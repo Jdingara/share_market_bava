@@ -14,6 +14,12 @@ Contract (same no-lookahead discipline as trend_bias.daily_trend_bias):
   - `daily_history` passed to build_daily_setup() must contain only days
     strictly BEFORE the day being traded, sorted ascending by date.
   - `day_open_spot` is that day's actual opening spot price.
+
+ATM selection (corrected 2026-07-27, see PROJECT_STATUS.md): the ATM strike is
+based on the PREVIOUS trading day's closing index value, not today's open -
+e.g. previous close 23922 -> ATM 23900 (nearest_strike rounding). Today's
+actual open is only used to check for the huge-gap exception (see
+lock_atm_strike's docstring).
 """
 
 from __future__ import annotations
@@ -54,15 +60,63 @@ def time_to_expiry_years(as_of: datetime, expiry_date: date) -> float:
     return max((expiry_dt - as_of_naive).total_seconds(), 0.0) / SECONDS_PER_YEAR
 
 
-def lock_atm_strike(day_open_spot: float) -> float:
-    """The day's ATM strike, locked once at open and never re-picked intraday.
+ATM_GAP_THRESHOLD = NIFTY_STRIKE_INTERVAL  # a gap of one full strike interval (50pts) or more
+# between today's actual open and the previous-close-based ATM triggers the "huge gap" override
+ATM_SEARCH_RADIUS_STRIKES = 3  # per the user's own worked example: check up to 3 strikes above and
+# 3 below the initial nearest-strike estimate for the one where CE and PE close values are closest
 
-    This single computation already handles both 'pick a fresh ATM every day'
-    and 'override on a huge overnight gap' - nearest_strike() quantizes to the
-    nearest 50, so a gap under half a strike-width leaves the ATM unchanged and
-    any larger gap naturally produces a different strike. No separate gap
-    threshold/branch is needed."""
-    return nearest_strike(day_open_spot)
+
+def _closest_ce_pe_strike(
+    center_strike: float,
+    reference_spot: float,
+    tte: float,
+    volatility: float,
+    radius: int = ATM_SEARCH_RADIUS_STRIKES,
+) -> float:
+    """The 'true' ATM: among the strikes within `radius` of center_strike, the one
+    whose CE and PE premiums (both priced off reference_spot/tte/volatility) are
+    closest to each other - the standard put-call-parity definition of ATM, not
+    just the strike nearest to spot. Ties broken by proximity to center_strike."""
+    best_strike, best_gap = center_strike, None
+    for i in range(-radius, radius + 1):
+        strike = center_strike + i * NIFTY_STRIKE_INTERVAL
+        ce = black_scholes_price(reference_spot, strike, tte, volatility, "CE")
+        pe = black_scholes_price(reference_spot, strike, tte, volatility, "PE")
+        gap = abs(ce - pe)
+        if best_gap is None or gap < best_gap - 1e-9 or (
+            abs(gap - best_gap) <= 1e-9 and abs(strike - center_strike) < abs(best_strike - center_strike)
+        ):
+            best_gap, best_strike = gap, strike
+    return best_strike
+
+
+def lock_atm_strike(previous_close_spot: float, day_open_spot: float, previous_tte: float, volatility: float) -> float:
+    """The day's ATM strike, locked before today's session and never re-picked
+    intraday.
+
+    Primary rule (2026-07-27, refined per the user's own worked example): NOT
+    just nearest_strike() rounding - starting from that as a center point,
+    search the strikes within ATM_SEARCH_RADIUS_STRIKES of it and pick whichever
+    has the previous day's closest CE/PE closing premiums (e.g. previous close
+    23922 -> initial estimate 23900, then the closest-CE/PE-gap search may confirm
+    or shift that - the user's own example shifted it to 24000).
+
+    Huge gap exception: if today's actual open has moved a full strike interval
+    or more away from that ATM, the stale one is discarded in favor of simple
+    nearest_strike() rounding of today's actual open (e.g. yesterday's ATM
+    24250, today opens at 24580 -> new ATM 24600) - deliberately NOT re-run
+    through the CE/PE-gap search, since that search is only meaningful using
+    previous-close pricing near where the previous close actually was; a gap
+    scenario means today's open sits far outside where that pricing means
+    anything, so refining "around today's open using yesterday's prices" would
+    just walk to whichever edge of the search window happens to be nearest
+    yesterday's close - not a real refinement."""
+    provisional_center = nearest_strike(previous_close_spot)
+    provisional_atm = _closest_ce_pe_strike(provisional_center, previous_close_spot, previous_tte, volatility)
+
+    if abs(day_open_spot - provisional_atm) >= ATM_GAP_THRESHOLD:
+        return nearest_strike(day_open_spot)
+    return provisional_atm
 
 
 def option_type_for_trend(trend: Literal["bullish", "bearish", "neutral"]) -> Optional[Literal["CE", "PE"]]:
@@ -153,19 +207,20 @@ def build_daily_setup(daily_history: pd.DataFrame, day_open_spot: float, trade_d
             reasoning="No clear daily trend bias (EMA20/EMA50 too close) - no ATM locked, no trade today",
         )
 
-    atm_strike = lock_atm_strike(day_open_spot)
-    otm_strike = otm_strike_for(atm_strike, option_type)
+    previous_day = daily_history.iloc[-1]
+    previous_close_spot = previous_day["close"]
+
     # Expiry resolved from today's date (not yesterday's) so the ATM/OTM contract
     # identity - strike + expiry - is fixed and singular for the whole day; using
     # yesterday's date could disagree with today's actual expiry right around a
     # Monday/Tuesday boundary.
     expiry = next_weekly_expiry(trade_date)
     volatility = historical_volatility(daily_history["close"], window=VOLATILITY_WINDOW)
-
-    previous_day = daily_history.iloc[-1]
-    previous_close_spot = previous_day["close"]
     previous_close_time = pd.Timestamp(previous_day["date"]).to_pydatetime()
     previous_tte = time_to_expiry_years(previous_close_time, expiry)
+
+    atm_strike = lock_atm_strike(previous_close_spot, day_open_spot, previous_tte, volatility)
+    otm_strike = otm_strike_for(atm_strike, option_type)
     atm_previous_close_premium = black_scholes_price(
         previous_close_spot, atm_strike, previous_tte, volatility, option_type
     )
