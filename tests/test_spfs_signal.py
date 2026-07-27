@@ -14,8 +14,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-import spfs_signal
-from options_pricing import nearest_strike
 from spfs_signal import (
     build_daily_setup,
     is_confirmed,
@@ -29,68 +27,40 @@ from spfs_signal import (
 )
 
 
-# --- lock_atm_strike / _closest_ce_pe_strike ---
-#
-# black_scholes_price is monkeypatched here with a synthetic CE/PE pair whose
-# gap is a simple, exactly-known function of distance from a chosen "true ATM"
-# target (gap = 2 * |strike - target|, minimized only at target) - this gives
-# full deterministic control over which strike "wins" the search, rather than
-# depending on real Black-Scholes numbers (which would require hand-verifying
-# a forward-price/interest-rate-carry calculation to predict).
+# --- lock_atm_strike ---
+# Confirmed 2026-07-27: simple nearest_strike() round-off of the previous
+# close, nothing more - a CE/PE-closest-gap refinement was tried per an
+# earlier worked example and explicitly rejected by the user. See
+# PROJECT_STATUS.md for the full back-and-forth.
 
 
-def _fake_bs_centered_at(target):
-    def fake(spot, strike, tte, volatility, option_type):
-        distance = strike - target
-        return (1000 - distance) if option_type == "CE" else (1000 + distance)
-
-    return fake
+def test_lock_atm_strike_uses_previous_close_not_todays_open():
+    # Previous close 23922 -> ATM 23900 (nearest_strike rounding), matching the
+    # user's own example - today's open is a small, non-gap move so it's ignored.
+    assert lock_atm_strike(previous_close_spot=23922, day_open_spot=23935) == 23900
 
 
-def test_closest_ce_pe_strike_finds_exact_minimum_gap_within_radius(monkeypatch):
-    monkeypatch.setattr(spfs_signal, "black_scholes_price", _fake_bs_centered_at(24000))
-    assert spfs_signal._closest_ce_pe_strike(23900, reference_spot=23922, tte=5 / 365, volatility=0.12) == 24000
+def test_lock_atm_strike_small_overnight_move_keeps_previous_close_based_atm():
+    # Today's open (24030) differs from the previous-close-based ATM (24000) by
+    # less than one full strike interval - no override, ATM stays 24000.
+    assert lock_atm_strike(previous_close_spot=24012, day_open_spot=24030) == 24000
 
 
-def test_closest_ce_pe_strike_clamped_to_search_radius(monkeypatch):
-    # True target (24300) is 8 strikes from center (23900) - beyond the +/-3
-    # radius - so the closest reachable candidate (center + 3*50 = 24050) wins.
-    monkeypatch.setattr(spfs_signal, "black_scholes_price", _fake_bs_centered_at(24300))
-    assert spfs_signal._closest_ce_pe_strike(23900, reference_spot=23922, tte=5 / 365, volatility=0.12) == 24050
+def test_lock_atm_strike_huge_gap_overrides_to_todays_open():
+    # Previous close -> ATM 24250, but today opens 330 points away (>= the
+    # 50-point gap threshold) - the stale ATM is discarded for a fresh one from
+    # today's actual open instead.
+    previous_close_spot = 24240  # -> provisional ATM 24250
+    today_open = 24580
+    assert lock_atm_strike(previous_close_spot, today_open) == 24600
 
 
-def test_lock_atm_strike_refines_beyond_simple_rounding(monkeypatch):
-    # Matches the user's own worked example: previous close 23922 rounds to a
-    # naive 23900, but the closest-CE/PE-gap search (target genuinely at 24000)
-    # shifts the real ATM there instead.
-    monkeypatch.setattr(spfs_signal, "black_scholes_price", _fake_bs_centered_at(24000))
-    atm = lock_atm_strike(previous_close_spot=23922, day_open_spot=23980, previous_tte=5 / 365, volatility=0.12)
-    assert atm == 24000
-
-
-def test_lock_atm_strike_small_overnight_move_keeps_previous_close_based_atm(monkeypatch):
-    # No refinement shift here (target == center == 24000); today's open (24030)
-    # differs by less than one full strike interval - no gap override.
-    monkeypatch.setattr(spfs_signal, "black_scholes_price", _fake_bs_centered_at(24000))
-    atm = lock_atm_strike(previous_close_spot=24012, day_open_spot=24030, previous_tte=5 / 365, volatility=0.12)
-    assert atm == 24000
-
-
-def test_lock_atm_strike_huge_gap_overrides_to_todays_open(monkeypatch):
-    # ATM (24250, no refinement shift) but today opens 330 points away (>= the
-    # 50-point gap threshold) - the stale ATM is discarded for a fresh search
-    # re-centered on today's actual open instead.
-    monkeypatch.setattr(spfs_signal, "black_scholes_price", _fake_bs_centered_at(24250))
-    atm = lock_atm_strike(previous_close_spot=24240, day_open_spot=24580, previous_tte=5 / 365, volatility=0.12)
-    assert atm == 24600
-
-
-def test_lock_atm_strike_gap_exactly_at_threshold_overrides(monkeypatch):
+def test_lock_atm_strike_gap_exactly_at_threshold_overrides():
     # Exactly one strike interval away (50 points) still counts as a huge gap
     # (rule uses >=, not strict >).
-    monkeypatch.setattr(spfs_signal, "black_scholes_price", _fake_bs_centered_at(24250))
-    atm = lock_atm_strike(previous_close_spot=24240, day_open_spot=24300, previous_tte=5 / 365, volatility=0.12)
-    assert atm == 24300
+    previous_close_spot = 24240  # -> provisional ATM 24250
+    today_open = 24300  # exactly 50 points from 24250
+    assert lock_atm_strike(previous_close_spot, today_open) == 24300
 
 
 # --- otm_strike_for ---
@@ -214,11 +184,7 @@ def test_build_daily_setup_bullish_locks_call_atm_and_computes_sniper_level():
 
     assert setup.trend == "bullish"
     assert setup.option_type == "CE"
-    # Exact ATM value (real, non-monkeypatched Black-Scholes) is covered by the
-    # dedicated lock_atm_strike/_closest_ce_pe_strike tests above - here just
-    # confirm it's a real strike within the search radius of naive rounding.
-    assert setup.atm_strike % 50 == 0
-    assert abs(setup.atm_strike - nearest_strike(closes[-1])) <= spfs_signal.ATM_SEARCH_RADIUS_STRIKES * 50
+    assert setup.atm_strike == lock_atm_strike(closes[-1], day_open_spot)
     assert setup.otm_strike == setup.atm_strike + 50
     assert setup.atm_previous_close_premium is not None and setup.atm_previous_close_premium > 0
     assert setup.sniper_level == pytest.approx(setup.atm_previous_close_premium * 0.70)
