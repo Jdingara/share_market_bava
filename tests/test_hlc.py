@@ -83,3 +83,22 @@ def test_breaking_a_level_moves_the_sl_to_it():
     assert "S1 22728.5 broken" in events[0] and t.trail_level[0] == "S1"
     events = day.on_candle(_at("09:35"), Candle(22705, 22740, 22700, 22735), _chain((74, 76, 62, 63)))  # back above S1 (SL 35 not hit)
     assert "closed back across S1" in events[0] and t.pnl_points == pytest.approx(3)
+
+
+def test_big_gap_uses_the_strike_near_the_market_and_exits_when_the_pattern_turns():
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    chain = lambda pe: {(22600.0, "CE"): Candle(40, 42, 38, 41), (22600.0, "PE"): Candle(*pe),
+                        (22800.0, "CE"): Candle(5, 6, 4, 5), (22800.0, "PE"): Candle(190, 195, 185, 190)}
+    day.on_candle(_at("09:15"), Candle(22610, 22620, 22590, 22600), chain((50, 52, 48, 50)))  # opens 170 below 22780.25
+    events = day.on_candle(_at("09:25"), Candle(22600, 22605, 22595, 22598), chain((50, 60, 49, 58)))
+    assert day.big_gap and events[0].startswith("BUY PE 22600 at 58.00 (GAP, BIG gap down")
+    day.on_candle(_at("09:30"), Candle(22598, 22600, 22580, 22585), chain((58, 66, 57, 65)))  # red, nothing
+    events = day.on_candle(_at("09:35"), Candle(22584, 22603, 22583, 22602), chain((65, 66, 58, 59)))  # bullish engulfing
+    assert "pattern turned: index Bullish Engulfing" in events[0]
+    assert day.trades[0].pnl_points == pytest.approx(1)
+
+
+def test_small_gap_keeps_the_morning_atm():
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    day.on_candle(_at("09:15"), Candle(22732.45, 22753, 22680, 22684), _chain((60, 62, 55, 58)))  # 48 below
+    assert not day.big_gap

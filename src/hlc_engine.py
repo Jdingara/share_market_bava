@@ -13,8 +13,12 @@ candles closing 09:30-14:55):
                 resistance pattern at R1/R2/R3 AND the ATM PE premium shows an
                 up-reversal pattern -> buy ATM PE.
 
-  Strike = always the morning ATM (owner, 2026-09-29: even if the balanced
-  strike has moved by 09:30). Fill = the option's candle close.
+  Strike = the morning ATM (owner, 2026-09-29: even if the balanced strike
+  has moved by 09:30). Except on a BIG GAP day (|open - yesterday's close| >=
+  150 NIFTY / 300 SENSEX): every trade uses the strike nearest the index at
+  entry, the levels stay the same, and the trade also exits when the index
+  pattern turns against it (a directional reversal pattern - Doji/Spinning
+  Top don't count). Fill = the option's candle close.
   SL = entry premium - 25 points (NIFTY) / 50 (SENSEX) (owner, 2026-09-29).
   Targets = levels only. PE: the levels below the index, one by one; CE: the
   levels above. Final target: the last level (S3/R3) for a gap trade, the
@@ -34,7 +38,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 
-from hlc_signal import Candle, HlcLevels, HlcMarket, OptionType, bearish_pattern, bullish_pattern
+from hlc_signal import DIRECTIONLESS, Candle, HlcLevels, HlcMarket, OptionType, bearish_pattern, bullish_pattern
 
 FIRST_ENTRY_CLOSE = time(9, 30)
 LAST_ENTRY_CLOSE = time(14, 55)
@@ -57,6 +61,7 @@ class HlcTrade:
     sl_premium: float
     targets: list[tuple[str, float]] = field(default_factory=list)
     trail_level: Optional[tuple[str, float]] = None
+    big_gap: bool = False  # big-gap day: strike near the index, exit when the index pattern turns
     exit_time: str = ""
     exit_premium: float = 0.0
     exit_reason: str = ""
@@ -76,6 +81,7 @@ class HlcDay:
         self.open_trade: Optional[HlcTrade] = None
         self.day_open: Optional[float] = None
         self.gap_done = False
+        self.big_gap = False
         self.index_history: list[Candle] = []
         self.premium_history: dict[tuple[float, str], list[Candle]] = {}
         self.done = False
@@ -130,7 +136,8 @@ class HlcDay:
             return None
         trade = HlcTrade(date=self.day.isoformat(), kind=kind, side=side, strike=strike, pattern=pattern,
                          entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=index.close,
-                         sl_premium=round(prem.close - self.market.sl_points, 2), targets=targets)
+                         sl_premium=round(prem.close - self.market.sl_points, 2), targets=targets,
+                         big_gap=self.big_gap)
         self.trades.append(trade)
         self.open_trade = trade
         names = " -> ".join(f"{n} {v:g}" for n, v in targets)
@@ -146,6 +153,7 @@ class HlcDay:
         closes = _closes_at(when)
         if self.day_open is None:
             self.day_open = index.open
+            self.big_gap = abs(index.open - self.levels.close) >= self.market.big_gap
         self.index_history.append(index)
         for key, candle in chain.items():
             self.premium_history.setdefault(key, []).append(candle)
@@ -165,6 +173,8 @@ class HlcDay:
             return events
 
         atm = self.levels.atm
+        if self.big_gap:  # big gap: the round strike nearest the market now
+            atm = float(round(index.close / self.market.strike_step) * self.market.strike_step)
         if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
 
@@ -173,8 +183,9 @@ class HlcDay:
             if self.day_open != self.levels.close:
                 side: OptionType = "PE" if self.day_open < self.levels.close else "CE"
                 final = self.levels.ladder()[0][0] if side == "PE" else self.levels.ladder()[-1][0]
+                size = "BIG gap" if self.big_gap else "gap"
                 event = self._enter("GAP", side, atm, when, chain[(atm, side)], index,
-                                    f"gap {'down' if side == 'PE' else 'up'} open {self.day_open:.2f}", final)
+                                    f"{size} {'down' if side == 'PE' else 'up'} open {self.day_open:.2f}", final)
                 if event:
                     return events + [event]
 
@@ -205,6 +216,10 @@ class HlcDay:
         if prem.low <= trade.sl_premium:
             return [self._exit(trade, when, trade.sl_premium, f"SL ({self.market.sl_points:g} points)")]
         pe = trade.side == "PE"
+        if trade.big_gap:
+            turned = bullish_pattern(self.index_history[-3:]) if pe else bearish_pattern(self.index_history[-3:])
+            if turned and turned[0] not in DIRECTIONLESS:
+                return [self._exit(trade, when, prem.close, f"pattern turned: index {turned[0]}")]
         if trade.trail_level is not None:
             name, value = trade.trail_level
             if (pe and index.close > value) or (not pe and index.close < value):

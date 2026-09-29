@@ -28,11 +28,12 @@ class HlcMarket:
     level_tolerance: float  # how close to a level a pattern must form (index points)
     quantity: int
     sl_points: float  # stop loss = entry premium - this (owner, 2026-09-29)
+    big_gap: float  # |open - yesterday's close| at least this = big gap day (owner: NIFTY 150-200, SENSEX 300-500)
 
 
 HLC_MARKETS = {
-    "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=325, sl_points=25),
-    "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=300, sl_points=50),
+    "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=325, sl_points=25, big_gap=150),
+    "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=300, sl_points=50, big_gap=300),
 }
 
 
@@ -173,6 +174,9 @@ def is_morning_star(a: Candle, b: Candle, c: Candle) -> bool:
 def is_evening_star(a: Candle, b: Candle, c: Candle) -> bool:
     return (a.green and a.body > 0 and b.body <= STAR_BODY * a.body and c.red
             and c.close <= (a.open + a.close) / 2)
+
+
+DIRECTIONLESS = ("Doji", "Spinning Top")  # count for entries at a level, not as a "pattern changed" exit
 
 
 def bullish_pattern(candles: Sequence[Candle]) -> Optional[tuple[str, int]]:
