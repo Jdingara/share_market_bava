@@ -160,7 +160,8 @@ def completed_bars(
             if candle is None:
                 bars[key] = Bar(last_close[key], last_close[key], last_close[key])
             else:
-                bars[key] = Bar(float(candle["high"]), float(candle["low"]), float(candle["close"]))
+                bars[key] = Bar(float(candle["high"]), float(candle["low"]), float(candle["close"]),
+                               float(candle["open"]) if candle.get("open") is not None else None)
                 last_close[key] = bars[key].close
         if when not in processed:
             result.append((when, bars))
@@ -219,9 +220,20 @@ def describe_plan(plan: DailyPlan, expiry: date, previous_day: date) -> str:
 
 
 def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: int = MARKETS["NIFTY"].quantity) -> str:
+    note = "  (catch-up: this candle closed before the bot started)" if late else ""
+    if event.kind in ("ORDER", "CANCEL"):
+        symbol = contracts["otm_ce" if event.setup.buy_type == "CE" else "otm_pe"]["tradingsymbol"]
+        trigger = event.setup.levels.trigger
+        if event.kind == "ORDER" and event.square:
+            return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
+                    f"WOULD BUY {qty} at {event.square} if it comes back, or at {event.next_square} if it runs up{note}")
+        if event.kind == "ORDER":
+            return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
+                    f"WOULD BUY {qty} at {event.next_square} when it rises there{note}")
+        levels = f"{event.square}/{event.next_square}" if event.square else f"{event.next_square}"
+        return f"Order for {symbol} at {levels} cancelled - window ended without a fill{note}"
     t = event.trade
     symbol = contracts["otm_ce" if t.buy_type == "CE" else "otm_pe"]["tradingsymbol"]
-    note = "  (catch-up: this candle closed before the bot started)" if late else ""
     if event.kind == "ENTRY":
         return (f"WOULD BUY {qty} x {symbol} at {t.entry_fill:.2f} ({t.half} half, candle {t.entry_time[11:16]}) - "
                 f"SL {t.stop_loss} (trails up), target {t.target}{note}")
@@ -294,10 +306,15 @@ def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
         _sleep_until(next_poll)
         now = datetime.now()
 
-        candles = {
-            key: _historical(kite, c["instrument_token"], session_start, now, f"{CANDLE_MINUTES}minute")
-            for key, c in contracts.items()
-        }
+        try:
+            candles = {
+                key: _historical(kite, c["instrument_token"], session_start, now, f"{CANDLE_MINUTES}minute")
+                for key, c in contracts.items()
+            }
+        except Exception as error:  # network hiccup / Kite error: never let it end the day - retry next candle
+            notify.send(f"Zerodha data fetch failed ({type(error).__name__}: {error}) - retrying at the next candle.",
+                        phone=False)
+            continue
         new = completed_bars(candles, processed, now, row)
         if not new and not processed and now.time() >= NO_DATA_GIVE_UP:
             notify.send("No option candles received today - market holiday? Stopping.")

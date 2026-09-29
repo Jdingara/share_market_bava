@@ -74,7 +74,8 @@ def _bars_from_spot(candle, row: StrikeRow, when: datetime, price: PriceFn) -> d
         at_high = price(candle["high"], strike, option_type, when)
         at_low = price(candle["low"], strike, option_type, when)
         close = price(candle["close"], strike, option_type, when)
-        bars[key] = Bar(high=at_high, low=at_low, close=close) if option_type == "CE" else Bar(at_low, at_high, close)
+        opened = price(candle["open"], strike, option_type, when)
+        bars[key] = Bar(at_high, at_low, close, opened) if option_type == "CE" else Bar(at_low, at_high, close, opened)
     return bars
 
 

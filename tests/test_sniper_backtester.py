@@ -20,7 +20,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from sniper_backtester import simulate_day
+from functools import partial
+
+from sniper_backtester import simulate_day as _simulate_day
+
+# Most tests here check entry/exit mechanics with the original "bought at the signal candle's close" fill.
+# The owner's fill-at-the-square rule (2026-09-29) has its own tests at the end, using _simulate_day.
+simulate_day = partial(_simulate_day, fill_at_square=False)
 from sniper_engine import trailed_stop
 from sniper_signal import MARKETS, build_daily_plan
 
@@ -98,8 +104,15 @@ def test_stop_wins_when_both_cross_in_one_candle():
 
 
 def test_before_0930_is_ignored():
-    trades, _ = simulate_day(DAY, ROW, _day({"09:25": (23100, 23090, 23095)}), _price)
+    trades, _ = simulate_day(DAY, ROW, _day({"09:20": (23100, 23090, 23095)}), _price)  # closes 09:25
     assert trades == []
+
+
+def test_candle_closing_at_0930_counts():
+    """29-09-2026: 22700 PE closed 101.90 on the 09:25-09:30 candle - the owner's entry at 100."""
+    trades, _ = simulate_day(DAY, ROW, _day({"09:25": (23100, 23090, 23095)}), _price)
+    [t] = trades
+    assert (t.entry_time[11:16], t.entry_square) == ("09:25", 100)
 
 
 def test_close_must_be_strictly_above_square():

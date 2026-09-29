@@ -8,10 +8,24 @@ Black-Scholes estimates (backtest).
 
 Conventions where the spec leaves room for interpretation (listed in
 PROJECT_STATUS.md's Open Decisions until the owner confirms them):
-  - Entry: a candle whose close falls in a half's window, with the falling ATM
-    leg below its yesterday close and the bought OTM's candle close strictly
-    above the entry square. Filled at that candle close (not at the square
-    itself - a buy only happens after the close is known, above the square).
+  - Signal: a candle whose close falls in a half's window, with the falling
+    ATM leg below its yesterday close and the bought OTM's candle close strictly
+    above the entry square.
+  - Owner's rule, 2026-09-29 (fill_at_square=True):
+    SIGNAL = the OTM candle closes above the TRIGGER (first half: the falling
+    ATM's yesterday close; second half: Sniper) - above the trigger is enough,
+    no square needs to be crossed yet.
+    ENTRY = the upcoming square number, as orders from the next candle:
+      * signal close still below the plan square n^2 (e.g. 85-99 with n^2=100):
+        buy STOP at n^2 - bought when price rises to it;
+      * signal close already above a square k^2 (e.g. 101.90 > 100): buy LIMIT
+        at k^2 (bought if price comes back) and buy STOP at (k+1)^2 (bought
+        there if it runs up first), with SL/target from the square bought. If one candle touches both and its open doesn't say which came
+    first, the worse price (N) is assumed. The order is cancelled if the
+    half's window ends first. On the fill candle a low at/below the SL counts
+    as stopped out (conservative); the target is only checked from the next
+    candle. With fill_at_square=False the old behaviour applies: bought at
+    the signal candle's close.
   - With require_cross (the default), the OTM must close above a square
     having closed at/below it on the previous candle (yesterday's close before
     the day's first candle) - the candle that crosses the square, not any
@@ -44,7 +58,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from sniper_signal import (
     EXIT_BY,
@@ -61,6 +75,7 @@ from sniper_signal import (
 CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
 TRAILING_SL = True
 KEEP_FIXED_TARGET = True
+FILL_AT_SQUARE = True
 
 
 @dataclass(frozen=True)
@@ -70,6 +85,7 @@ class Bar:
     high: float
     low: float
     close: float
+    open: Optional[float] = None  # used to tell which of two levels a candle reached first; None = unknown
 
 
 @dataclass
@@ -96,8 +112,22 @@ class TradeResult:
 
 @dataclass(frozen=True)
 class Event:
-    kind: Literal["ENTRY", "EXIT"]
-    trade: TradeResult
+    kind: Literal["ENTRY", "EXIT", "ORDER", "CANCEL"]
+    trade: Optional[TradeResult] = None
+    # ORDER / CANCEL only: the pending buy
+    setup: Optional[TradeSetup] = None
+    square: int = 0  # buy limit here
+    next_square: int = 0  # or buy stop here
+    signal_close: float = 0.0
+    when: Optional[datetime] = None
+
+
+@dataclass
+class _Pending:
+    setup: TradeSetup
+    k: int  # stop at (k+1)^2; limit at k^2 only if has_limit
+    signal_close: float
+    has_limit: bool = True
 
 
 def _otm_key(option_type: OptionType) -> str:
@@ -125,12 +155,15 @@ class SniperDay:
         require_cross: bool = True,
         trailing: bool = TRAILING_SL,
         keep_target: bool = KEEP_FIXED_TARGET,
+        fill_at_square: bool = FILL_AT_SQUARE,
     ):
         self.day = day
         self.row = row
         self.require_cross = require_cross
         self.trailing = trailing
         self.keep_target = keep_target
+        self.fill_at_square = fill_at_square
+        self.pending: list[_Pending] = []
         self.setups = trade_setups(row)
         self.prev = previous_closes(row)
         self.open_trades: list[tuple[TradeSetup, TradeResult]] = []
@@ -178,11 +211,23 @@ class SniperDay:
                 continue
             self.open_trades.remove((setup, trade))
 
+        half = entry_window_for(when)
+        for pending in list(self.pending):
+            self.pending.remove(pending)
+            if closes_at_exit or half != pending.setup.half:
+                events.append(self._order_event("CANCEL", pending, when))
+                continue
+            fill = self._pending_fill(pending, bars[_otm_key(pending.setup.buy_type)])
+            if fill is None:
+                self.pending.append(pending)
+            else:
+                k, price = fill
+                events += self._open(pending.setup, k, when, price, bars[_otm_key(pending.setup.buy_type)], True)
+
         if closes_at_exit:
             self.done = True
             return events
 
-        half = entry_window_for(when)
         if half is None or half in self.halves_used:
             return events
 
@@ -198,37 +243,80 @@ class SniperDay:
             otm_key = _otm_key(setup.buy_type)
             buy_close = current[otm_key]
             k = highest_square_below(buy_close)  # the highest square this close is above
+            if self.fill_at_square:
+                if buy_close <= setup.levels.trigger:
+                    continue
+                if k < setup.levels.n:  # between the trigger and the plan square: wait for it to rise to n^2
+                    pending = _Pending(setup, setup.levels.n - 1, buy_close, has_limit=False)
+                else:
+                    pending = _Pending(setup, k, buy_close)
+                self.halves_used.add(half)
+                self.pending.append(pending)
+                events.append(self._order_event("ORDER", pending, when))
+                break
             if k < setup.levels.n:
                 continue
             if self.require_cross and previous_otm_close[otm_key] > k * k:
                 continue
-            trade = TradeResult(
-                date=self.day.isoformat(),
-                half=setup.half,
-                direction=setup.direction,
-                buy_strike=setup.buy_strike,
-                buy_type=setup.buy_type,
-                trigger=round(setup.levels.trigger, 2),
-                entry_square=k * k,
-                stop_loss=(k - 1) ** 2,
-                target=(k + 2) ** 2,
-                entry_time=when.isoformat(),
-                entry_fill=round(buy_close, 2),
-                trail_stop=float((k - 1) ** 2),
-            )
-            if self.trailing:
-                trade.trail_stop = trailed_stop(trade.trail_stop, buy_close)
-            self.trades.append(trade)
-            self.open_trades.append((setup, trade))
             self.halves_used.add(half)
-            events.append(Event("ENTRY", trade))
+            events += self._open(setup, k, when, buy_close, bars[otm_key], False)
             break
 
         return events
 
+    @staticmethod
+    def _order_event(kind: str, pending: _Pending, when: datetime) -> Event:
+        return Event(kind, setup=pending.setup, square=pending.k ** 2 if pending.has_limit else 0,
+                     next_square=(pending.k + 1) ** 2, signal_close=pending.signal_close, when=when)
+
+    @staticmethod
+    def _pending_fill(pending: _Pending, bar: Bar) -> Optional[tuple[int, float]]:
+        """(k, fill price) if this candle fills the pending buy, else None."""
+        k = pending.k
+        limit, stop = k * k, (k + 1) ** 2
+        back, up = pending.has_limit and bar.low <= limit, bar.high >= stop
+        if back and up:
+            if bar.open is not None and bar.open <= limit:
+                return k, bar.open  # opened at/below the limit: filled there first
+            if bar.open is not None and bar.open >= stop:
+                return k + 1, bar.open
+            return k + 1, float(stop)  # order unknown - assume the worse price
+        if back:
+            return k, min(float(limit), bar.open) if bar.open is not None else float(limit)
+        if up:
+            return k + 1, max(float(stop), bar.open) if bar.open is not None else float(stop)
+        return None
+
+    def _open(self, setup: TradeSetup, k: int, when: datetime, price: float, bar: Bar, fill_candle: bool) -> list[Event]:
+        trade = TradeResult(
+            date=self.day.isoformat(),
+            half=setup.half,
+            direction=setup.direction,
+            buy_strike=setup.buy_strike,
+            buy_type=setup.buy_type,
+            trigger=round(setup.levels.trigger, 2),
+            entry_square=k * k,
+            stop_loss=(k - 1) ** 2,
+            target=(k + 2) ** 2,
+            entry_time=when.isoformat(),
+            entry_fill=round(price, 2),
+            trail_stop=float((k - 1) ** 2),
+        )
+        self.trades.append(trade)
+        events = [Event("ENTRY", trade)]
+        if fill_candle and bar.low <= trade.stop_loss:  # filled and stopped in the same candle (conservative)
+            events.append(self._close(trade, when, trade.stop_loss, "STOPLOSS"))
+            return events
+        if self.trailing:
+            trade.trail_stop = trailed_stop(trade.trail_stop, bar.close)
+        self.open_trades.append((setup, trade))
+        return events
+
     def finish(self, when: datetime, bars: dict[str, Bar]) -> list[Event]:
         """Data ended before 15:00: close anything still open at the last bars."""
-        events = [
+        events = [self._order_event("CANCEL", p, when) for p in self.pending]
+        self.pending.clear()
+        events += [
             self._close(trade, when, bars[_otm_key(setup.buy_type)].close, "DATA_END") for setup, trade in self.open_trades
         ]
         self.open_trades.clear()

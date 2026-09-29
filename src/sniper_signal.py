@@ -199,14 +199,13 @@ def candle_close_time(candle_start: datetime) -> time:
 
 
 def entry_window_for(candle_start: datetime) -> Optional[Half]:
-    """Which half's entry window a 5-minute candle falls in, judged by when it
-    closes (entries act on candle closes). The 09:30 candle closes at 09:35, so
-    the first eligible first-half candle is the one starting 09:30 and the last
-    is the one closing at 12:00; likewise 12:30-15:00 for the second half."""
-    start = candle_start.time()
+    """Which half's entry window a 5-minute candle falls in, judged only by when
+    it closes (entries act on candle closes). Owner decision 2026-09-29: the
+    candle closing AT 09:30 (09:25-09:30) already counts, through the one closing
+    at 12:00; likewise closes 12:30-15:00 for the second half."""
     close = candle_close_time(candle_start)
     for half, (window_start, window_end) in (("first", FIRST_HALF_WINDOW), ("second", SECOND_HALF_WINDOW)):
-        if start >= window_start and close <= window_end:
+        if window_start <= close <= window_end:
             return half
     return None
 

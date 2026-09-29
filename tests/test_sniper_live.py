@@ -139,7 +139,7 @@ def test_live_bars_drive_the_engine_to_an_entry():
         for key, (h, l, c) in shape.items():
             candles[key].append(_candle(hhmm, h, l, c))
 
-    engine = SniperDay(TODAY, row)
+    engine = SniperDay(TODAY, row, fill_at_square=False)
     events = []
     for when, bars in sniper_live.completed_bars(candles, set(), datetime(2026, 9, 29, 9, 50), row):
         events += engine.on_candle(when, bars)
@@ -206,7 +206,7 @@ def test_full_day_watch_loop_with_fake_clock(monkeypatch, tmp_path):
                 seen_future.append(True)  # the still-forming candle, which the bot must ignore
             return out
 
-    engine = SniperDay(TODAY, row)
+    engine = SniperDay(TODAY, row, fill_at_square=False)
     contracts = sniper_live.plan_contracts(row, FakeKite_options())
     sniper_live.watch(LiveKite(), engine, contracts, sniper_live.Notifier(TODAY))
 
@@ -220,6 +220,37 @@ def test_full_day_watch_loop_with_fake_clock(monkeypatch, tmp_path):
     assert "WOULD EXIT 325 x NIFTY26092923100PE at 144.00 - TARGET" in log
     assert "Rs +13,325" in log  # 41 points x 325 qty
     assert "catch-up" not in log
+
+
+def test_watch_survives_a_data_fetch_error(monkeypatch, tmp_path):
+    """A Kite error on one poll must not end the day (29-09-2026: the bot stopped after 09:40)."""
+    clock = _Clock(datetime(2026, 9, 29, 9, 0))
+
+    class FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock.now
+
+    monkeypatch.setattr(sniper_live, "datetime", FakeDatetime)
+    monkeypatch.setattr(sniper_live, "time_module", type("T", (), {"sleep": staticmethod(clock.sleep)}))
+    monkeypatch.setattr(sniper_live, "OUT_DIR", tmp_path)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    row = _row()
+    calls = []
+
+    class FlakyKite:
+        def historical_data(self, token, start, end, interval):
+            calls.append(end)
+            if len(calls) == 1:
+                raise ConnectionError("Read timed out")
+            return [_candle(t.strftime("%H:%M"), 50, 40, 45) for t in
+                    (datetime(2026, 9, 29, 9, 15) + timedelta(minutes=5 * i) for i in range(80))
+                    if t + timedelta(minutes=5) <= end]
+
+    engine = SniperDay(TODAY, row, fill_at_square=False)
+    sniper_live.watch(FlakyKite(), engine, sniper_live.plan_contracts(row, FakeKite_options()), sniper_live.Notifier(TODAY))
+    assert engine.done  # carried on to 15:00
+    assert "Zerodha data fetch failed (ConnectionError" in (tmp_path / "log_2026-09-29.txt").read_text(encoding="utf-8")
 
 
 def FakeKite_options():

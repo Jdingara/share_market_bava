@@ -44,9 +44,14 @@ When one side's ATM premium falls from its yesterday close, watch the **opposite
 | First half | 09:30 – 12:00 | Falling ATM's **yesterday close** |
 | Second half | 12:30 – 15:00 | **Sniper** value |
 
-- Entry = a **5-minute candle closing above** the entry square.
-- **The candle must cross a square** (2026-09-28): previous candle closed at/below it, this one closes above it.
-- **If the OTM is already above the entry square** (e.g. after a gap), buy at the **next square it crosses**, with SL/target measured from **that** square (2026-09-28). Example: entry square 100 but OTM already at 189 → candle closes above 196 (14²) → buy; SL 169, target 256. A candle jumping several squares uses the highest one crossed. No square crossed in the window → no trade.
+- **Windows count by candle close time** (2026-09-29): the candle closing **at 09:30** (09:25–09:30) is already in the first half, up to the one closing at 12:00; second half = candles closing 12:30–15:00 (no entry on the 15:00 close).
+- **Signal** (2026-09-29): a 5-minute OTM candle **closes above the trigger** (first half: the falling ATM's yesterday close; second half: Sniper). Above the trigger is enough — no square has to be crossed yet.
+- **Entry at the upcoming square number** (2026-09-29), as orders from the next candle:
+  - signal close still **below** the plan square n² (e.g. trigger 84.20, close 90, n² = 100) → buy when price **rises to 100**;
+  - signal close already **above** a square k² (e.g. 101.90 > 100) → buy at **100 if price comes back**, or at the **next square 121 if it runs up first**;
+  - SL/target are measured from the square actually bought (100 → SL 81, target 144; 121 → SL 100, target 169). Unfilled at the window's end → cancelled, no trade.
+- Worked case, 29-09-2026: 22700 PE, trigger 84.20. The 09:25–09:30 candle closed 101.90 → signal. The next candle's low was 90.45 → **bought at 100**. The 09:35 candle's high was 148.85 → **144 target, +44**.
+- Superseded the same week: "the candle must cross the square, then buy at the close" (28-09) and "buy at the next square it crosses" (28-09). The engine keeps the old behaviour behind `fill_at_square=False` for comparison only.
 
 ### §3 Square-number levels
 
@@ -83,14 +88,15 @@ NIFTY close 23140.5 → nearest ATM 23100.
 ### Implementation conventions (current behaviour where the rules above leave room)
 
 Not yet explicitly confirmed by the owner — listed again in Open Decisions.
-1. **Fill price** = the entry candle's close (above the square), not the square itself. P&L is measured from the fill.
-2. **Windows judged by candle close time:** first half = candles starting 09:30…11:55; second half = 12:30…14:50. No entry on the candle closing at 15:00.
+1. **Fills:** a buy at the square fills at the square, or at the candle's open if it opened beyond it (gap). If one candle touches both the limit square and the next square and its open doesn't show which came first, the **higher** price is assumed. On the fill candle a low at/below the SL counts as stopped out; the target is checked from the next candle.
+2. **Orders wait across candles** until filled or the half's window ends (one order per half).
 3. **Sideways checked per candle**, not for the whole day (a whole-day check would need future data).
 4. **"Falling" ATM** = below its yesterday close on the entry candle.
 5. A second-half trade **may open while a first-half trade is still running**.
 6. **Stop before target** if one candle's range crosses both. Stop/target fill at their level.
 7. **Shift oscillation** (PE fails at one ATM, CE at the next) is followed literally until the 3-shift limit → no plan.
 8. **Previous close** = Zerodha's official daily close for each contract.
+9. **"Falling ATM"** is the only ATM condition at the signal. The owner noted on 29-09 that the ATM CE had also fallen below the Sniper; it's not a condition unless confirmed (see Open Decisions).
 
 ## Non-Obvious Technical Findings
 
@@ -138,6 +144,8 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 - `start_bot.bat` now starts both markets after one login.
 - **Permanent day-by-day history added** (`history/`, written by the bot after every entry/exit so a mid-day stop still leaves a record). 28-09 was backfilled from its log. Both bots were restarted at 09:24, before the entry window, to start recording.
 - **Pushed to GitHub** (github.com/Jdingara/share_market_bava, `main`, commit `7d2469c`, author Sasikumar). The first push needed a one-time GitHub browser login in a fresh cmd window (Finding 13); later pushes use the stored credential.
+- **The NIFTY bot died after its 09:40 entry** (no traceback captured; likely an unhandled Kite/network error on a poll). Data-fetch errors now log and retry at the next candle instead of ending the day.
+- **Entry rules reworked with the owner during the session** (see §2): the candle closing at 09:30 counts, the signal is a close above the trigger, and the buy is at the upcoming square (limit back to it, or the next square if it runs). Under the old rules the bot had bought 22700 PE at 139.70 (09:35 candle, crossing 121). Each change was applied by restarting the bot, which replays the day's candles (catch-up). Final: **signal 101.90 on the 09:30 close → bought at 100 → 144 target, +44 points = +₹14,300**.
 - Day's result: pending (15:00) — see `history/TRADE_HISTORY.md`.
 
 ## Open Decisions
@@ -149,7 +157,8 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 - **ATM reversal trade** (Morning Star / Bullish Engulfing / Bullish Harami on the ATM chart): dropped completely?
 - **Order mode for Phase 3:** fully automatic, or alert + manual confirm?
 - **Where the bot runs** (laptop vs cloud VPS) and SEBI algo/static-IP compliance with Zerodha.
-- **Implementation conventions 1–8** above: confirm, especially #1 (fill at candle close, not the square).
+- **Implementation conventions 1–9** above: confirm, especially #1 (worse price when a candle touches both squares).
+- **ATM below Sniper:** the owner mentioned on 29-09 that the ATM had also fallen below the Sniper — should that be an extra entry condition?
 - **SENSEX gap check** keeps failing with ±100 strikes: accept "no plan" days, or change something?
 - **Excel morning plan:** the old spec mentioned `sniper_phase1.py` (plan → Excel), not in this repo — still wanted?
 - **Real option data** for a meaningful backtest (Kite has none for expired contracts).
