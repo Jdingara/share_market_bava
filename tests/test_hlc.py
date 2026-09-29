@@ -104,15 +104,42 @@ def test_small_gap_keeps_the_morning_atm():
     assert not day.big_gap
 
 
-def test_low_premium_uses_the_day_low_minus_one_as_sl():
-    """29-09 10:15: CE 22800 at 10.00 - 10 - 25 < 0, so SL = the CE's day low so far (9.65) - 1."""
+def _low_premium_day():
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
-    chain = lambda ce: {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(200, 210, 195, 205)}
     day.gap_done = True  # only the reversal is under test
     day.day_open = 22780.25
-    day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), chain((10.4, 10.9, 9.9, 10.3)))
-    events = day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), chain((10.3, 10.8, 9.65, 10.0)))
-    assert "BUY CE 22800 at 10.00 (REVERSAL" in events[0]
+    return day
+
+
+def _ce_chain(ce):
+    return {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(200, 210, 195, 205)}
+
+
+def test_low_premium_before_1330_buys_above_the_confirmation_high():
+    """29-09 10:15: CE 22800 at 10.00 (10 - 25 < 0) -> buy only if the next candle breaks 10.80; SL under 2 candles."""
+    day = _low_premium_day()
+    day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
+    events = day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
+    assert events[0].startswith("ORDER CE 22800: low premium 10.00 - buy only above this candle's high 10.80")
+    events = day.on_candle(_at("10:20"), Candle(22584.8, 22587.7, 22573.0, 22587.5), _ce_chain((10.0, 11.5, 9.8, 11.2)))
+    t = day.open_trade
+    assert "BUY CE 22800 at 10.80" in events[0]
+    assert (t.entry_fill, t.sl_premium, t.sl_rule) == (10.8, 9.65, "2-candle low")
+
+
+def test_low_premium_order_not_triggered_is_cancelled():
+    day = _low_premium_day()
+    day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
+    day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
+    events = day.on_candle(_at("10:20"), Candle(22584.8, 22587.7, 22580, 22583), _ce_chain((10.0, 10.5, 9.5, 9.8)))
+    assert "cancelled - not triggered" in events[0] and day.trades == []
+
+
+def test_low_premium_from_1330_uses_the_day_low_minus_one():
+    day = _low_premium_day()
+    day.on_candle(_at("13:20"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
+    events = day.on_candle(_at("13:25"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
+    assert "BUY CE 22800 at 10.00 (REVERSAL" in events[0]  # candle closes 13:30
     assert (day.open_trade.sl_premium, day.open_trade.sl_rule) == (8.65, "day low - 1")
 
 

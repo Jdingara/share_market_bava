@@ -20,9 +20,14 @@ candles closing 09:30-14:55):
   pattern turns against it (a directional reversal pattern - Doji/Spinning
   Top don't count). Fill = the option's candle close.
   SL = entry premium - 25 points (NIFTY) / 50 (SENSEX) (owner, 2026-09-29).
-  If the premium is too low for that (entry - points <= 0): SL = that
-  option's day low so far - 1 point (owner, 2026-09-29; replaced "the
-  pattern's low", which sat 0.35 under a 10.00 entry).
+  If the premium is too low for that (entry - points <= 0) (owner, 2026-09-29):
+    * from 13:30 (about 4 hours of trading, so the day low means something):
+      buy at the close, SL = the option's day low so far - 1 point;
+    * before 13:30 (e.g. expiry-day morning): buy only if the NEXT candle
+      trades above the confirmation candle's high (filled at that high, or
+      the open if it gaps above), SL = below the lowest low of the last 2
+      candles (confirmation candle and the one before). Not triggered on the
+      next candle -> cancelled.
   Targets = levels only. PE: the levels below the index, one by one; CE: the
   levels above. Final target: the last level (S3/R3) for a gap trade, the
   yesterday's Close for a reversal trade. When the index touches a target:
@@ -50,6 +55,7 @@ from hlc_signal import (DIRECTIONLESS, Candle, HlcLevels, HlcMarket, OptionType,
                         leg_label)
 
 FIRST_ENTRY_CLOSE = time(9, 30)
+DAY_LOW_SL_FROM = time(13, 30)
 LAST_ENTRY_CLOSE = time(14, 55)
 EXIT_CLOSE = time(15, 0)
 MAX_TRADES = 2
@@ -99,6 +105,7 @@ class HlcDay:
         self.index_history: list[Candle] = []
         self.premium_history: dict[tuple[float, str], list[Candle]] = {}
         self.done = False
+        self.pending: Optional[dict] = None  # low-premium buy stop above the confirmation candle
 
     # --- helpers ---
 
@@ -149,9 +156,15 @@ class HlcDay:
         if not targets or side in self.blocked:
             return None
         sl, sl_rule = prem.close - self.market.sl_points, f"{self.market.sl_points:g} points"
-        if sl <= 0:  # premium too low for a points SL: 1 point under the option's day low
-            day_low = min(c.low for c in self.premium_history.get((strike, side), [prem]))
-            sl, sl_rule = max(day_low - 1, 0.05), "day low - 1"
+        if sl <= 0:  # premium too low for a points SL
+            history = self.premium_history.get((strike, side), [prem])
+            if _closes_at(when) >= DAY_LOW_SL_FROM:
+                sl, sl_rule = max(min(c.low for c in history) - 1, 0.05), "day low - 1"
+            else:  # wait for the next candle to break this candle's high
+                self.pending = dict(kind=kind, side=side, strike=strike, stop=prem.high, pattern=pattern, final=final,
+                                    sl=round(min(c.low for c in history[-2:]), 2))
+                return (f"ORDER {side} {strike:g}: low premium {prem.close:.2f} - buy only above this candle's high "
+                        f"{prem.high:.2f} on the next candle, SL {self.pending['sl']:.2f} (2-candle low)")
         trade = HlcTrade(date=self.day.isoformat(), kind=kind, side=side, strike=strike, pattern=pattern,
                          entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=index.close,
                          sl_premium=round(sl, 2), sl_rule=sl_rule, targets=targets,
@@ -183,8 +196,19 @@ class HlcDay:
                 self.blocked[other] = f"{side} PANIC yesterday and above its high {hlc[0]:g} today"
                 events.append(f"No {other} trades today - {self.blocked[other]}")
 
+        if self.pending is not None:
+            order, self.pending = self.pending, None
+            prem = chain.get((order["strike"], order["side"]))
+            if prem is not None and prem.high >= order["stop"] and order["side"] not in self.blocked:
+                fill = Candle(prem.open, prem.high, prem.low, max(order["stop"], prem.open))
+                event = self._open_filled(order, when, fill, index)
+                if event:
+                    events.append(event)
+            else:
+                events.append(f"Order {order['side']} {order['strike']:g} above {order['stop']:.2f} cancelled - not triggered")
+
         trade = self.open_trade
-        if trade is not None:
+        if trade is not None and trade.entry_time != when.isoformat():
             prem = chain.get((trade.strike, trade.side))
             if prem is not None:
                 events += self._manage(trade, when, index, prem, closes)
@@ -192,7 +216,7 @@ class HlcDay:
         if closes >= EXIT_CLOSE:
             self.done = True
             return events
-        if self.open_trade is not None or len(self.trades) >= MAX_TRADES:
+        if self.open_trade is not None or self.pending is not None or len(self.trades) >= MAX_TRADES:
             return events
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
@@ -238,6 +262,20 @@ class HlcDay:
                 if event:
                     return events + [event]
         return events
+
+    def _open_filled(self, order: dict, when: datetime, fill: Candle, index: Candle) -> Optional[str]:
+        """A low-premium buy stop filled at fill.close; managed from the next candle."""
+        targets = self._targets(order["side"], index.close, order["final"])
+        if not targets:
+            return None
+        trade = HlcTrade(date=self.day.isoformat(), kind=order["kind"], side=order["side"], strike=order["strike"],
+                         pattern=order["pattern"], entry_time=when.isoformat(), entry_fill=round(fill.close, 2),
+                         entry_index=index.close, sl_premium=order["sl"], sl_rule="2-candle low", targets=targets,
+                         big_gap=self.big_gap)
+        self.trades.append(trade)
+        self.open_trade = trade
+        names = " -> ".join(f"{n} {v:g}" for n, v in targets)
+        return f"BUY {trade.side} {trade.strike:g} at {trade.entry_fill:.2f} (broke the confirmation high) - SL {trade.sl_premium:.2f}, targets {names}"
 
     def _manage(self, trade: HlcTrade, when: datetime, index: Candle, prem: Candle, closes: time) -> list[str]:
         if prem.low <= trade.sl_premium:
