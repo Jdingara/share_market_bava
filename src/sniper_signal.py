@@ -58,7 +58,7 @@ MAX_SHIFTS = 3
 
 CANDLE_MINUTES = 5
 FIRST_HALF_WINDOW = (time(9, 30), time(12, 0))
-SECOND_HALF_WINDOW = (time(12, 30), time(15, 0))
+SECOND_HALF_WINDOW = (time(12, 5), time(15, 0))  # owner, 2026-09-30: second entry right after 12:00 (was 12:30)
 EXIT_BY = time(15, 0)
 MAX_TRADES_PER_HALF = 1
 

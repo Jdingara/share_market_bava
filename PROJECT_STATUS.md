@@ -42,9 +42,9 @@ When one side's ATM premium falls from its yesterday close, watch the **opposite
 | Half | Entry window | Trigger level |
 |---|---|---|
 | First half | 09:30 – 12:00 | Falling ATM's **yesterday close** |
-| Second half | 12:30 – 15:00 | **Sniper** value |
+| Second half | **after 12:00** – 15:00 (was 12:30; owner, 29-09) | **Sniper** value |
 
-- **Windows count by candle close time** (2026-09-29): the candle closing **at 09:30** (09:25–09:30) is already in the first half, up to the one closing at 12:00; second half = candles closing 12:30–15:00 (no entry on the 15:00 close).
+- **Windows count by candle close time** (2026-09-29): the candle closing **at 09:30** (09:25–09:30) is already in the first half, up to the one closing at 12:00; second half = candles closing **after 12:00** (12:05) to 15:00 (no entry on the 15:00 close; owner moved it from 12:30 on 29-09 — "the second entry only after 12, never before").
 - **Signal** (2026-09-29): a 5-minute OTM candle **closes above the trigger** (first half: the falling ATM's yesterday close; second half: Sniper). Above the trigger is enough — no square has to be crossed yet.
 - **Entry at the upcoming square number** (2026-09-29), as orders from the next candle:
   - signal close still **below** the plan square n² (e.g. trigger 84.20, close 90, n² = 100) → buy when price **rises to 100**;

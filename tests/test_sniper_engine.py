@@ -106,8 +106,11 @@ def test_order_cancelled_when_the_window_ends_unfilled():
         ("11:55", (104, 71, 101.9, 72)),  # signal on the candle closing 12:00
         ("12:00", (104, 102, 103, 102)),  # 12:00-12:05 is outside the first half -> cancelled
     ])
-    assert [e.kind for e in events] == ["ORDER", "CANCEL"]
-    assert engine.trades == [] and engine.pending == []
+    # The first-half order is cancelled; the same 12:00-12:05 candle is already in the second half (owner,
+    # 30-09), so a second-half order starts at once (103 is above Sniper 54).
+    assert [e.kind for e in events] == ["ORDER", "CANCEL", "ORDER"]
+    assert [e.setup.half for e in events] == ["first", "first", "second"]
+    assert engine.trades == []
 
 
 def test_waits_several_candles_for_the_pullback():
