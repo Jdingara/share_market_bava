@@ -1,95 +1,183 @@
-# SPFS Options Strategy — Project Status
+# Sniper Strategy Bot — Project Status
 
-This file is the single source of truth for this project's goal, decisions, and current progress. Any AI assistant (Claude, Codex, or otherwise) or human picking this up should read this file first before making changes. Keep it updated as the project progresses — update the "Current Status" and "Open Decisions" sections whenever a phase completes or a new decision is made.
-
-## Relationship to the sibling project
-
-This is a **separate, independent project** from the older "share-market-bro" NIFTY options bot (rule-based + XGBoost signal, currently running live on its own Kite Connect API app and Zerodha account). That project continues unchanged. This one exists because the user wants to try a genuinely different strategy ("SPFS") without risking or entangling the working system — separate codebase, and eventually a separate Kite Connect API app and separate Zerodha account once this moves past backtesting.
-
-**No runtime code is shared between the two repos.** Building blocks this project needs (Black-Scholes pricing, strike/expiry math, EMA trend calculation) are kept as independent copies here (`src/options_pricing.py`, `src/trend_bias.py`), not imports reaching into the other project's folder — so this project keeps working even if the sibling project's folder is moved, renamed, or deleted.
+**This file is the single source of truth for the project.** If it and any other file (README, code comments, old chats, `Bava Details for bot.docx`, the old `SNIPER_SPEC.md`) disagree, this file is correct and the other one should be fixed to match. Update "Current Status" and "Open Decisions" after every meaningful work session.
 
 ## Goal
 
-Build and validate the SPFS options trading strategy for NIFTY 50 weekly options, following the same disciplined validation order as the sibling project: **backtest first (measure a real historical edge) → paper trading (simulated orders, real live data) → live trading (real money) — never skip ahead.**
+An automated trading bot for the owner (Sasikumar, Zerodha client UTC038) that runs the owner's **Sniper** options-buying strategy on NIFTY (NSE) and SENSEX (BSE) weekly options: a morning plan from the previous day's closing premiums, then square-number entries, stops and targets through the day. Validation order: backtest → paper trading on live data (current phase) → real orders only after paper results match expectations.
 
-## The SPFS Strategy Rules (as currently specified — do not change without explicit user confirmation)
+## Core Decisions/Rules
 
-Reconciled 2026-07-26/27 from two of the user's strategy write-ups that directly contradicted each other on the most important point (one had the ATM strike migrating dynamically with price; the other locked it for the whole day). The user chose the locked-ATM version. Reconciled via several rounds of clarifying questions rather than guessing:
+Decided and stable — **do not change without the owner's explicit confirmation.** Dates show when a rule was confirmed. Section numbers (§1–§5) are referenced from code comments.
 
-1. **Daily ATM lock**: `atm_strike = nearest_strike(previous trading day's closing index value)` — simple round-off, nothing more — e.g. previous close 23922 → ATM 23900 — computed once before the session and never re-picked intraday. **Correction 2026-07-27**: an earlier implementation used *today's opening spot* instead, on the mistaken belief that this was an equivalent simplification. The user corrected this directly with a concrete example — the reference price is yesterday's close, not today's open.
+### Project rules
 
-   **A further refinement was tried and then explicitly rejected the same day** (see Current Status for the full back-and-forth): per an earlier reading of `Bava Details for bot.docx` (a file found in the project folder and read in full before committing it — see Non-Obvious Technical Findings), a "closest CE/PE closing premium" search across ±3 strikes was built, since the doc's own worked example concluded ATM=24000 for previous close 23922, not the naive 23900. When asked directly, the user confirmed the plain round-off (23900) is correct and the CE/PE-gap search should be dropped entirely — the doc's worked example is not the intended rule. **Current, confirmed rule: plain `nearest_strike(previous_close)`, full stop.**
+- **Options buyer only.** R1/R2/R3 and S1/S2/S3 levels are **not** part of this strategy.
+- **Broker: Zerodha** via Kite Connect (app "Sniper_Bot", type Connect, client UTC038, redirect `https://127.0.0.1`). Decided 2026-09-27.
+- **Paper mode only** until the owner explicitly says to place real orders. The bot logs "WOULD BUY / WOULD EXIT" and never calls an order API.
+- **Replaced strategy:** this repo used to hold an unrelated "SPFS" strategy (EMA trend, 70% Sniper, 20-point squares, same-side OTM). On 2026-09-27 the owner replaced it entirely with Sniper and asked that no old concepts be kept. The SPFS code is only in git history (commit `bf1c059` and earlier).
+- **Decide vs execute:** the Sniper logic (`sniper_signal.py`, `sniper_engine.py`) only decides; anything that talks to the broker stays outside it, so an execution layer can be swapped in later.
+- **Independent of the sibling "share-market-bro" bot** (older XGBoost/rule-based NIFTY bot, its own Kite app/account). No runtime code is shared; anything reused is copied here. Never import from that project's folder.
+- **Security:** API key/secret, tokens → `.env` only (gitignored). Never in code, commits or chats. If exposed, regenerate the secret on developers.kite.trade.
 
-   Today's actual open is used only for the huge-gap exception: if it has moved a full strike interval (50pts) or more away from the (now CE/PE-gap-refined) previous-close-based ATM, that stale ATM is discarded in favor of **simple `nearest_strike()` rounding of today's open** — deliberately NOT re-run through the CE/PE-gap search, since that search is only meaningful using previous-close pricing near where the previous close actually was; a gap scenario means today's open sits far outside where that pricing means anything (tried running the refined search here first, found it just walks to whichever edge of the search window is nearest yesterday's close - not a real refinement - see Current Status).
-2. **Direction**: the daily EMA20-vs-EMA50 trend bias (`trend_bias.daily_trend_bias`, using only days strictly before the traded day) picks CE (bullish) or PE (bearish); **neutral trend → no ATM locked, no trade that day** (no-trade is a valid, expected outcome — never forced).
-3. **OTM strike**: same option type as ATM, one strike further out of the money (confirmed explicitly by the user — not the opposite type).
-4. **Sniper level** = 30% drop from the ATM contract's own previous trading day's closing premium (Black-Scholes-simulated, same reason as #6 below — no real historical option premiums are fetchable).
-5. **OTM confirmation**: within a single candle, ATM's *lowest reachable* premium that candle ≤ Sniper level, AND OTM's *highest reachable* premium that candle > ATM's previous-day close. (See Technical Finding #2 below for why each leg is checked at its own favorable extreme, not the same shared spot value.)
-6. **Square Number entry**: a 20-point grid applied to the OTM contract's premium. After confirmation, wait for OTM's premium to reach/cross the next Square Number above its current value (re-evaluated fresh every candle); enter at that square price.
-7. **Trade management**: stop-loss = one square below entry (-20 points), target = two squares above entry (+40 points), both fixed — no momentum-based target extension (the sibling project has direct evidence, from its own real trade data, that trailing/momentum-based exits underperformed a simple fixed target there).
-8. Both CALL and PUT sides supported symmetrically.
-9. Intra-candle crossing convention: check each candle's high/low range (not just close); if both stop and target are theoretically crossable within one candle, conservatively assume the stop hit first.
+### §1 Daily setup (previous trading day's data)
 
-**Explicitly deferred, not built (v1 scope):**
-- The "fake breakout → consolidation → retest → reversal candle → second-chance entry" retry path from the original discussion. v1 just returns a clean no-trade result when OTM never confirms.
-- Any live or paper trading code. This is backtest-only for now.
+| Step | Rule |
+|---|---|
+| Index close | Previous trading day close (skip weekends/holidays) |
+| Nearest ATM | Nearest 100-multiple strike to the index close |
+| OTM strikes | OTM CE = ATM + 100, OTM PE = ATM − 100 (**both NIFTY and SENSEX**, confirmed 2026-09-29) |
+| Sniper | `(OTM CE close + OTM PE close) / 2` |
+| Gap check | ATM CE close − Sniper ≥ min gap **AND** ATM PE close − Sniper ≥ min gap |
+| Min gap | NIFTY **25**, SENSEX **35** (SENSEX changed from 45 on 2026-09-29) |
+| Shift | PE fails → ATM +100. CE fails → ATM −100. Recalculate. Max 3 shifts. Both fail → no plan |
+| Expiry | Nearest expiry on/after the trading day (expiry day uses the same-day expiry) |
+
+### §2 Entry logic
+
+When one side's ATM premium falls from its yesterday close, watch the **opposite-side OTM**:
+- ATM CE falling (market down) → buy **OTM PE** (ATM − 100)
+- ATM PE falling (market up) → buy **OTM CE** (ATM + 100)
+
+| Half | Entry window | Trigger level |
+|---|---|---|
+| First half | 09:30 – 12:00 | Falling ATM's **yesterday close** |
+| Second half | 12:30 – 15:00 | **Sniper** value |
+
+- Entry = a **5-minute candle closing above** the entry square.
+- **The candle must cross a square** (2026-09-28): previous candle closed at/below it, this one closes above it.
+- **If the OTM is already above the entry square** (e.g. after a gap), buy at the **next square it crosses**, with SL/target measured from **that** square (2026-09-28). Example: entry square 100 but OTM already at 189 → candle closes above 196 (14²) → buy; SL 169, target 256. A candle jumping several squares uses the highest one crossed. No square crossed in the window → no trade.
+
+### §3 Square-number levels
+
+- `n = ceil(sqrt(trigger))` → **Entry = n²** (the square at or above the trigger, never below)
+- **SL = (n − 1)²**, **Target = (n + 2)²** (or from k when a higher square k² was crossed, §2)
+- Example: trigger 89.15 → entry 100 (10²), SL 81, target 144
+
+### §4 Limits and exits
+
+- Max **2 trades/day** (one per half). **Exit everything by 15:00.**
+- **Sideways** (all 4 strikes — ATM CE, ATM PE, OTM CE, OTM PE — below their yesterday close) = no trade. Expiry day: same rules.
+- **Trailing SL** (2026-09-28): each time a 5-minute candle **closes above** a square k², SL moves up to (k − 1)². **Only moves up, never down.** Entry 100: close above 121 → SL 100; above 144 → SL 121; above 169 → SL 144.
+- **Target stays — book the profit there** (2026-09-28): a trade in profit must not give it back.
+- **Quantity per trade** (2026-09-28): **NIFTY 5 lots = 325** (lot 65), **SENSEX 15 lots = 300** (lot 20).
+
+### §5 Worked example (owner's, data 25-09-2026 → trading 28-09-2026)
+
+NIFTY close 23140.5 → nearest ATM 23100.
+
+| ATM | OTM CE | OTM PE | Sniper | ATM CE gap | ATM PE gap | Result |
+|---|---|---|---|---|---|---|
+| 23100 | 23200 CE 89.15 | 23000 PE 34.25 | 61.70 | 147.40 → +85.70 ✓ | 59.20 → −2.50 ✗ | Shift up |
+| **23200** | 23300 CE 48.8 | 23100 PE 59.2 | **54.00** | 89.15 → +35.15 ✓ | 99.80 → +45.80 ✓ | **Final** |
+
+| Half | Scenario | Buy | Trigger | Entry | SL | Target |
+|---|---|---|---|---|---|---|
+| First | Market down | 23100 PE | ATM CE close 89.15 | 100 | 81 | 144 |
+| First | Market up | 23300 CE | ATM PE close 99.80 | 100 | 81 | 144 |
+| Second | Market down | 23100 PE | Sniper 54 | 64 | 49 | 100 |
+| Second | Market up | 23300 CE | Sniper 54 | 64 | 49 | 100 |
+
+`tests/test_sniper_signal.py` reproduces this exactly.
+
+### Implementation conventions (current behaviour where the rules above leave room)
+
+Not yet explicitly confirmed by the owner — listed again in Open Decisions.
+1. **Fill price** = the entry candle's close (above the square), not the square itself. P&L is measured from the fill.
+2. **Windows judged by candle close time:** first half = candles starting 09:30…11:55; second half = 12:30…14:50. No entry on the candle closing at 15:00.
+3. **Sideways checked per candle**, not for the whole day (a whole-day check would need future data).
+4. **"Falling" ATM** = below its yesterday close on the entry candle.
+5. A second-half trade **may open while a first-half trade is still running**.
+6. **Stop before target** if one candle's range crosses both. Stop/target fill at their level.
+7. **Shift oscillation** (PE fails at one ATM, CE at the next) is followed literally until the 3-shift limit → no plan.
+8. **Previous close** = Zerodha's official daily close for each contract.
 
 ## Non-Obvious Technical Findings
 
-1. **Kite Connect has no historical option premium data for expired contracts** (confirmed in the sibling project — the earliest listed expiry in the live instrument dump is always today's date). `src/options_pricing.py` simulates premiums via Black-Scholes using real historical NIFTY spot prices, with historical/realized volatility standing in for implied volatility. Same permanent API constraint as the sibling project, not something to fix later.
-2. **A same-candle, same-spot confirmation check is mathematically impossible, not just imprecise — found and fixed 2026-07-27 before the first real backtest run.** The initial implementation checked ATM-decayed-to-Sniper and OTM-broken-out at the same single spot value (a candle's close). Since OTM and ATM are the same option type with OTM's strike further out, no-arbitrage guarantees OTM's premium can never exceed ATM's premium at any shared spot/vol/time point — so requiring ATM ≤ 70% of its old close (low) while OTM simultaneously exceeds that same old close (necessarily higher than ATM, which is already capped lower) can never be true at one spot value. **Fixed** by checking each leg at its own favorable extreme within the candle's high/low range instead (ATM's lowest reachable premium vs. OTM's highest reachable premium, each within the same candle) — the same "did price touch this level today" convention the sibling project already uses for stop/target crossings.
-3. **`data_fetch.py`-style tools that overwrite (not merge) a cached CSV are a real risk when refreshing historical data** — this bit the sibling project during this same work session: refreshing with too small a `--days` value silently truncated ~230 days of cached history. This project's `data/historical/*.csv` files were copied from the sibling project's already-recovered, full-range cache (2025-06-23 through 2026-07-15) — if this project ever builds its own `data_fetch.py`, always pass a `--days` value comfortably larger than the existing cached range, never a "just fill the gap" small one.
-4. **`data/historical/*.csv` is committed to git here**, unlike the sibling project (which gitignores it and regenerates via `data_fetch.py` + Kite auth). This project has no fetch mechanism yet — once it gets its own Kite Connect API app and `data_fetch.py`/`auth.py` equivalents, reconsider whether to keep committing this data or switch to the sibling project's gitignore convention.
-5. **Always read a file before committing/pushing it, even if it wasn't explicitly shared in chat.** A file (`Bava Details for bot.docx`) appeared directly in this project's folder mid-session, picked up by `git add -A`. It was opened and read before staging/committing it - not sensitive data, but its worked example turned out to describe a different ATM rule than what the user actually confirmed as correct (see Strategy Rule #1 and Current Status) - the point being that reading it first is what surfaced that discrepancy at all, rather than silently implementing whichever version was assumed right.
+1. **No historical option premiums for expired contracts** on Kite. The backtester therefore uses Black-Scholes **estimates** from NIFTY spot with 20-day realized volatility. Square levels are sensitive to exact premiums, so backtest P&L is directional only.
+2. **Kite's daily close ≠ the last 5-minute close.** E.g. 23100 PE on 25-09: last 5-min close 58.80, official daily close 59.20. The owner's 23200 PE figure 99.80 vs Zerodha's 100.10 flips the entry from 100 to 121 (√100.10 > 10).
+3. **Kite Connect app type must be "Connect"** (paid). "Personal" is free but has no historical or live market data.
+4. **"The user is not enabled for the app"** at login = the app's Zerodha Client ID doesn't match the login ID. The app was first saved with the form's grey placeholder `AB1234`; fixed to UTC038 in the app settings (editable, no need to recreate).
+5. **Login flow:** Zerodha passes through `kite.zerodha.com/connect/finish?...sess_id=...` (not usable) before redirecting to `https://127.0.0.1/?...request_token=...`. The final page shows "site can't be reached" — that is expected. A request_token works **once, for a few minutes**. Sessions expire ~06:00 the next day, so login is daily.
+6. **Pasting into the cmd login prompt has been unreliable** (window closing, stale tokens). Reliable fallback: the owner pastes the `127.0.0.1/?request_token=...` address into the Claude chat and Claude exchanges it (script in the 2026-09-29 session) — safe because the token is single-use and useless without the API secret.
+7. **The bot stops if its cmd window is closed or the laptop sleeps.** On 2026-09-28 the bot stopped after 10:45 (no "Day finished", no trades CSV, second half not watched). Set Windows sleep to Never on trading days.
+8. **5-minute option candles are available within the 20 s poll delay**; Kite also returns the still-forming candle, which the bot skips. Historical API limit is 3 requests/second (0.35 s pause built in).
+9. **Instrument facts** (checked 2026-09-28/29): NIFTY index token 256265, options on NFO, Tuesday weekly expiry, lot 65. SENSEX index token 265, options on BFO (`SENSEX26O01…` symbols), Thursday weekly expiry, lot 20. Both 100-point strike steps.
+10. **SENSEX with ±100 OTM often fails the gap check**: at ~72,800 adjacent strikes differ by only ~50 in premium, so the shift loop oscillates (72900 ↔ 73000) and ends in no plan — happened on 2026-09-29 at both 45 and 35 min gap.
+11. **Restarting the live bot mid-day is safe:** it replays today's closed candles in order and marks any entry from that replay as "catch-up" in the log. Python code changes need a restart; `dashboard.html` is re-read on every request, so page edits apply on refresh.
+12. **Windows environment:** Python 3.12 and Git were installed with winget on 2026-09-27. `py`/`git` only work in shells opened after the install. PowerShell 5.1 mangles quotes in `python -c "..."` — put scripts in files. `.bat` files need CRLF line endings.
+13. **Refreshing cached CSVs by overwrite can silently truncate history** (happened in the sibling project). Any future fetch script must fetch a range larger than the existing cache.
 
-## Current Status (last updated: 2026-07-27)
+## Full Roadmap
 
-**Built and backtested, but not yet a working strategy.** `src/spfs_signal.py` (pure ATM/Sniper/Square math) and `src/spfs_backtester.py` (day-by-day replay, simulating both the ATM and OTM contracts' premiums via Black-Scholes per 5-minute candle) are complete, with 24 passing unit tests (`tests/test_spfs_signal.py`, `tests/test_spfs_backtester.py`) covering the pure functions and the confirmation→entry→exit state machine (via synthetic candle data + monkeypatched pricing, isolating the state machine from real Black-Scholes curvature).
+| Phase | Scope | Status |
+|---|---|---|
+| 0 | Replace SPFS with the Sniper rules; pure logic + tests; backtest on estimated premiums | ✅ Done 2026-09-27 |
+| 1 | Morning plan from real previous-day closes | ✅ Done — `sniper_live.py --plan-only`, dashboard, JSON; matched §5 on real Zerodha data |
+| 2 | Paper mode: live 5-min watch, "would buy/exit" alerts, dashboard, ₹ P&L | 🟡 **Running since 2026-09-28** (NIFTY; SENSEX added 2026-09-29). Needs several full days of clean results |
+| 3 | Real orders via Zerodha, owner's quantity, daily max-loss stop | ⏳ Not started — needs owner go-ahead, daily max loss, order mode, SEBI algo/static-IP compliance |
+| — | Backtest on real option data | ⏳ Blocked on a source of expired-option history |
 
-**Honest backtest result (140 real cached days, 2025-12-17 to 2026-07-15): 5 no-trade days (neutral trend), 135 no-trade days (OTM never confirmed on the same candle as ATM's decay), ZERO trades taken.**
+## Current Status (last updated: 2026-09-29)
 
-Investigated *why* via `tests/manual_spfs_sanity_check.py` rather than assuming the rule was simply too strict by design: on several individual days (e.g. 2026-07-06, 07-07, 07-09, 07-10) the OTM leg cleared its threshold AND the ATM leg separately reached Sniper *at some point that day* — but hand-tracing 2026-06-11 candle-by-candle confirmed they never land on the *same* candle. OTM's premium peak tends to occur early (right when a favorable spot move happens); ATM's premium trough tends to occur later (cumulative theta decay layered on top of the day's price action). Different times of day, for different underlying reasons — because ATM and OTM premiums are otherwise highly correlated (same underlying, same vol, same expiry). **This is a genuine structural finding about the rule exactly as specified, not a bug in this codebase.**
+**What's built and verified.** The full Sniper rule set (§1–§4) runs in one engine (`sniper_engine.SniperDay`) shared by the backtester and the live paper bot. 56 tests pass, including §5 reproduced exactly, a fake-clock full trading day, and the 28-09 gap-day entry. The live bot logs in to Zerodha, builds the morning plan from real closes, polls real 5-minute option candles, and shows everything on a local dashboard (NIFTY :8050, SENSEX :8051) with ₹ P&L for the configured quantity.
 
-A rough diagnostic found that loosening the check to "both conditions true independently, anywhere in the same day" (not the same candle) would have qualified roughly 24 of the 135 no-confirmation days — a plausible starting point if the rule gets revisited, but not yet decided or built.
+**How the rules got here (2026-09-27/28), in order:**
+- The first Sniper backtest let the bot buy any candle already above the square. That bought above its own targets and lost ~5,300 estimated points, so a **cross requirement** was added. The owner confirmed it on 28-09 (a gap-down day), first as "no cross = no trade".
+- Minutes later the owner refined it: if the OTM is already above, buy the **next square it crosses**, with SL/target from that square (§2). The bot was restarted at 09:49 to apply it.
+- **Trailing SL** was added on the owner's request. The backtest (estimated premiums, 140 days, 63 trades) compared three exit rules: fixed SL + target **+106** pts; trailing + target **+153**; trailing without target **+199**. The owner chose trailing + target ("book the profit, never give it back"), even though no-target scored higher.
+- The **big-gap ATM rule** (re-pick ATM from today's open after a 100–150 point gap) was proposed by the owner but **not built**. On 28-09 the open gap was only 75 points (the big fall came after the open), so it would not have changed that day.
 
-**This project was migrated into its own separate repo/folder on 2026-07-27**, at the user's explicit request, to keep it fully independent from the sibling XGBoost bot (separate code, and eventually a separate Kite Connect API app + separate Zerodha account). All SPFS source/test files were copied over with the sibling project's shared dependencies (`options_pricing.py` in full, and a new minimal `trend_bias.py` extracted from the sibling's larger `signal_engine.py` — SPFS only ever needed the EMA20/50 trend calculation from that file, not its RSI/Fibonacci/candlestick confluence logic). Verified fully standalone: all 24 tests and the backtester itself were re-run from this new location with zero dependency on the sibling project's folder, producing byte-identical results.
+**First live paper day, 2026-09-28 (NIFTY).** Plan ATM 23200, Sniper 54 (matches §5 except the 100.10 vs 99.80 close). NIFTY opened 23064.9 and fell ~280 points by 09:40. The 23100 PE jumped 59 → 164 before 09:30. The bot bought **325 × 23100 PE @ 197.25** (09:30 candle crossed 196; SL 169 → trailed to 196). It hit the **256 target at 10:45: +58.75 points = +₹19,094** before charges. That entry was found on the 09:49 restart's catch-up and is marked as such. **The bot then stopped** (window closed or laptop sleep), so the second half wasn't watched and no trades CSV was written. The result is in `data/paper_trades/log_2026-09-28.txt`.
 
-**ATM lock rule corrected the same day, right after the migration** (see Strategy Rule #1 above for the full before/after): the user pointed out directly that ATM must be locked off the *previous day's closing index value*, not today's open, with a concrete example (previous close 23922 → ATM 23900). The earlier "today's open already handles the gap exception for free" reasoning was a mistaken oversimplification — the real rule needs previous-close as the primary reference *and* a genuine gap-check branch on top, which the fix now implements (`lock_atm_strike(previous_close_spot, day_open_spot)`, `ATM_GAP_THRESHOLD = 50`). 2 new/rewritten unit tests cover the previous-close basis, a small-move no-override case, and both a clear gap and an exactly-at-threshold gap; full suite now 26 passing.
-
-**Re-ran the backtest after the previous-close fix: 1 trade (was 0), a target hit, +40 points (+25%)** — still just n=1, only confirming the pipeline runs end-to-end.
-
-**Tried refining the ATM rule further the same session, per `Bava Details for bot.docx`**: built a CE/PE-gap-minimizing search across ±3 strikes (`_closest_ce_pe_strike`), matching the doc's own worked example which concluded ATM=24000 for previous close 23922 (not the naive 23900). Backtest re-run with this refinement: back to 0 trades (the one trade found under simple rounding depended on exactly the strike shift this refinement undid).
-
-**Explicitly rejected the same session, after asking the user directly.** Described the discrepancy plainly (doc's worked example says 24000, plain round-off says 23900, those disagree) and asked which was correct. **User confirmed: plain round-off (23900) is correct — the CE/PE-gap search should be dropped entirely.** Reverted `lock_atm_strike` back to simple `nearest_strike(previous_close)`, removed `_closest_ce_pe_strike` and its tests, restored the simpler deterministic test set. Full suite back to 26 passing.
-
-**Re-ran the real backtest with the confirmed simple rule: 1 trade, target hit, +40 points (+25%)** — same single result as right after the previous-close fix (before the CE/PE-gap detour). **Honest current state: the strategy, fully as specified and confirmed today, produces 1 trade across 140 real days** - not remotely a validated edge on its own, and the same-candle confirmation rule (Strategy Rule #5) remains the dominant reason for the other 134 no-trade days, unaffected by ATM selection since it's about the correlation between ATM/OTM premiums, not which exact strike is chosen.
-
-**Lesson for next time**: when a user-provided document's own worked example produces a different answer than a plain-language rule restated in chat, flag the discrepancy explicitly and ask, rather than assuming either one is more authoritative than the other - this happened here (asked, and the doc's example turned out not to reflect the intended rule).
+**2026-09-29 (NIFTY expiry day).**
+- Login via `start_bot.bat` failed twice. The owner then pasted the redirect URL into chat and Claude completed the login (Finding 6). The laptop was restarted in between.
+- NIFTY plan: close 22780.25 → ATM 22800, no shift, Sniper 39.58. First half: 22700 PE above 100 (81/144) or 22900 CE above 81 (64/121). Second half: either side above 49 (36/81). 325 qty.
+- **SENSEX support added** (`--market SENSEX`, 300 qty, BFO contracts, own dashboard port). The owner lowered the SENSEX min gap 45 → 35 and kept ±100 strikes. SENSEX still had **no plan** today (gap check oscillated, Finding 10).
+- `start_bot.bat` now starts both markets after one login.
+- **Permanent day-by-day history added** (`history/`, written by the bot after every entry/exit so a mid-day stop still leaves a record). 28-09 was backfilled from its log. Both bots were restarted at 09:24, before the entry window, to start recording.
+- Day's result: pending (15:00) — see `history/TRADE_HISTORY.md`.
 
 ## Open Decisions
 
-- **1 trade across 140 days, even with the ATM rule now confirmed correct — the same-candle confirmation rule (Strategy Rule #5) is the real bottleneck, not ATM selection.** Options: (a) loosen the confirmation timing to same-day instead of same-candle (a diagnostic found ~24/135 no-confirmation days would have qualified under an earlier ATM rule variant - worth re-checking against the current confirmed logic, not yet done), (b) adjust the Sniper %/Square interval/OTM distance and re-backtest, or (c) conclude SPFS isn't viable as specified and stop here. Not decided yet — do not change the rule unilaterally.
-- **New Kite Connect API app + new Zerodha account** — needed before this project can move to paper trading (matching the sibling project's Phase 4). Not started; the user indicated this will be a genuinely separate app/account from the sibling project's.
-- **Fake-breakout/reversal retry path** (from the original strategy discussion) — deliberately deferred out of v1. Revisit only after the core mechanic above is either fixed to produce real trades, or replaced.
-- **Whether to keep committing `data/historical/*.csv`** once this project gets its own data-fetching capability (see Technical Finding #4).
+- **Big-gap ATM rule:** threshold 100 or 150 points? (Proposed 28-09, not built.)
+- **Previous close source:** Zerodha official close (bot's current choice) or the owner's figure (e.g. 99.80 vs 100.10)?
+- **Daily max loss** at which the bot stops for the day (needed before real orders).
+- **Second-half last entry time:** 15:00 per rules, or 14:30?
+- **ATM reversal trade** (Morning Star / Bullish Engulfing / Bullish Harami on the ATM chart): dropped completely?
+- **Order mode for Phase 3:** fully automatic, or alert + manual confirm?
+- **Where the bot runs** (laptop vs cloud VPS) and SEBI algo/static-IP compliance with Zerodha.
+- **Implementation conventions 1–8** above: confirm, especially #1 (fill at candle close, not the square).
+- **SENSEX gap check** keeps failing with ±100 strikes: accept "no plan" days, or change something?
+- **Excel morning plan:** the old spec mentioned `sniper_phase1.py` (plan → Excel), not in this repo — still wanted?
+- **Real option data** for a meaningful backtest (Kite has none for expired contracts).
+- **Commit and push:** nothing since 2026-09-27 is committed yet.
 
 ## Repo Structure
 
 ```
-Share_Market_Bava_SPFS/
-  PROJECT_STATUS.md     # this file - read first
-  README.md             # setup/usage instructions
-  requirements.txt
-  src/
-    options_pricing.py  # Black-Scholes premium simulation + strike/expiry helpers (independent copy)
-    trend_bias.py        # minimal EMA20/EMA50 daily trend calc (independent extraction)
-    spfs_signal.py         # pure ATM/Sniper/Square Number logic
-    spfs_backtester.py       # day-by-day replay + reporting
-  tests/
-    test_spfs_signal.py       # unit tests for the pure functions
-    test_spfs_backtester.py    # state-machine regression tests (synthetic data)
-    manual_spfs_sanity_check.py # non-automated, human-eyeball check against real cached data
-  data/
-    historical/           # cached NIFTY 50 daily + 5-minute candles (committed - see Technical Finding #4)
-    backtest_results/      # spfs_trades.csv from the last backtester run (gitignored)
+PROJECT_STATUS.md        # this file - single source of truth (rules, findings, roadmap, status)
+CLAUDE.md, AGENTS.md     # pointers for AI tools to this file (keep word-for-word in sync)
+README.md                # how to install and run
+SNIPER_SPEC.md           # stub pointing here (the rules moved into Core Decisions on 2026-09-29)
+start_bot.bat            # daily login, then SENSEX (2nd window) + NIFTY paper bots
+.env.example             # credentials template -> copy to .env (gitignored)
+requirements.txt
+Bava Details for bot.docx  # an earlier write-up of the strategy - superseded by this file
+src/
+  sniper_signal.py       # pure rules: ATM/OTM/Sniper, gap check + shifts, squares, windows, sideways; NIFTY/SENSEX configs
+  sniper_engine.py       # candle-by-candle entries/exits, trailing SL - shared by backtest and live
+  sniper_live.py         # live paper bot on Zerodha data (--market, --plan-only, --replay)
+  kite_auth.py           # daily Kite Connect login
+  dashboard.py/.html     # local dashboard (NIFTY :8050, SENSEX :8051)
+  history.py             # writes history/ (per-day plan, trades, P&L)
+  sniper_backtester.py   # backtest on cached NIFTY candles with estimated premiums
+  options_pricing.py     # Black-Scholes estimates, expiry helpers
+tests/                   # 58 tests: rules (§5), engine/backtest, live bot (fake Kite + fake clock)
+history/                 # permanent record, committed: days.csv, trades.csv, TRADE_HISTORY.md (all days, newest first)
+data/
+  historical/            # cached NIFTY daily + 5-minute candles (committed)
+  backtest_results/      # backtest output (gitignored)
+  paper_trades/          # raw per-day plans, logs, trades (gitignored - history/ is the permanent record)
+.cache/                  # today's Kite session token (gitignored)
 ```

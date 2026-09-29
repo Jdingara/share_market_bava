@@ -1,0 +1,2 @@
+date,market,half,direction,symbol,qty,entry_time,entry_fill,entry_square,stop_loss,trail_stop,target,exit_time,exit_premium,exit_reason,pnl_points,pnl_rupees,note
+2026-09-28,NIFTY,first,down,NIFTY26SEP23100PE,325,09:30,197.25,196,169,196.0,256,10:40,256.0,TARGET,58.75,19094,catch-up

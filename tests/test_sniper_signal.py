@@ -1,0 +1,183 @@
+"""Unit tests for sniper_signal.py, anchored on PROJECT_STATUS.md §5's worked example."""
+
+import sys
+from datetime import date, datetime
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from options_pricing import next_weekly_expiry
+from sniper_signal import (
+    MARKETS,
+    build_daily_plan,
+    entry_window_for,
+    is_sideways,
+    nearest_atm,
+    square_levels,
+    trade_setups,
+)
+
+NIFTY = MARKETS["NIFTY"]
+
+# PROJECT_STATUS.md §5: data 28-09-2026, NIFTY close 23140.5
+WORKED_EXAMPLE_PREMIUMS = {
+    (23100, "CE"): 147.40,
+    (23100, "PE"): 59.20,
+    (23200, "CE"): 89.15,
+    (23000, "PE"): 34.25,
+    (23300, "CE"): 48.80,
+    (23200, "PE"): 99.80,
+}
+
+
+def _lookup(table):
+    return lambda strike, option_type: table[(strike, option_type)]
+
+
+def test_nearest_atm():
+    assert nearest_atm(23140.5, 100) == 23100
+    assert nearest_atm(23150, 100) == 23200  # exact half rounds up
+    assert nearest_atm(23250, 100) == 23300  # not banker's rounding (would give 23200)
+
+
+def test_worked_example_plan():
+    plan = build_daily_plan(23140.5, NIFTY, _lookup(WORKED_EXAMPLE_PREMIUMS))
+
+    first, final = plan.attempts
+    assert first.atm_strike == 23100
+    assert first.sniper == pytest.approx(61.70)
+    assert first.ce_gap == pytest.approx(85.70)
+    assert first.pe_gap == pytest.approx(-2.50)
+    assert first.ce_ok and not first.pe_ok
+
+    assert plan.final == final
+    assert final.atm_strike == 23200
+    assert final.otm_ce_strike == 23300
+    assert final.otm_pe_strike == 23100
+    assert final.sniper == pytest.approx(54.00)
+    assert final.ce_gap == pytest.approx(35.15)
+    assert final.pe_gap == pytest.approx(45.80)
+
+
+def test_worked_example_trade_table():
+    plan = build_daily_plan(23140.5, NIFTY, _lookup(WORKED_EXAMPLE_PREMIUMS))
+    table = {
+        (s.half, s.direction): (s.buy_strike, s.buy_type, s.levels.trigger, s.levels.entry, s.levels.stop_loss, s.levels.target)
+        for s in trade_setups(plan.final)
+    }
+    assert table[("first", "down")] == (23100, "PE", 89.15, 100, 81, 144)
+    assert table[("first", "up")] == (23300, "CE", 99.80, 100, 81, 144)
+    assert table[("second", "down")] == (23100, "PE", pytest.approx(54.0), 64, 49, 100)
+    assert table[("second", "up")] == (23300, "CE", pytest.approx(54.0), 64, 49, 100)
+
+
+def _flat_premiums(atm_ce_gap, atm_pe_gap, atm_strike, sniper=50.0):
+    """A premium lookup where every ATM gives the same gaps, relative to a
+    Sniper of 50 (OTM CE and OTM PE both 50)."""
+
+    def lookup(strike, option_type):
+        if strike == atm_strike:
+            return sniper + (atm_ce_gap if option_type == "CE" else atm_pe_gap)
+        return sniper
+
+    return lookup
+
+
+def test_ce_fail_shifts_down():
+    # Mirror image of the worked example: CE gap fails at 23100, both pass at 23000.
+    mirrored = {
+        (23100, "CE"): 59.20,
+        (23100, "PE"): 147.40,
+        (23200, "CE"): 34.25,
+        (23000, "PE"): 89.15,
+        (23000, "CE"): 99.80,
+        (22900, "PE"): 48.80,
+    }
+    plan = build_daily_plan(23059.5, NIFTY, _lookup(mirrored))
+    assert [a.atm_strike for a in plan.attempts] == [23100, 23000]
+    assert plan.attempts[0].ce_gap == pytest.approx(-2.50)
+    assert plan.final.sniper == pytest.approx(54.00)
+
+
+def test_both_fail_is_no_plan():
+    plan = build_daily_plan(23100, NIFTY, _flat_premiums(10, 10, 23100))
+    assert plan.final is None
+    assert len(plan.attempts) == 1
+
+
+def test_gap_exactly_min_passes():
+    plan = build_daily_plan(23100, NIFTY, _flat_premiums(25, 25, 23100))
+    assert plan.final is not None
+
+
+def test_sensex_uses_35_min_gap():
+    lookup = _flat_premiums(30, 30, 80000)
+    assert build_daily_plan(80000, NIFTY, lookup).final is not None  # 30 >= 25
+    assert build_daily_plan(80000, MARKETS["SENSEX"], lookup).final is None  # 30 < 35
+    assert build_daily_plan(80000, MARKETS["SENSEX"], _flat_premiums(35, 35, 80000)).final is not None
+
+
+def test_max_three_shifts_then_no_plan():
+    # PE gap always fails, CE always passes -> keeps shifting up.
+    def lookup(strike, option_type):
+        if strike % 100 == 0 and option_type == "CE" and strike >= 23100:
+            return 100.0
+        return 50.0
+
+    plan = build_daily_plan(23100, NIFTY, lookup)
+    assert plan.final is None
+    assert [a.atm_strike for a in plan.attempts] == [23100, 23200, 23300, 23400]
+
+
+@pytest.mark.parametrize(
+    "trigger, entry, sl, target",
+    [
+        (89.15, 100, 81, 144),
+        (99.80, 100, 81, 144),
+        (100.0, 100, 81, 144),  # exactly a square: at-or-above keeps it
+        (100.01, 121, 100, 169),
+        (54.0, 64, 49, 100),
+        (0.5, 1, 0, 9),
+    ],
+)
+def test_square_levels(trigger, entry, sl, target):
+    levels = square_levels(trigger)
+    assert (levels.entry, levels.stop_loss, levels.target) == (entry, sl, target)
+    assert levels.entry >= trigger
+
+
+def test_square_levels_rejects_non_positive():
+    with pytest.raises(ValueError):
+        square_levels(0)
+
+
+@pytest.mark.parametrize(
+    "hhmm, half",
+    [
+        ("09:25", None),
+        ("09:30", "first"),
+        ("11:55", "first"),  # closes 12:00
+        ("12:00", None),
+        ("12:25", None),
+        ("12:30", "second"),
+        ("14:55", "second"),  # closes 15:00
+        ("15:00", None),
+    ],
+)
+def test_entry_windows(hhmm, half):
+    assert entry_window_for(datetime.fromisoformat(f"2026-09-29T{hhmm}")) == half
+
+
+def test_sideways():
+    prev = {"atm_ce": 89.15, "atm_pe": 99.80, "otm_ce": 48.8, "otm_pe": 59.2}
+    assert is_sideways({"atm_ce": 80, "atm_pe": 90, "otm_ce": 40, "otm_pe": 50}, prev)
+    assert not is_sideways({"atm_ce": 80, "atm_pe": 100, "otm_ce": 40, "otm_pe": 50}, prev)
+
+
+def test_expiry_day_uses_same_day():
+    tuesday = date(2026, 9, 29)
+    assert next_weekly_expiry(tuesday, 1) == tuesday
+    assert next_weekly_expiry(date(2026, 9, 28), 1) == tuesday
+    assert next_weekly_expiry(date(2026, 9, 30), 1) == date(2026, 10, 6)

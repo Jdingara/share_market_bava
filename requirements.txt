@@ -1,2 +1,4 @@
 pandas
 pytest
+kiteconnect
+python-dotenv

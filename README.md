@@ -1,56 +1,69 @@
-# Share Market Bava — SPFS Strategy
+# Share Market Bava — Sniper Bot
 
-> **See `PROJECT_STATUS.md` for the full project state** — goal, strategy rules, current backtest result, and technical findings. Read that first, especially after a break or when picking this up with a different AI assistant.
+> **Read [PROJECT_STATUS.md](PROJECT_STATUS.md) first** — the strategy rules, decisions, current status and known gotchas all live there. This README only covers how to install and run things.
 
-A new, independent NIFTY 50 options trading strategy ("SPFS": locked ATM + Sniper premium level + OTM confirmation + Square Number execution), built as a **separate project** from the older XGBoost/rule-based bot (a different repo - see `PROJECT_STATUS.md` for why). This project will get its own Kite Connect API app and its own Zerodha account once it's ready to move past backtesting.
+The bot is in **paper mode**: it uses real Zerodha market data but only reports what it *would* buy and sell. It never places orders.
 
-## Current phase: backtest only
+## Install
 
-There is no live or paper trading code here yet, and no `.env`/Kite credentials are wired up. Everything so far is a historical backtest against cached NIFTY 50 candles, following the same validation order as the sibling project: **backtest first, prove out a real edge, only then build paper trading, only then consider real money.**
+1. Python 3.12+ and Git (on Windows: `winget install Python.Python.3.12` and `winget install Git.Git`, then open a new terminal).
+2. From the repo folder:
+   ```
+   py -m pip install -r requirements.txt
+   ```
+3. Zerodha **Kite Connect** app (developers.kite.trade): type **Connect**, redirect URL `https://127.0.0.1`, Zerodha Client ID = your Kite login ID.
+4. Copy `.env.example` to `.env` and fill in `KITE_API_KEY` and `KITE_API_SECRET`. Optional: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` for phone alerts.
 
-**Honest current result: 0 trades across 140 real cached trading days.** The strategy's confirmation rule, as specified, requires two conditions on the *same 5-minute candle* that in practice occur on different candles within the same day (see `PROJECT_STATUS.md`'s Current Status for the full explanation). This is not yet a working, tradeable strategy — it's a documented starting point for the next iteration.
+## Run the paper bot (every trading day, before 09:15)
 
-## Setup
+Double-click **`start_bot.bat`**. It:
+1. opens Zerodha login — log in, then copy the address the browser lands on (`https://127.0.0.1/?...request_token=...`; the page itself shows an error, that's normal) and paste it into the window;
+2. starts the **SENSEX** bot in a second window and the **NIFTY** bot in the first.
+
+Keep both windows open and the laptop awake until 15:00.
+
+Or step by step in cmd:
+```
+py src\kite_auth.py
+py src\sniper_live.py --market NIFTY
+py src\sniper_live.py --market SENSEX      (in a second window)
+```
+
+### `sniper_live.py` options
+
+| Flag | Meaning |
+|---|---|
+| `--market NIFTY` / `--market SENSEX` | Which index (default NIFTY) |
+| `--plan-only` | Show today's morning plan, don't watch the market |
+| `--replay YYYY-MM-DD` | Re-run a recent day on its real candles (contracts must still be listed — about the current and previous expiry week) |
+| `--speed N` | Replay speed, seconds per candle (default 0.5) |
+| `--no-browser` | Don't open the dashboard automatically |
+
+### Dashboard
+
+- NIFTY: http://127.0.0.1:8050
+- SENSEX: http://127.0.0.1:8051
+
+It shows the morning plan, the 4 possible trades, premium charts with entry/SL/target lines, paper trades with ₹ P&L, and the log. It refreshes every 3 seconds and is reachable from this PC only.
+
+### History (all days)
+
+`history\TRADE_HISTORY.md` — every trading day, newest first: the plan, each paper trade, and P&L in points and ₹, with a running total. Updated by the bot after every buy/exit. The same data is in `history\days.csv` and `history\trades.csv` (open in Excel).
+
+### Raw output
+
+`data\paper_trades\`: `plan_<date>.json`, `log_<date>.txt`, `trades_<date>.csv` (SENSEX files are prefixed `SENSEX_`, replays `replay_`).
+
+## Backtest
 
 ```
-py -m pip install -r requirements.txt
+py src\sniper_backtester.py
 ```
+Uses the cached NIFTY candles in `data\historical\` with **estimated** option premiums. Writes `data\backtest_results\sniper_days.csv` and `sniper_trades.csv`.
 
-No Kite Connect credentials needed yet — the backtester only uses the cached CSVs already committed under `data/historical/`. (Unlike the sibling project's `.gitignore`, these CSVs *are* committed here, since there's no `data_fetch.py`/Kite auth in this project yet to regenerate them - see `PROJECT_STATUS.md`.)
+## Tests
 
-## Usage
-
-**Run the SPFS backtest:**
-```
-py src/spfs_backtester.py
-```
-Prints a day-by-day outcome summary and writes `data/backtest_results/spfs_trades.csv`.
-
-**Run the test suite:**
 ```
 py -m pytest tests/ -v
 ```
-
-**Hand-verify a few real days** (prints per-day setup, Sniper level, and how close each day came to confirming, even on days that didn't trade):
-```
-py tests/manual_spfs_sanity_check.py
-```
-
-## Repo structure
-
-```
-Share_Market_Bava_SPFS/
-  PROJECT_STATUS.md       # read first
-  src/
-    options_pricing.py     # Black-Scholes premium simulation + strike/expiry helpers (independent copy)
-    trend_bias.py            # minimal EMA20/EMA50 daily trend calc (independent extraction, not an import)
-    spfs_signal.py             # pure ATM/Sniper/Square Number logic
-    spfs_backtester.py          # day-by-day replay + reporting
-  tests/
-    test_spfs_signal.py           # unit tests for the pure functions
-    test_spfs_backtester.py        # state-machine regression tests (synthetic data)
-    manual_spfs_sanity_check.py     # non-automated, human-eyeball check against real cached data
-  data/
-    historical/               # cached NIFTY 50 daily + 5-minute candles (committed - see note above)
-    backtest_results/          # spfs_trades.csv from the last backtester run (gitignored)
-```
+No network or credentials needed (the live-bot tests use a fake Kite client and a fake clock).

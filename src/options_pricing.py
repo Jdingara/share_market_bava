@@ -16,19 +16,15 @@ Phase 4 (paper trading), via Kite's live option quotes.
 from __future__ import annotations
 
 import math
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Literal
 
 import pandas as pd
 
 RISK_FREE_RATE = 0.065  # approximate India risk-free rate; short-dated weekly options are not very sensitive to this
-NIFTY_STRIKE_INTERVAL = 50
 NIFTY_LOT_SIZE = 65  # confirmed live against Kite's instrument dump (not 50, not 40 - both common guesses are wrong)
-WEEKLY_EXPIRY_WEEKDAY = 1  # Tuesday (Monday=0) - confirmed live against Kite's instrument list on 2026-07-08;
-# NSE has changed NIFTY's weekly expiry day before (was Thursday) and may again - this is only an
-# approximation for backtesting/simulation (no real historical expiry calendar is fetchable, same
-# reason expired contracts aren't - see PROJECT_STATUS.md). Live trading does NOT rely on this guess -
-# option_lookup.find_nearest_valid_expiry() queries the real listed expiries instead (see paper_trader.py).
+MARKET_CLOSE_HOUR_MINUTE = (15, 30)
+SECONDS_PER_YEAR = 365 * 24 * 3600
 
 
 def _standard_normal_cdf(x: float) -> float:
@@ -65,21 +61,16 @@ def historical_volatility(daily_closes: pd.Series, window: int = 20) -> float:
     return rolling_std.iloc[-1] * math.sqrt(252)
 
 
-def nearest_strike(spot: float, interval: float = NIFTY_STRIKE_INTERVAL) -> float:
-    return round(spot / interval) * interval
+def time_to_expiry_years(as_of: datetime, expiry_date: date) -> float:
+    """Years from as_of until expiry_date's market close (15:30), floored at 0."""
+    hour, minute = MARKET_CLOSE_HOUR_MINUTE
+    expiry_dt = datetime.combine(expiry_date, time(hour, minute))
+    return max((expiry_dt - as_of.replace(tzinfo=None)).total_seconds(), 0.0) / SECONDS_PER_YEAR
 
 
-MIN_DAYS_TO_EXPIRY = 3  # avoid 0-2 DTE options - confirmed empirically (Phase 3 backtest) that their
-# extreme gamma/theta noise can swing premium +/-10% on a near-flat underlying move, swamping any
-# real directional signal
-
-
-def next_weekly_expiry(from_date: date, min_days: int = MIN_DAYS_TO_EXPIRY) -> date:
-    """Nearest Thursday on/after from_date that is at least min_days away, skipping to the
-    following week if the immediate one is too close (approximation - the real historical
-    expiry calendar isn't fetchable for the same reason expired contracts aren't)."""
-    days_until = (WEEKLY_EXPIRY_WEEKDAY - from_date.weekday()) % 7
-    expiry = from_date + timedelta(days=days_until)
-    if (expiry - from_date).days < min_days:
-        expiry += timedelta(days=7)
-    return expiry
+def next_weekly_expiry(from_date: date, expiry_weekday: int) -> date:
+    """Nearest weekly expiry on/after from_date - on expiry day itself, that same
+    day (PROJECT_STATUS.md §1). Approximation for backtesting only: it ignores
+    holiday-shifted expiries, and exchanges have changed expiry weekdays before.
+    Live trading must use the broker's real listed expiries instead."""
+    return from_date + timedelta(days=(expiry_weekday - from_date.weekday()) % 7)

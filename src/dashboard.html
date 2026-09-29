@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sniper Bot</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2129; --muted: #6b7280; --line: #e3e6eb;
+    --down: #d9483b; --up: #1f9d55; --accent: #2f6fde; --warn: #b7791f;
+    --band: rgba(47, 111, 222, 0.06); --paper-bg: #fff4d6; --paper-text: #7a5300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --card: #1a1e24; --text: #e6e8eb; --muted: #9aa3ad; --line: #2c323a;
+      --down: #f0705f; --up: #4cc47f; --accent: #6b9bf0; --warn: #e0a84a;
+      --band: rgba(107, 155, 240, 0.08); --paper-bg: #3a2e12; --paper-text: #f3cf7a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 14px; }
+  h1 { font-size: 20px; margin: 0; }
+  .pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .paper { background: var(--paper-bg); color: var(--paper-text); }
+  .mode { background: var(--card); border: 1px solid var(--line); }
+  .status { color: var(--muted); flex: 1 1 260px; }
+  .pnl { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+  .setup .title { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .setup .buy { font-size: 16px; margin: 6px 0; font-weight: 600; }
+  .levels { display: flex; gap: 14px; font-variant-numeric: tabular-nums; }
+  .levels div span { display: block; font-size: 11px; color: var(--muted); }
+  .state { margin-top: 10px; padding: 6px 8px; border-radius: 6px; background: var(--bg); font-size: 13px; }
+  .down { color: var(--down); } .up { color: var(--up); } .muted { color: var(--muted); }
+  .setup.down-side { border-top: 3px solid var(--down); } .setup.up-side { border-top: 3px solid var(--up); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  tr.final td { font-weight: 700; }
+  .ok { color: var(--up); } .fail { color: var(--down); }
+  svg { width: 100%; height: auto; display: block; }
+  .chart-title { display: flex; justify-content: space-between; align-items: baseline; }
+  .log { max-height: 320px; overflow-y: auto; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: pre-wrap; }
+  .log div { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .log .t { color: var(--muted); margin-right: 8px; }
+  .section { margin-top: 14px; }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Sniper Bot</h1>
+    <span class="pill paper">PAPER MODE — no real orders</span>
+    <span class="pill mode" id="mode"></span>
+    <span class="status" id="status">Connecting…</span>
+    <span class="pnl" id="pnl"></span>
+  </header>
+
+  <div class="card" id="plan-card"><h2>Morning plan</h2><div id="plan" class="empty">Waiting for the plan…</div></div>
+
+  <div class="grid section" id="setups"></div>
+
+  <div class="grid section">
+    <div class="card"><div class="chart-title"><h2>Market down → buy <span id="pe-name">OTM PE</span></h2><span class="muted" id="pe-last"></span></div><svg id="chart-pe" viewBox="0 0 640 260"></svg></div>
+    <div class="card"><div class="chart-title"><h2>Market up → buy <span id="ce-name">OTM CE</span></h2><span class="muted" id="ce-last"></span></div><svg id="chart-ce" viewBox="0 0 640 260"></svg></div>
+  </div>
+
+  <div class="card section"><h2>Paper trades</h2><div class="scroll" id="trades"><div class="empty">No trades yet.</div></div></div>
+  <div class="card section"><h2>Log</h2><div class="log" id="log"></div></div>
+  <div class="card section"><h2>History — all days</h2><div id="history" class="empty">Loading…</div></div>
+  <p class="muted" style="font-size:12px">Updated <span id="updated">–</span> · refreshes every 3 s · entry = a 5-minute candle closing above the square</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 2) => (v === null || v === undefined) ? "–" : Number(v).toFixed(d);
+const signed = v => (v >= 0 ? "+" : "") + Number(v).toFixed(2);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const WINDOWS = {first: ["09:30", "12:00"], second: ["12:30", "15:00"]};
+let QTY = 325;  // replaced by the bot's configured quantity (st.quantity); 325 = NIFTY 5 lots x 65
+const rupees = pts => (pts >= 0 ? "+₹" : "−₹") + Math.abs(pts * QTY).toLocaleString("en-IN", {maximumFractionDigits: 0});
+const mins = hhmm => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
+
+function renderPlan(p) {
+  if (!p) return;
+  const rows = p.attempts.map(a => {
+    const isFinal = p.final && a.atm_strike === p.final.atm_strike;
+    const gap = (v, ok) => `<span class="${ok ? "ok" : "fail"}">${signed(v)} ${ok ? "✓" : "✗"}</span>`;
+    return `<tr class="${isFinal ? "final" : ""}"><td>${a.atm_strike}${isFinal ? " (final)" : ""}</td>
+      <td>${fmt(a.atm_ce_close)}</td><td>${fmt(a.atm_pe_close)}</td>
+      <td>${a.otm_ce_strike} CE ${fmt(a.otm_ce_close)}</td><td>${a.otm_pe_strike} PE ${fmt(a.otm_pe_close)}</td>
+      <td>${fmt(a.sniper)}</td><td>${gap(a.ce_gap, a.ce_ok)}</td><td>${gap(a.pe_gap, a.pe_ok)}</td></tr>`;
+  }).join("");
+  $("plan").className = "";
+  $("plan").innerHTML = `<p style="margin:0 0 8px">NIFTY close <b>${p.index_close}</b> on ${p.previous_day} · expiry ${p.expiry} ·
+      ${p.final ? `<b>Sniper ${fmt(p.final.sniper)}</b> (${esc(p.reason)})` : `<b class="fail">No plan today: ${esc(p.reason)}</b>`}</p>
+    <div class="scroll"><table><tr><th>ATM</th><th>ATM CE</th><th>ATM PE</th><th>OTM CE</th><th>OTM PE</th><th>Sniper</th><th>CE gap</th><th>PE gap</th></tr>${rows}</table></div>`;
+}
+
+function setupState(s, st) {
+  const trade = st.trades.find(t => t.half === s.half && t.direction === s.direction);
+  if (trade) {
+    if (!trade.exit_reason) {
+      const sl = trade.trail_stop || trade.stop_loss;
+      return `🟡 Bought at <b>${fmt(trade.entry_fill)}</b> (${trade.entry_time.slice(11, 16)}) — open · SL now <b>${sl}</b>${sl > trade.stop_loss ? " (trailed ▲)" : ""}`;
+    }
+    const cls = trade.pnl_points >= 0 ? "up" : "down";
+    return `Bought ${fmt(trade.entry_fill)} → exited ${fmt(trade.exit_premium)} (${trade.exit_reason}) <b class="${cls}">${signed(trade.pnl_points)} pts · ${rupees(trade.pnl_points)}</b>`;
+  }
+  if (st.trades.some(t => t.half === s.half)) return "Other side traded this half";
+  const last = st.candles.length ? st.candles[st.candles.length - 1].time : null;
+  const [a, b] = WINDOWS[s.half];
+  if (!last || mins(last) + 5 <= mins(a)) return `Waiting for window ${a}–${b}`;
+  if (mins(last) + 5 > mins(b)) return "Window closed — no entry";
+  return `👀 Watching (${a}–${b})`;
+}
+
+function renderSetups(st) {
+  if (!st.setups.length) { $("setups").innerHTML = ""; return; }
+  $("setups").innerHTML = st.setups.map(s => {
+    const side = s.direction === "down" ? "down" : "up";
+    const sym = st.contracts[s.buy_type === "CE" ? "otm_ce" : "otm_pe"] || `${s.buy_strike} ${s.buy_type}`;
+    return `<div class="card setup ${side}-side">
+      <div class="title"><span>${s.half === "first" ? "First half" : "Second half"} · ${WINDOWS[s.half].join("–")}</span>
+        <span class="${side}">Market ${side} ${side === "down" ? "▼" : "▲"}</span></div>
+      <div class="buy">Buy ${esc(sym)}</div>
+      <div class="levels"><div><span>Trigger</span>${fmt(s.trigger)}</div><div><span>Entry above</span>${s.entry}</div>
+        <div><span>Stop loss</span>${s.stop_loss}</div><div><span>Target</span>${s.target}</div></div>
+      <div class="state">${setupState(s, st)}</div></div>`;
+  }).join("");
+}
+
+function drawChart(svg, key, st, colorVar) {
+  const W = 640, H = 260, L = 44, R = 10, T = 12, B = 26;
+  const t0 = mins("09:15"), t1 = mins("15:30");
+  const x = m => L + (m - t0) / (t1 - t0) * (W - L - R);
+  const pts = st.candles.map(c => [mins(c.time) + 5, c[key]]);
+  const type = key === "otm_ce" ? "CE" : "PE";
+  const setups = st.setups.filter(s => s.buy_type === type);
+  const trades = st.trades.filter(t => t.buy_type === type);
+  const final = st.plan && st.plan.final;
+  const yClose = final ? final[key + "_close"] : null;
+  const levels = [];
+  setups.forEach(s => levels.push({v: s.entry, label: `${s.half === "first" ? "1st" : "2nd"} entry ${s.entry}`, dash: "5 4", c: "var(--accent)"}));
+  trades.forEach(t => {
+    const sl = t.trail_stop || t.stop_loss;
+    levels.push({v: sl, label: sl > t.stop_loss ? `Trailing SL ${sl}` : `SL ${sl}`, dash: "2 3", c: "var(--down)"});
+    levels.push({v: t.target, label: `Target ${t.target}`, dash: "2 3", c: "var(--up)"});
+  });
+  if (yClose) levels.push({v: yClose, label: `Yday ${fmt(yClose)}`, dash: "1 4", c: "var(--muted)"});
+  const vals = pts.map(p => p[1]).concat(levels.map(l => l.v));
+  if (!vals.length) { svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="var(--muted)" font-size="13">No data yet</text>`; return; }
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.08 || 5; lo -= pad; hi += pad;
+  const y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  let s = "";
+  Object.values(WINDOWS).forEach(([a, b]) => s += `<rect x="${x(mins(a))}" y="${T}" width="${x(mins(b)) - x(mins(a))}" height="${H - T - B}" fill="var(--band)"/>`);
+  for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4; s += `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="var(--muted)">${v.toFixed(0)}</text>`; }
+  ["09:15", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"].forEach(h => s += `<text x="${x(mins(h))}" y="${H - 8}" text-anchor="middle" font-size="10" fill="var(--muted)">${h}</text><line x1="${x(mins(h))}" x2="${x(mins(h))}" y1="${H - B}" y2="${H - B + 4}" stroke="var(--line)"/>`);
+  s += `<line x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}" stroke="var(--line)"/>`;
+  levels.forEach(l => s += `<line x1="${L}" x2="${W - R}" y1="${y(l.v)}" y2="${y(l.v)}" stroke="${l.c}" stroke-dasharray="${l.dash}"/><text x="${W - R - 2}" y="${y(l.v) - 3}" text-anchor="end" font-size="10" fill="${l.c}">${l.label}</text>`);
+  if (pts.length) s += `<polyline fill="none" stroke="${colorVar}" stroke-width="2" stroke-linejoin="round" points="${pts.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ")}"/>`;
+  trades.forEach(t => {
+    const em = mins(t.entry_time.slice(11, 16)) + 5;
+    s += `<circle cx="${x(em)}" cy="${y(t.entry_fill)}" r="5" fill="var(--accent)"><title>Buy ${t.entry_fill}</title></circle>`;
+    if (t.exit_reason) { const xm = mins(t.exit_time.slice(11, 16)) + 5; s += `<rect x="${x(xm) - 5}" y="${y(t.exit_premium) - 5}" width="10" height="10" fill="${t.pnl_points >= 0 ? "var(--up)" : "var(--down)"}"><title>Exit ${t.exit_premium} ${t.exit_reason}</title></rect>`; }
+  });
+  svg.innerHTML = s;
+  const last = st.candles[st.candles.length - 1];
+  $(key === "otm_ce" ? "ce-last" : "pe-last").textContent = last ? `${last.time}: ${fmt(last[key])}` : "";
+}
+
+function renderTrades(st) {
+  if (!st.trades.length) { $("trades").innerHTML = `<div class="empty">No trades yet.</div>`; return; }
+  $("trades").innerHTML = `<table><tr><th>Half</th><th>Buy</th><th>Entry time</th><th>Fill</th><th>SL</th><th>Target</th><th>Exit</th><th>Reason</th><th>P&amp;L (pts)</th><th>P&amp;L (₹)</th></tr>` +
+    st.trades.map(t => `<tr><td>${t.half}</td><td>${t.buy_strike} ${t.buy_type}</td><td>${t.entry_time.slice(11, 16)}</td><td>${fmt(t.entry_fill)}</td>
+      <td>${t.stop_loss}</td><td>${t.target}</td><td>${t.exit_reason ? fmt(t.exit_premium) : "open"}</td><td>${t.exit_reason || "–"}</td>
+      <td class="${t.pnl_points >= 0 ? "up" : "down"}">${t.exit_reason ? signed(t.pnl_points) : "–"}</td>
+      <td class="${t.pnl_points >= 0 ? "up" : "down"}">${t.exit_reason ? rupees(t.pnl_points) : "–"}</td></tr>`).join("") +
+    `</table><p class="muted" style="font-size:12px;margin:8px 0 0">₹ P&amp;L for ${QTY} qty per trade. Before brokerage, STT and exchange charges.</p>`;
+}
+
+async function refresh() {
+  let st;
+  try { st = await (await fetch("/api/state", {cache: "no-store"})).json(); }
+  catch { $("status").textContent = "⚠ Bot not reachable — is the bot window still running?"; return; }
+  const market = st.market || "NIFTY";
+  $("title").textContent = `Sniper Bot · ${market}`;
+  document.title = `Sniper ${market}`;
+  $("mode").textContent = st.mode === "REPLAY" ? `REPLAY of ${st.day}` : `LIVE · ${st.day}`;
+  $("status").textContent = st.status;
+  if (st.quantity) QTY = st.quantity;
+  const closed = st.trades.filter(t => t.exit_reason);
+  const pnl = closed.reduce((a, t) => a + t.pnl_points, 0);
+  $("pnl").innerHTML = st.trades.length
+    ? `P&amp;L <span class="${pnl >= 0 ? "up" : "down"}">${signed(pnl)} pts · ${rupees(pnl)}</span> <span class="muted" style="font-size:12px;font-weight:400">(${QTY} qty)</span>`
+    : "Paper P&amp;L: no trades yet";
+  $("pe-name").textContent = st.contracts.otm_pe || "OTM PE";
+  $("ce-name").textContent = st.contracts.otm_ce || "OTM CE";
+  renderPlan(st.plan); renderSetups(st); renderTrades(st);
+  drawChart($("chart-pe"), "otm_pe", st, "var(--down)");
+  drawChart($("chart-ce"), "otm_ce", st, "var(--up)");
+  $("log").innerHTML = st.log.slice().reverse().map(l => `<div><span class="t">${l.time}</span>${esc(l.text)}</div>`).join("");
+  $("updated").textContent = st.updated;
+}
+async function refreshHistory() {
+  let h;
+  try { h = await (await fetch("/api/history", {cache: "no-store"})).json(); } catch { return; }
+  const num = v => Number(v) || 0;
+  const money = v => (num(v) >= 0 ? "+₹" : "−₹") + Math.abs(num(v)).toLocaleString("en-IN", {maximumFractionDigits: 0});
+  if (!h.days.length) { $("history").innerHTML = `<div class="empty">No days recorded yet.</div>`; return; }
+  const pts = h.days.reduce((a, d) => a + num(d.pnl_points), 0), rs = h.days.reduce((a, d) => a + num(d.pnl_rupees), 0);
+  const nTrades = h.days.reduce((a, d) => a + num(d.trades), 0);
+  const wins = h.trades.filter(t => num(t.pnl_points) > 0).length, losses = h.trades.filter(t => t.exit_reason !== "OPEN" && num(t.pnl_points) < 0).length;
+  const days = h.days.slice().sort((a, b) => (b.date + b.market).localeCompare(a.date + a.market));
+  const rows = days.map(d => {
+    const trades = h.trades.filter(t => t.date === d.date && t.market === d.market);
+    const detail = trades.map(t => `<tr class="muted"><td></td><td colspan="2">${t.half} · ${t.qty} × ${esc(t.symbol)}</td>
+      <td>${t.entry_time}${t.note ? ` (${esc(t.note)})` : ""} @ ${t.entry_fill}</td><td>SL ${t.stop_loss}${num(t.trail_stop) > num(t.stop_loss) ? ` → ${num(t.trail_stop)}` : ""} · T ${t.target}</td>
+      <td>${t.exit_reason === "OPEN" ? "open" : `${num(t.exit_premium)} ${t.exit_reason} (${t.exit_time})`}</td>
+      <td class="${num(t.pnl_points) >= 0 ? "up" : "down"}">${t.exit_reason === "OPEN" ? "–" : money(t.pnl_rupees)}</td><td></td></tr>`).join("");
+    return `<tr><td>${d.date}</td><td>${d.market}</td><td>${d.plan === "yes" ? `ATM ${d.atm} · Sniper ${d.sniper}` : "no plan"}</td>
+      <td>${d.trades} trade(s)</td><td class="${num(d.pnl_points) >= 0 ? "up" : "down"}">${signed(num(d.pnl_points))} pts</td><td></td>
+      <td class="${num(d.pnl_rupees) >= 0 ? "up" : "down"}"><b>${money(d.pnl_rupees)}</b></td><td>${esc(d.status)}</td></tr>` + detail;
+  }).join("");
+  $("history").className = "";
+  $("history").innerHTML = `<p style="margin:0 0 8px">All days: <b>${nTrades} trade(s)</b> · won ${wins}, lost ${losses} ·
+      <b class="${pts >= 0 ? "up" : "down"}">${signed(pts)} pts · ${money(rs)}</b> <span class="muted">(paper, before charges)</span></p>
+    <div class="scroll"><table><tr><th>Date</th><th>Market</th><th>Plan</th><th>Trades</th><th>P&amp;L</th><th></th><th>₹</th><th>Status</th></tr>${rows}</table></div>`;
+}
+refresh(); setInterval(refresh, 3000);
+refreshHistory(); setInterval(refreshHistory, 15000);
+</script>
+</body>
+</html>
