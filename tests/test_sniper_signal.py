@@ -112,11 +112,22 @@ def test_gap_exactly_min_passes():
     assert plan.final is not None
 
 
-def test_sensex_uses_35_min_gap():
-    lookup = _flat_premiums(30, 30, 80000)
-    assert build_daily_plan(80000, NIFTY, lookup).final is not None  # 30 >= 25
-    assert build_daily_plan(80000, MARKETS["SENSEX"], lookup).final is None  # 30 < 35
-    assert build_daily_plan(80000, MARKETS["SENSEX"], _flat_premiums(35, 35, 80000)).final is not None
+def test_sensex_keeps_the_nearest_atm_and_widens_the_otms_until_both_gaps_reach_40():
+    """Owner, 29-09: SENSEX ATM = nearest round strike; move the OTMs out until both gaps >= 40.
+    29-09 closes (72771.72 -> ATM 72800): at +-100 the PE gap is -22.62; further strikes are cheaper."""
+    closes = {(72800, "CE"): 500.40, (72800, "PE"): 357.85,
+              (72900, "CE"): 444.20, (72700, "PE"): 316.75,  # +-100: Sniper 380.48 -> PE gap -22.62
+              (73000, "CE"): 394.35, (72600, "PE"): 280.00,  # +-200: Sniper 337.18 -> PE gap 20.67
+              (73100, "CE"): 345.95, (72500, "PE"): 247.00}  # +-300: Sniper 296.48 -> gaps 203.92 / 61.37
+    plan = build_daily_plan(72771.72, MARKETS["SENSEX"], _lookup(closes))
+    assert [a.otm_ce_strike - a.atm_strike for a in plan.attempts] == [100, 200, 300]
+    assert all(a.atm_strike == 72800 for a in plan.attempts)
+    assert (plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (73100, 72500)
+    assert plan.final.sniper == pytest.approx(296.475)
+
+
+def test_nifty_still_shifts_the_atm():
+    assert not MARKETS["NIFTY"].widen_otm and MARKETS["SENSEX"].min_gap == 40
 
 
 def test_max_three_shifts_then_no_plan():

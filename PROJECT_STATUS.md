@@ -29,7 +29,8 @@ Decided and stable — **do not change without the owner's explicit confirmation
 | OTM strikes | OTM CE = ATM + 100, OTM PE = ATM − 100 (**both NIFTY and SENSEX**, confirmed 2026-09-29) |
 | Sniper | `(OTM CE close + OTM PE close) / 2` |
 | Gap check | ATM CE close − Sniper ≥ min gap **AND** ATM PE close − Sniper ≥ min gap |
-| Min gap | NIFTY **25**, SENSEX **35** (SENSEX changed from 45 on 2026-09-29) |
+| Min gap | NIFTY **25**, SENSEX **40** (SENSEX 45 → 35 → 40 on 2026-09-29) |
+| SENSEX: widen the OTMs | **SENSEX only** (owner, 29-09): ATM stays the **nearest round strike** (no shifts); the OTMs move out one strike at a time (±100, ±200, …, up to ±500) until **both gaps ≥ 40**. 29-09: ATM 72800, ±100 PE gap −22.62, ±200 +20.85, **±300 → Sniper 295.70, gaps +204.70 / +62.15** → plan (the old shift rule gave no plan). |
 | Shift | PE fails → ATM +100. CE fails → ATM −100. Recalculate. Max 3 shifts. Both fail → no plan |
 | Expiry | Nearest expiry on/after the trading day (expiry day uses the same-day expiry) |
 

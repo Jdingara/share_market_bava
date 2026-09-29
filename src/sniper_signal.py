@@ -41,6 +41,8 @@ class MarketConfig:
     max_lots: int  # owner's maximum per trade (spec §7 item 5)
     index_token: int  # the index's instrument token on Kite
     options_exchange: str  # Kite exchange holding the index's option contracts
+    widen_otm: bool = False  # SENSEX (owner, 2026-09-29): keep the nearest ATM, move the OTMs out instead of shifting
+    max_otm_steps: int = 5  # widen_otm: try OTM = ATM +- 1..5 strike steps
 
     @property
     def quantity(self) -> int:
@@ -50,8 +52,8 @@ class MarketConfig:
 MARKETS = {
     "NIFTY": MarketConfig(name="NIFTY", strike_step=100, min_gap=25, expiry_weekday=1, lot_size=65, max_lots=5,
                           index_token=256265, options_exchange="NFO"),  # NSE, Tuesday expiry, 325 qty
-    "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=35, expiry_weekday=3, lot_size=20, max_lots=15,
-                           index_token=265, options_exchange="BFO"),  # BSE, Thursday expiry, 300 qty
+    "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=40, expiry_weekday=3, lot_size=20, max_lots=15,
+                           index_token=265, options_exchange="BFO", widen_otm=True),  # BSE, Thursday expiry, 300 qty
 }
 
 MAX_SHIFTS = 3
@@ -90,9 +92,11 @@ class StrikeRow:
     pe_ok: bool
 
 
-def evaluate_strike(atm_strike: float, market: MarketConfig, premium: PremiumLookup) -> StrikeRow:
-    otm_ce_strike = atm_strike + market.strike_step
-    otm_pe_strike = atm_strike - market.strike_step
+def evaluate_strike(atm_strike: float, market: MarketConfig, premium: PremiumLookup,
+                    otm_distance: Optional[float] = None) -> StrikeRow:
+    distance = otm_distance or market.strike_step
+    otm_ce_strike = atm_strike + distance
+    otm_pe_strike = atm_strike - distance
     atm_ce_close = premium(atm_strike, "CE")
     atm_pe_close = premium(atm_strike, "PE")
     otm_ce_close = premium(otm_ce_strike, "CE")
@@ -128,9 +132,24 @@ class DailyPlan:
 def build_daily_plan(index_close: float, market: MarketConfig, premium: PremiumLookup) -> DailyPlan:
     """Spec §1: start at the nearest ATM; if only the PE gap fails shift ATM up,
     if only the CE gap fails shift ATM down, recalculating each time. Both gaps
-    failing on any attempt, or still failing after MAX_SHIFTS shifts, is no plan."""
+    failing on any attempt, or still failing after MAX_SHIFTS shifts, is no plan.
+
+    SENSEX (widen_otm, owner 2026-09-29): the ATM stays the nearest round
+    strike; the OTMs move out one strike at a time (+-100, +-200, ...) until
+    both gaps reach the minimum (40)."""
     atm = nearest_atm(index_close, market.strike_step)
     attempts: list[StrikeRow] = []
+
+    if market.widen_otm:
+        for k in range(1, market.max_otm_steps + 1):
+            row = evaluate_strike(atm, market, premium, k * market.strike_step)
+            attempts.append(row)
+            if row.ce_ok and row.pe_ok:
+                return DailyPlan(market.name, index_close, tuple(attempts), row,
+                                 f"ATM {atm:g}, OTM +-{k * market.strike_step:g}")
+        return DailyPlan(market.name, index_close, tuple(attempts), None,
+                         f"no OTM distance up to +-{market.max_otm_steps * market.strike_step:g} gives both gaps "
+                         f">= {market.min_gap:g}")
 
     for shift in range(MAX_SHIFTS + 1):
         row = evaluate_strike(atm, market, premium)
