@@ -20,9 +20,9 @@ candles closing 09:30-14:55):
   pattern turns against it (a directional reversal pattern - Doji/Spinning
   Top don't count). Fill = the option's candle close.
   SL = entry premium - 25 points (NIFTY) / 50 (SENSEX) (owner, 2026-09-29).
-  If the premium is too low for that (entry - points <= 0): SL = the low of
-  the premium pattern before the entry (reversal trades) or of the entry
-  candle (gap trades) (owner, 2026-09-29).
+  If the premium is too low for that (entry - points <= 0): SL = that
+  option's day low so far - 1 point (owner, 2026-09-29; replaced "the
+  pattern's low", which sat 0.35 under a 10.00 entry).
   Targets = levels only. PE: the levels below the index, one by one; CE: the
   levels above. Final target: the last level (S3/R3) for a gap trade, the
   yesterday's Close for a reversal trade. When the index touches a target:
@@ -134,13 +134,14 @@ class HlcDay:
                 f"(bought {trade.entry_fill:.2f}, {trade.pnl_points:+.2f} points)")
 
     def _enter(self, kind: str, side: OptionType, strike: float, when: datetime, prem: Candle, index: Candle,
-               pattern: str, final: str, pattern_low: Optional[float] = None) -> Optional[str]:
+               pattern: str, final: str) -> Optional[str]:
         targets = self._targets(side, index.close, final)
         if not targets:
             return None
         sl, sl_rule = prem.close - self.market.sl_points, f"{self.market.sl_points:g} points"
-        if sl <= 0:  # premium too low for a points SL: the pattern's low instead
-            sl, sl_rule = (pattern_low, "pattern low") if pattern_low is not None else (prem.low, "entry candle low")
+        if sl <= 0:  # premium too low for a points SL: 1 point under the option's day low
+            day_low = min(c.low for c in self.premium_history.get((strike, side), [prem]))
+            sl, sl_rule = max(day_low - 1, 0.05), "day low - 1"
         trade = HlcTrade(date=self.day.isoformat(), kind=kind, side=side, strike=strike, pattern=pattern,
                          entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=index.close,
                          sl_premium=round(sl, 2), sl_rule=sl_rule, targets=targets,
@@ -204,8 +205,7 @@ class HlcDay:
             prem_pattern = bullish_pattern(ce_history[-3:])
             if level and prem_pattern:
                 event = self._enter("REVERSAL", "CE", atm, when, chain[(atm, "CE")], index,
-                                    f"index {up[0]} at {level}, CE {prem_pattern[0]}", "Close",
-                                    min(c.low for c in ce_history[-prem_pattern[1]:]))
+                                    f"index {up[0]} at {level}, CE {prem_pattern[0]}", "Close")
                 if event:
                     return events + [event]
 
@@ -217,8 +217,7 @@ class HlcDay:
             prem_pattern = bullish_pattern(pe_history[-3:])
             if level and prem_pattern:
                 event = self._enter("REVERSAL", "PE", atm, when, chain[(atm, "PE")], index,
-                                    f"index {down[0]} at {level}, PE {prem_pattern[0]}", "Close",
-                                    min(c.low for c in pe_history[-prem_pattern[1]:]))
+                                    f"index {down[0]} at {level}, PE {prem_pattern[0]}", "Close")
                 if event:
                     return events + [event]
         return events

@@ -104,8 +104,8 @@ def test_small_gap_keeps_the_morning_atm():
     assert not day.big_gap
 
 
-def test_low_premium_uses_the_pattern_low_as_sl():
-    """29-09 10:15: CE 22800 at 10.00 - 10 - 25 < 0, so SL = the CE pattern's low."""
+def test_low_premium_uses_the_day_low_minus_one_as_sl():
+    """29-09 10:15: CE 22800 at 10.00 - 10 - 25 < 0, so SL = the CE's day low so far (9.65) - 1."""
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
     chain = lambda ce: {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(200, 210, 195, 205)}
     day.gap_done = True  # only the reversal is under test
@@ -113,4 +113,4 @@ def test_low_premium_uses_the_pattern_low_as_sl():
     day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), chain((10.4, 10.9, 9.9, 10.3)))
     events = day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), chain((10.3, 10.8, 9.65, 10.0)))
     assert "BUY CE 22800 at 10.00 (REVERSAL" in events[0]
-    assert (day.open_trade.sl_premium, day.open_trade.sl_rule) == (9.65, "pattern low")
+    assert (day.open_trade.sl_premium, day.open_trade.sl_rule) == (8.65, "day low - 1")
