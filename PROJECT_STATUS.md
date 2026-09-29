@@ -100,15 +100,16 @@ Owner started it on 2026-09-29. NIFTY 50 and SENSEX only. Runs separately from S
   - Window 09:30–15:00, **1 or 2 trades a day**, **5-minute candles**.
   - **"Close" level = yesterday's NIFTY (index) close.** Travel: a candle closing below Close → price heads to S1; below S1 → S2 (and so on); likewise upwards to R1, R2, R3. **Target = the next level.**
   - **Entry only after candlestick confirmation, on BOTH the index chart and the option premium chart.** Support patterns: Morning Star, Hammer, Bullish Engulfing, Bullish Harami. At support/resistance also: Doji, Spinning Top, Hanging Man. If the CE side doesn't confirm, the PUT side may; either way the index must confirm too.
-  - **Buy the ATM strike only** (CE or PE) — **the ATM at entry time**: the strike whose **current** CE and PE prices are nearest each other (same rule as the morning ATM, applied live; confirmed 29-09).
+  - **Buy the morning ATM strike only** (CE or PE) — even if the balanced strike has moved by 09:30 (owner, 29-09; replaces an earlier "ATM at entry time" reading).
   - **No trade before 09:30** (confirmed 29-09).
   - **Gap trade:** open below yesterday's close → at 09:30 buy the ATM **PE** at market; open above → ATM **CE** (owner's 29-09 example).
-  - **SL = the previous candle's low** of the bought option (confirmed 29-09, replacing "swing before the entry candle").
+  - **SL = entry premium − 25 points (NIFTY) / − 50 points (SENSEX)** (owner, 29-09; replaced "previous candle low", which stopped the 29-09 replay's CE trade out one candle after entry).
   - **Target = the next level; if the index breaks it and keeps going, the SL moves to that level** and the next level becomes the target (confirmed 29-09).
   - **Reversal trade at S3:** a CE pattern at S3 → buy CE; exits step up through S2, S1, Close (confirmed 29-09).
   - **Quantity:** NIFTY 325, SENSEX 300; increase later once it proves itself.
 - **PANIC / PROFIT BOOKING label** (confirmed 29-09): for each ATM leg (CE, PE), yesterday's **close nearer its low = PROFIT BOOKING**, **close nearer its high = PANIC**. Matches the sheet: NIFTY CE 298.5/77.05/84.20 → PB, PE 94/8.4/71.45 → PANIC; SENSEX CE 800/416.7/444.20 → PB, PE 448/105/402.10 → PANIC.
 - **Owner's 29-09 example (checked against Kite data):** open 22732.5 < close 22780.25 → PE side; S1 broken 09:15, S2 09:25; at 09:30 bought ATM PE; S3 (22572.90) touched on the 09:35 candle (day low 22569.7) = target and the day's reversal point.
+- **Built 29-09** (`hlc_signal.py`, `hlc_engine.py`, `hlc_live.py --replay`), replay only so far. **29-09 NIFTY replay:** gap-down PE 22800 @ 177.10 at 09:30 → S3 target 222.70 (+45.60); S3 reversal (index Bullish Engulfing + CE Spinning Top) CE 22800 @ 10.00 → S2 broken, SL to S2 → S1 target 33.65 (+23.65). **+69.25 points = +₹22,506** (325 qty).
 - **Still unclear (asked 29-09):** how the PANIC / PROFIT BOOKING label is used in trading; whether the 09:30 gap trade needs a candlestick pattern; how close to a level a pattern must form; precise pattern and swing definitions; whether the target is judged on the index or the premium; strike step (NIFTY 50 / SENSEX 100?).
 
 ### Sniper implementation conventions (current behaviour where the §1–§4 rules leave room)

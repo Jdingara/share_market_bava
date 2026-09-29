@@ -54,8 +54,9 @@ def _at(hhmm):
 
 
 def _chain(pe):
-    """Balanced 22650 CE/PE so the live ATM is 22650; PE candle as given."""
-    return {(22650.0, "CE"): Candle(70, 72, 68, 71), (22650.0, "PE"): Candle(*pe)}
+    """The morning ATM 22800's CE and PE (PE candle as given), plus a balanced 22650 that must NOT be used."""
+    return {(22800.0, "CE"): Candle(20, 22, 18, 21), (22800.0, "PE"): Candle(*pe),
+            (22650.0, "CE"): Candle(70, 72, 68, 71), (22650.0, "PE"): Candle(70, 72, 68, 71)}
 
 
 def test_gap_down_buys_pe_at_0930_and_exits_at_the_last_level():
@@ -63,9 +64,9 @@ def test_gap_down_buys_pe_at_0930_and_exits_at_the_last_level():
     day.on_candle(_at("09:15"), Candle(22732.45, 22753, 22680, 22684), _chain((60, 62, 55, 58)))
     day.on_candle(_at("09:20"), Candle(22683, 22686, 22656, 22667), _chain((58, 66, 57, 65)))
     events = day.on_candle(_at("09:25"), Candle(22667, 22668, 22624, 22624.2), _chain((65, 74, 64, 72.55)))
-    assert events and events[0].startswith("BUY PE 22650 at 72.55 (GAP")
+    assert events and events[0].startswith("BUY PE 22800 at 72.55 (GAP")  # our ATM, not the balanced 22650
     t = day.open_trade
-    assert (t.sl_premium, [n for n, _ in t.targets]) == (64, ["S3"])
+    assert (t.sl_premium, [n for n, _ in t.targets]) == (47.55, ["S3"])  # 72.55 - 25
     day.on_candle(_at("09:30"), Candle(22624, 22638, 22611, 22620), _chain((72, 80, 70, 78)))
     events = day.on_candle(_at("09:35"), Candle(22619, 22619.5, 22569.7, 22577.3), _chain((78, 110, 77, 104.3)))
     assert "TARGET S3" in events[0]
@@ -80,5 +81,5 @@ def test_breaking_a_level_moves_the_sl_to_it():
     assert [n for n, _ in t.targets] == ["S1", "S2", "S3"]
     events = day.on_candle(_at("09:30"), Candle(22740, 22741, 22700, 22705), _chain((60, 75, 59, 74)))  # closes below S1
     assert "S1 22728.5 broken" in events[0] and t.trail_level[0] == "S1"
-    events = day.on_candle(_at("09:35"), Candle(22705, 22740, 22700, 22735), _chain((74, 76, 62, 63)))  # back above S1
+    events = day.on_candle(_at("09:35"), Candle(22705, 22740, 22700, 22735), _chain((74, 76, 62, 63)))  # back above S1 (SL 35 not hit)
     assert "closed back across S1" in events[0] and t.pnl_points == pytest.approx(3)

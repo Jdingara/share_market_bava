@@ -13,8 +13,9 @@ candles closing 09:30-14:55):
                 resistance pattern at R1/R2/R3 AND the ATM PE premium shows an
                 up-reversal pattern -> buy ATM PE.
 
-  ATM at entry = the strike whose CE and PE closes are nearest each other now.
-  Fill = the option's candle close. SL = that candle's low (premium).
+  Strike = always the morning ATM (owner, 2026-09-29: even if the balanced
+  strike has moved by 09:30). Fill = the option's candle close.
+  SL = entry premium - 25 points (NIFTY) / 50 (SENSEX) (owner, 2026-09-29).
   Targets = levels only. PE: the levels below the index, one by one; CE: the
   levels above. Final target: the last level (S3/R3) for a gap trade, the
   yesterday's Close for a reversal trade. When the index touches a target:
@@ -129,12 +130,12 @@ class HlcDay:
             return None
         trade = HlcTrade(date=self.day.isoformat(), kind=kind, side=side, strike=strike, pattern=pattern,
                          entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=index.close,
-                         sl_premium=round(prem.low, 2), targets=targets)
+                         sl_premium=round(prem.close - self.market.sl_points, 2), targets=targets)
         self.trades.append(trade)
         self.open_trade = trade
         names = " -> ".join(f"{n} {v:g}" for n, v in targets)
         return (f"BUY {side} {strike:g} at {prem.close:.2f} ({kind}, {pattern}; index {index.close:.2f}) - "
-                f"SL {prem.low:.2f}, targets {names}")
+                f"SL {trade.sl_premium:.2f}, targets {names}")
 
     # --- per candle ---
 
@@ -163,8 +164,8 @@ class HlcDay:
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
 
-        atm = self.live_atm(index.close, chain)
-        if atm is None:
+        atm = self.levels.atm
+        if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
 
         if not self.gap_done and closes == FIRST_ENTRY_CLOSE:
@@ -202,7 +203,7 @@ class HlcDay:
 
     def _manage(self, trade: HlcTrade, when: datetime, index: Candle, prem: Candle, closes: time) -> list[str]:
         if prem.low <= trade.sl_premium:
-            return [self._exit(trade, when, trade.sl_premium, "SL (previous candle low)")]
+            return [self._exit(trade, when, trade.sl_premium, f"SL ({self.market.sl_points:g} points)")]
         pe = trade.side == "PE"
         if trade.trail_level is not None:
             name, value = trade.trail_level

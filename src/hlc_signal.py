@@ -27,11 +27,12 @@ class HlcMarket:
     strike_step: int  # option strike interval
     level_tolerance: float  # how close to a level a pattern must form (index points)
     quantity: int
+    sl_points: float  # stop loss = entry premium - this (owner, 2026-09-29)
 
 
 HLC_MARKETS = {
-    "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=325),
-    "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=300),
+    "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=325, sl_points=25),
+    "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=300, sl_points=50),
 }
 
 
