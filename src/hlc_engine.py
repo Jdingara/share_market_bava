@@ -31,6 +31,11 @@ candles closing 09:30-14:55):
   next level becomes the target. Exit also when a candle closes back across
   the trailed level, or at 15:00.
 
+  PANIC side takes over (owner, 2026-09-29): if yesterday's ATM PE was PANIC
+  (closed near its high) and today the ATM PE trades above yesterday's PE
+  high, the PE side dominates - no CE trades for the rest of the day. Same
+  for a PANIC CE breaking its high -> no PE trades.
+
   Exits are at the option's candle close (at the SL level for a premium SL).
   A premium SL is checked before the targets (conservative).
 """
@@ -41,7 +46,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 
-from hlc_signal import DIRECTIONLESS, Candle, HlcLevels, HlcMarket, OptionType, bearish_pattern, bullish_pattern
+from hlc_signal import (DIRECTIONLESS, Candle, HlcLevels, HlcMarket, OptionType, bearish_pattern, bullish_pattern,
+                        leg_label)
 
 FIRST_ENTRY_CLOSE = time(9, 30)
 LAST_ENTRY_CLOSE = time(14, 55)
@@ -77,8 +83,12 @@ def _closes_at(when: datetime) -> time:
 
 
 class HlcDay:
-    def __init__(self, day: date, levels: HlcLevels, market: HlcMarket):
+    def __init__(self, day: date, levels: HlcLevels, market: HlcMarket,
+                 yesterday: Optional[dict[str, tuple[float, float, float]]] = None):
+        """`yesterday`: {"CE": (high, low, close), "PE": (...)} of the morning ATM's options."""
         self.day = day
+        self.yesterday = yesterday or {}
+        self.blocked: dict[str, str] = {}  # side -> why no trades on that side today
         self.levels = levels
         self.market = market
         self.trades: list[HlcTrade] = []
@@ -136,7 +146,7 @@ class HlcDay:
     def _enter(self, kind: str, side: OptionType, strike: float, when: datetime, prem: Candle, index: Candle,
                pattern: str, final: str) -> Optional[str]:
         targets = self._targets(side, index.close, final)
-        if not targets:
+        if not targets or side in self.blocked:
             return None
         sl, sl_rule = prem.close - self.market.sl_points, f"{self.market.sl_points:g} points"
         if sl <= 0:  # premium too low for a points SL: 1 point under the option's day low
@@ -165,6 +175,13 @@ class HlcDay:
         self.index_history.append(index)
         for key, candle in chain.items():
             self.premium_history.setdefault(key, []).append(candle)
+
+        for side, other in (("PE", "CE"), ("CE", "PE")):
+            hlc = self.yesterday.get(side)
+            candle = chain.get((self.levels.atm, side))
+            if hlc and candle and other not in self.blocked and leg_label(*hlc) == "PANIC" and candle.high > hlc[0]:
+                self.blocked[other] = f"{side} PANIC yesterday and above its high {hlc[0]:g} today"
+                events.append(f"No {other} trades today - {self.blocked[other]}")
 
         trade = self.open_trade
         if trade is not None:

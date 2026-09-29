@@ -114,3 +114,16 @@ def test_low_premium_uses_the_day_low_minus_one_as_sl():
     events = day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), chain((10.3, 10.8, 9.65, 10.0)))
     assert "BUY CE 22800 at 10.00 (REVERSAL" in events[0]
     assert (day.open_trade.sl_premium, day.open_trade.sl_rule) == (8.65, "day low - 1")
+
+
+def test_panic_pe_above_yesterdays_high_blocks_ce_trades():
+    """29-09: 22800 PE was PANIC (H 94, L 8.4, C 71.45) and hit 133.90 at 09:15 -> no CE trade all day."""
+    yday = {"CE": (298.5, 77.05, 84.20), "PE": (94.0, 8.4, 71.45)}
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"], yday)
+    chain = lambda ce, pe: {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(*pe)}
+    events = day.on_candle(_at("09:15"), Candle(22732.45, 22753, 22680, 22684), chain((26, 44, 25, 26.6), (77, 133.9, 76.5, 132)))
+    assert events == ["No CE trades today - PE PANIC yesterday and above its high 94 today"]
+    day.gap_done = True
+    day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), chain((10.4, 10.9, 9.9, 10.3), (210, 215, 205, 212)))
+    day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), chain((10.3, 10.8, 9.65, 10.0), (212, 214, 208, 209)))
+    assert day.trades == []  # the S3 Bullish Engulfing CE reversal is blocked

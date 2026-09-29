@@ -74,7 +74,7 @@ def replay(day: date, market_name: str) -> None:
                 premiums[(float(strike), option_type)] = {
                     _naive(r["date"]): Candle(r["open"], r["high"], r["low"], r["close"]) for r in rows}
 
-    engine = HlcDay(day, lv, market)
+    engine = HlcDay(day, lv, market, {"CE": (ce["high"], ce["low"], ce["close"]), "PE": (pe["high"], pe["low"], pe["close"])})
     for row in index:
         when = _naive(row["date"])
         bar = Candle(row["open"], row["high"], row["low"], row["close"])
