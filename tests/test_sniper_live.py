@@ -241,7 +241,7 @@ def test_watch_survives_a_data_fetch_error(monkeypatch, tmp_path):
     class FlakyKite:
         def historical_data(self, token, start, end, interval):
             calls.append(end)
-            if len(calls) == 1:
+            if len(calls) <= sniper_live.HISTORICAL_ATTEMPTS:  # fails every retry of the first request
                 raise ConnectionError("Read timed out")
             return [_candle(t.strftime("%H:%M"), 50, 40, 45) for t in
                     (datetime(2026, 9, 29, 9, 15) + timedelta(minutes=5 * i) for i in range(80))

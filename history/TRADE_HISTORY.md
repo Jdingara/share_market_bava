@@ -3,24 +3,25 @@
 **Paper trades — no real orders.** Written automatically by the bot (`src/history.py`) after every entry/exit;
 don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. ₹ = points × qty, before brokerage and charges.
 
-**All days: 2 trade(s), +102.75 points, ₹+33,394**
+**All days: 3 trade(s), +87.75 points, ₹+28,519**
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
 | 2026-09-29 | SENSEX | no plan | – | 0 | +0.00 | ₹+0 | no plan |
-| 2026-09-29 | NIFTY | 22800 | 39.58 | 1 | +44.00 | ₹+14,300 | watching |
+| 2026-09-29 | NIFTY | 22800 | 39.58 | 2 | +29.00 | ₹+9,425 | watching |
 | 2026-09-28 | NIFTY | 23200 | 54.0 | 1 | +58.75 | ₹+19,094 | stopped early |
 
 ## 2026-09-29 (Tue)
 
-### NIFTY — watching (last update 2026-09-29 10:15)
+### NIFTY — watching (last update 2026-09-29 12:45)
 
 - NIFTY close 22780.25 on 2026-09-28, expiry 2026-09-29, qty 325.
 - Plan: ATM 22800 after 0 shift(s), Sniper 39.58.
 
 | Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|---|---|---|
-| first | 325 × NIFTY26SEP22700PE | 09:30 (catch-up) | 100.0 | 100 | 81 | 144 | 144 (09:35) | TARGET | +44.00 | ₹+14,300 |
+| first | 325 × NIFTY26SEP22700PE | 09:30 (catch-up) ★ HIGH | 100.0 | 100 | 81 | 144 | 144 (09:35) | TARGET | +44.00 | ₹+14,300 |
+| second | 325 × NIFTY26SEP22700PE | 12:30 ★ HIGH | 64.0 | 64 | 49 | 100 | 49 (12:40) | STOPLOSS | -15.00 | ₹-4,875 |
 
 ### SENSEX — no plan (last update 2026-09-29 09:27)
 

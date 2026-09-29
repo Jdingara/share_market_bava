@@ -89,9 +89,18 @@ class OptionChain:
 NiftyOptions = OptionChain
 
 
+HISTORICAL_ATTEMPTS = 3  # Kite occasionally times out (7 s) - retry before giving up
+
+
 def _historical(kite, token: int, start: datetime, end: datetime, interval: str) -> list[dict]:
-    time_module.sleep(HISTORICAL_PAUSE_SECONDS)
-    return kite.historical_data(token, start, end, interval)
+    for attempt in range(1, HISTORICAL_ATTEMPTS + 1):
+        time_module.sleep(HISTORICAL_PAUSE_SECONDS * attempt)
+        try:
+            return kite.historical_data(token, start, end, interval)
+        except Exception as error:  # network timeouts, 429s, Kite 5xx
+            if attempt == HISTORICAL_ATTEMPTS or "Token" in type(error).__name__:
+                raise
+            print(f"  (Kite request failed: {type(error).__name__} - retrying, attempt {attempt + 1})", flush=True)
 
 
 def _naive(ts: datetime) -> datetime:

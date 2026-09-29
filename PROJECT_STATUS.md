@@ -86,7 +86,32 @@ NIFTY close 23140.5 → nearest ATM 23100.
 
 `tests/test_sniper_signal.py` reproduces this exactly.
 
-### Implementation conventions (current behaviour where the rules above leave room)
+### HLC strategy (second strategy — rules being collected, not built yet)
+
+Owner started it on 2026-09-29. NIFTY 50 and SENSEX only. Runs separately from Sniper (own dashboard/history), paper mode first. The owner's own sheet for 29-09 (data 28-09) is the test example.
+
+- **ATM selection:** from the previous day's index close, check the nearby strikes and pick the one where the **CE close and PE close are nearest each other**. Owner's example: close 23080; 23100 has CE 150 / PE 225 (gap 75), 23150 has CE 165 / PE 175 (gap 10) → ATM 23150. On 29-09 SENSEX this picks 72900 (gap 42) over 72800 (gap 142), matching the sheet.
+- **Inputs:** that ATM's CE and PE previous-day **High, Low, Close**. The sheet labels the leg that closed near its low **PROFIT BOOKING** (CE: 298.5 → 84.20) and the one that closed near its high **PANIC** (PE: 8.4 → 71.45). How to derive the label exactly, and how it's used, isn't confirmed yet.
+- **Levels:** R1 = ATM + CE close; S1 = ATM − PE close; R2 = ATM + (CE + PE); S2 = ATM − (CE + PE); **R3 = R2 + CE close; S3 = S2 − PE close** (confirmed 29-09).
+- Sheet check, 29-09: NIFTY ATM 22800, CE 84.20 / PE 71.45 → R1 22884.20, R2 22955.65, R3 23039.85, S1 22728.55, S2 22644.35, S3 22572.90. SENSEX ATM 72900, CE 444.20 / PE 402.10 → R1 73344.20, R2 73746.30, R3 74190.50, S1 72497.90, S2 72053.70, S3 71651.60.
+- **Dropped by the owner:** the sheet's "Earth level" (pre-open ± 26.11% of the previous day's range) and the "SIDEWAY" label.
+- **ATM search:** as many strikes as needed; normally found within 2–3 strikes of the close.
+- **Trading rules (owner, 2026-09-29):**
+  - Window 09:30–15:00, **1 or 2 trades a day**, **5-minute candles**.
+  - **"Close" level = yesterday's NIFTY (index) close.** Travel: a candle closing below Close → price heads to S1; below S1 → S2 (and so on); likewise upwards to R1, R2, R3. **Target = the next level.**
+  - **Entry only after candlestick confirmation, on BOTH the index chart and the option premium chart.** Support patterns: Morning Star, Hammer, Bullish Engulfing, Bullish Harami. At support/resistance also: Doji, Spinning Top, Hanging Man. If the CE side doesn't confirm, the PUT side may; either way the index must confirm too.
+  - **Buy the ATM strike only** (CE or PE) — **the ATM at entry time**: the strike whose **current** CE and PE prices are nearest each other (same rule as the morning ATM, applied live; confirmed 29-09).
+  - **No trade before 09:30** (confirmed 29-09).
+  - **Gap trade:** open below yesterday's close → at 09:30 buy the ATM **PE** at market; open above → ATM **CE** (owner's 29-09 example).
+  - **SL = the previous candle's low** of the bought option (confirmed 29-09, replacing "swing before the entry candle").
+  - **Target = the next level; if the index breaks it and keeps going, the SL moves to that level** and the next level becomes the target (confirmed 29-09).
+  - **Reversal trade at S3:** a CE pattern at S3 → buy CE; exits step up through S2, S1, Close (confirmed 29-09).
+  - **Quantity:** NIFTY 325, SENSEX 300; increase later once it proves itself.
+- **PANIC / PROFIT BOOKING label** (confirmed 29-09): for each ATM leg (CE, PE), yesterday's **close nearer its low = PROFIT BOOKING**, **close nearer its high = PANIC**. Matches the sheet: NIFTY CE 298.5/77.05/84.20 → PB, PE 94/8.4/71.45 → PANIC; SENSEX CE 800/416.7/444.20 → PB, PE 448/105/402.10 → PANIC.
+- **Owner's 29-09 example (checked against Kite data):** open 22732.5 < close 22780.25 → PE side; S1 broken 09:15, S2 09:25; at 09:30 bought ATM PE; S3 (22572.90) touched on the 09:35 candle (day low 22569.7) = target and the day's reversal point.
+- **Still unclear (asked 29-09):** how the PANIC / PROFIT BOOKING label is used in trading; whether the 09:30 gap trade needs a candlestick pattern; how close to a level a pattern must form; precise pattern and swing definitions; whether the target is judged on the index or the premium; strike step (NIFTY 50 / SENSEX 100?).
+
+### Sniper implementation conventions (current behaviour where the §1–§4 rules leave room)
 
 Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 1. **Fills:** a buy at the square fills at the square, or at the candle's open if it opened beyond it (gap). If one candle touches both the limit square and the next square and its open doesn't show which came first, the **higher** price is assumed. On the fill candle a low at/below the SL counts as stopped out; the target is checked from the next candle.
