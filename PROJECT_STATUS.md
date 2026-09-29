@@ -145,6 +145,7 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 11. **Restarting the live bot mid-day is safe:** it replays today's closed candles in order and marks any entry from that replay as "catch-up" in the log. Python code changes need a restart; `dashboard.html` is re-read on every request, so page edits apply on refresh.
 12. **Windows environment:** Python 3.12 and Git were installed with winget on 2026-09-27. `py`/`git` only work in shells opened after the install. PowerShell 5.1 mangles quotes in `python -c "..."` — put scripts in files. `.bat` files need CRLF line endings.
 13. **Git push from Claude's shell can't prompt for GitHub login** (`GCM_INTERACTIVE=never`, `GIT_TERMINAL_PROMPT=0`), and cmd windows Claude opens inherit that. The one-time login must happen in a cmd the owner opens (Win+R → cmd). After that, the stored credential lets Claude push.
+15. **SENSEX closing prices are only final after 08:30 the next morning** (owner, 29-09). SENSEX bots (Sniper and HLC) wait until 08:31 before building the morning plan; NIFTY doesn't wait.
 14. **Refreshing cached CSVs by overwrite can silently truncate history** (happened in the sibling project). Any future fetch script must fetch a range larger than the existing cache.
 
 ## Full Roadmap

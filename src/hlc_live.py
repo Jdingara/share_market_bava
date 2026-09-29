@@ -29,7 +29,7 @@ from hlc_history import HLC_HISTORY_DIR, record_hlc_day
 from hlc_signal import HLC_MARKETS, Candle, HlcLevels, choose_atm, hlc_levels, leg_label
 from kite_auth import PROJECT_ROOT, connected_client
 from sniper_live import (CANDLE_MINUTES, MARKET_OPEN, Notifier, OptionChain, _historical, _keep_dashboard_open,
-                         _naive, _next_poll, _sleep_until)
+                         _naive, _next_poll, _sleep_until, wait_for_closing_prices)
 from sniper_signal import MARKETS
 
 DASHBOARD_PORTS = {"NIFTY": 8052, "SENSEX": 8053}
@@ -203,6 +203,7 @@ def live(market_name: str, open_browser: bool) -> None:
     notify = Notifier(day, state, prefix=f"HLC_{market_name}_log")
     notify.send(f"HLC bot started ({market_name}, {market.quantity} qty) - PAPER MODE, no real orders.", phone=False)
 
+    wait_for_closing_prices(market_name, state.set_status)
     state.set_status("Building the morning plan from yesterday's closing prices...")
     chain, prev_day, idx, levels, ce, pe = morning_plan(kite, day, market_name)
     yesterday = {"CE": (ce["high"], ce["low"], ce["close"]), "PE": (pe["high"], pe["low"], pe["close"])}

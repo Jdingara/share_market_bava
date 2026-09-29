@@ -91,6 +91,25 @@ NiftyOptions = OptionChain
 
 HISTORICAL_ATTEMPTS = 3  # Kite occasionally times out (7 s) - retry before giving up
 
+# Owner, 2026-09-29: BSE's correct SENSEX closing prices are only there after 08:30 the next morning.
+PLAN_NOT_BEFORE = {"SENSEX": time(8, 31)}
+
+
+def plan_wait_until(market_name: str, now: datetime) -> Optional[datetime]:
+    """When the morning plan may be built, if that's later than now (else None)."""
+    earliest = PLAN_NOT_BEFORE.get(market_name)
+    if earliest is None or now.time() >= earliest:
+        return None
+    return datetime.combine(now.date(), earliest)
+
+
+def wait_for_closing_prices(market_name: str, set_status) -> None:
+    until = plan_wait_until(market_name, datetime.now())
+    if until:
+        set_status(f"Waiting until {until:%H:%M} for the final {market_name} closing prices (BSE updates them after 08:30)")
+        print(f"Waiting until {until:%H:%M} for the final {market_name} closing prices...", flush=True)
+        _sleep_until(until)
+
 
 def _historical(kite, token: int, start: datetime, end: datetime, interval: str) -> list[dict]:
     for attempt in range(1, HISTORICAL_ATTEMPTS + 1):
@@ -409,6 +428,8 @@ def main() -> None:
                 + " - PAPER MODE, no real orders.",
                 phone=False)
 
+    if not args.replay:
+        wait_for_closing_prices(market.name, state.set_status)
     state.set_status("Building the morning plan from yesterday's closing prices...")
     plan, options, previous_day = build_morning_plan(kite, day, market)
     contracts = plan_contracts(plan.final, options) if plan.final else {}

@@ -267,3 +267,9 @@ def test_request_token_from_url_or_token():
     assert request_token_from("  abc123XYZ \n") == "abc123XYZ"
     with pytest.raises(SystemExit):
         request_token_from("https://kite.zerodha.com/connect/finish?api_key=k&sess_id=s")
+
+
+def test_sensex_plan_waits_for_bse_closing_prices():
+    assert sniper_live.plan_wait_until("SENSEX", datetime(2026, 9, 30, 8, 10)) == datetime(2026, 9, 30, 8, 31)
+    assert sniper_live.plan_wait_until("SENSEX", datetime(2026, 9, 30, 8, 45)) is None
+    assert sniper_live.plan_wait_until("NIFTY", datetime(2026, 9, 30, 8, 10)) is None
