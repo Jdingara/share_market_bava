@@ -13,6 +13,7 @@ from dataclasses import asdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Optional
 
 from history import HISTORY_DIR, _read
 from sniper_engine import CONTRACT_KEYS, Bar, TradeResult
@@ -98,19 +99,21 @@ class DashboardState:
             return json.dumps(self._data).encode("utf-8")
 
 
-def start_dashboard(state: DashboardState, port: int = DEFAULT_PORT) -> str:
-    """Serves the dashboard in a background thread; returns its URL. Tries the
-    next few ports if one is busy (e.g. a second bot window)."""
+def start_dashboard(state, port: int = DEFAULT_PORT, page: Path = PAGE, history_dir: Optional[Path] = None) -> str:
+    """Serves `page` and the state (anything with .to_json()) in a background
+    thread; returns the URL. Tries the next few ports if one is busy.
+    /api/history serves days.csv + trades.csv from history_dir (default: Sniper's)."""
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path.startswith("/api/state"):
                 body, content_type = state.to_json(), "application/json"
             elif self.path.startswith("/api/history"):
-                history = {"days": _read(HISTORY_DIR / "days.csv"), "trades": _read(HISTORY_DIR / "trades.csv")}
+                folder = history_dir or HISTORY_DIR
+                history = {"days": _read(folder / "days.csv"), "trades": _read(folder / "trades.csv")}
                 body, content_type = json.dumps(history).encode("utf-8"), "application/json"
             elif self.path in ("/", "/index.html"):
-                body, content_type = PAGE.read_bytes(), "text/html; charset=utf-8"
+                body, content_type = page.read_bytes(), "text/html; charset=utf-8"
             else:
                 self.send_error(404)
                 return

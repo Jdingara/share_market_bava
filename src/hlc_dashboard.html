@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HLC Bot</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2129; --muted: #6b7280; --line: #e3e6eb;
+    --down: #d9483b; --up: #1f9d55; --accent: #2f6fde; --warn: #b7791f;
+    --paper-bg: #fff4d6; --paper-text: #7a5300; --band: rgba(47, 111, 222, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --card: #1a1e24; --text: #e6e8eb; --muted: #9aa3ad; --line: #2c323a;
+      --down: #f0705f; --up: #4cc47f; --accent: #6b9bf0; --warn: #e0a84a;
+      --paper-bg: #3a2e12; --paper-text: #f3cf7a; --band: rgba(107, 155, 240, 0.08);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 14px; }
+  h1 { font-size: 20px; margin: 0; }
+  .pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .paper { background: var(--paper-bg); color: var(--paper-text); }
+  .mode { background: var(--card); border: 1px solid var(--line); }
+  .status { color: var(--muted); flex: 1 1 260px; }
+  .pnl { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+  .section { margin-top: 14px; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .up { color: var(--up); } .down { color: var(--down); } .muted { color: var(--muted); } .warn { color: var(--warn); }
+  .levels td.name { font-weight: 700; }
+  .info div { padding: 3px 0; }
+  svg { width: 100%; height: auto; display: block; }
+  .log { max-height: 300px; overflow-y: auto; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: pre-wrap; }
+  .log div { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .log .t { color: var(--muted); margin-right: 8px; }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">HLC Bot</h1>
+    <span class="pill paper">PAPER MODE — no real orders</span>
+    <span class="pill mode" id="mode"></span>
+    <span class="status" id="status">Connecting…</span>
+    <span class="pnl" id="pnl"></span>
+  </header>
+
+  <div class="grid">
+    <div class="card"><h2>Morning plan</h2><div id="plan" class="empty">Waiting for the plan…</div></div>
+    <div class="card"><h2>Yesterday's ATM options (information)</h2><div id="info" class="info empty">…</div></div>
+  </div>
+
+  <div class="card section"><h2 id="index-title">Index with HLC levels</h2><svg id="chart-index" viewBox="0 0 900 300"></svg></div>
+  <div class="grid section">
+    <div class="card"><h2 id="ce-title">ATM CE</h2><svg id="chart-ce" viewBox="0 0 640 240"></svg></div>
+    <div class="card"><h2 id="pe-title">ATM PE</h2><svg id="chart-pe" viewBox="0 0 640 240"></svg></div>
+  </div>
+
+  <div class="card section"><h2>Paper trades today</h2><div class="scroll" id="trades"><div class="empty">No trades yet.</div></div></div>
+  <div class="card section"><h2>Log</h2><div class="log" id="log"></div></div>
+  <div class="card section"><h2>HLC history — all days</h2><div id="history" class="empty">Loading…</div></div>
+  <p class="muted" style="font-size:12px">Updated <span id="updated">–</span> · refreshes every 3 s</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const num = v => Number(v) || 0;
+const fmt = (v, d = 2) => (v === null || v === undefined || v === "") ? "–" : Number(v).toFixed(d);
+const signed = v => (v >= 0 ? "+" : "") + Number(v).toFixed(2);
+let QTY = 325;
+const rupees = pts => (pts >= 0 ? "+₹" : "−₹") + Math.abs(pts * QTY).toLocaleString("en-IN", {maximumFractionDigits: 0});
+const mins = hhmm => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
+const LEVEL_COLOR = n => n.startsWith("R") ? "var(--down)" : n.startsWith("S") ? "var(--up)" : "var(--text)";
+
+function renderPlan(st) {
+  const p = st.plan; if (!p) return;
+  const rows = p.levels.map(l => `<tr class="levels"><td class="name" style="color:${LEVEL_COLOR(l.name)}">${l.name}</td><td>${fmt(l.value)}</td></tr>`).join("");
+  const blocked = Object.entries(st.blocked || {}).map(([side, why]) => `<div class="warn">No ${side} trades today — ${esc(why)}</div>`).join("");
+  $("plan").className = "";
+  $("plan").innerHTML = `<p style="margin:0 0 8px">Close <b>${fmt(p.close)}</b> on ${p.prev_day} · <b>ATM ${p.atm}</b> · expiry ${p.expiry}
+      ${st.big_gap ? ' · <b class="warn">BIG GAP day — strike near the market</b>' : ""}</p>
+    <table><tr><th>Level</th><th>Value</th></tr>${rows}</table>${blocked}`;
+  $("info").className = "info";
+  $("info").innerHTML = st.info.map(l => `<div>${esc(l)}</div>`).join("");
+  $("ce-title").textContent = `ATM CE · ${p.symbols.CE}`;
+  $("pe-title").textContent = `ATM PE · ${p.symbols.PE}`;
+}
+
+function draw(svg, W, H, points, lines, markers) {
+  const L = 52, R = 12, T = 12, B = 24, t0 = mins("09:15"), t1 = mins("15:30");
+  const x = m => L + (m - t0) / (t1 - t0) * (W - L - R);
+  const vals = points.map(p => p[1]).concat(lines.map(l => l.v));
+  if (!points.length) { svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="var(--muted)" font-size="13">No data yet</text>`; return; }
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.06 || 5; lo -= pad; hi += pad;
+  const y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  let s = `<rect x="${x(mins("09:30"))}" y="${T}" width="${x(mins("15:00")) - x(mins("09:30"))}" height="${H - T - B}" fill="var(--band)"/>`;
+  ["09:15", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"].forEach(h => s += `<text x="${x(mins(h))}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)">${h}</text>`);
+  lines.forEach(l => s += `<line x1="${L}" x2="${W - R}" y1="${y(l.v)}" y2="${y(l.v)}" stroke="${l.c}" stroke-dasharray="${l.dash || "4 4"}"/>
+      <text x="${L - 4}" y="${y(l.v) + 4}" text-anchor="end" font-size="10" fill="${l.c}">${esc(l.label)}</text>`);
+  s += `<polyline fill="none" stroke="var(--accent)" stroke-width="2" points="${points.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ")}"/>`;
+  markers.forEach(m => s += m.kind === "buy"
+    ? `<circle cx="${x(m.t)}" cy="${y(m.v)}" r="5" fill="var(--accent)"><title>${esc(m.title)}</title></circle>`
+    : `<rect x="${x(m.t) - 5}" y="${y(m.v) - 5}" width="10" height="10" fill="${m.win ? "var(--up)" : "var(--down)"}"><title>${esc(m.title)}</title></rect>`);
+  svg.innerHTML = s;
+}
+
+function renderCharts(st) {
+  const p = st.plan; if (!p) return;
+  const pts = key => st.candles.filter(c => c[key] !== null).map(c => [mins(c.time) + 5, c[key]]);
+  draw($("chart-index"), 900, 300, pts("index"),
+       p.levels.map(l => ({v: l.value, label: `${l.name} ${l.value.toFixed(0)}`, c: LEVEL_COLOR(l.name), dash: l.name === "Close" ? "1 3" : "5 4"})), []);
+  for (const side of ["CE", "PE"]) {
+    const yd = p.yesterday[side];
+    const lines = [{v: yd.high, label: `H ${yd.high}`, c: "var(--muted)"}, {v: yd.low, label: `L ${yd.low}`, c: "var(--muted)"},
+                   {v: yd.close, label: `C ${yd.close}`, c: "var(--text)", dash: "1 3"}];
+    const marks = [];
+    st.trades.filter(t => t.side === side && Number(t.strike) === Number(p.atm)).forEach(t => {
+      marks.push({kind: "buy", t: mins(t.entry_time.slice(11, 16)) + 5, v: t.entry_fill, title: `Buy ${t.entry_fill}`});
+      if (t.exit_reason) marks.push({kind: "exit", t: mins(t.exit_time.slice(11, 16)) + 5, v: t.exit_premium, win: t.pnl_points >= 0, title: `Exit ${t.exit_premium} ${t.exit_reason}`});
+    });
+    draw($(side === "CE" ? "chart-ce" : "chart-pe"), 640, 240, pts(side.toLowerCase()), lines, marks);
+  }
+}
+
+function renderTrades(st) {
+  if (!st.trades.length) { $("trades").innerHTML = `<div class="empty">No trades yet.</div>`; return; }
+  $("trades").innerHTML = `<table><tr><th>Kind</th><th>Buy</th><th>Pattern</th><th>Entry</th><th>Fill</th><th>SL</th><th>Next target</th><th>Exit</th><th>Reason</th><th>Points</th><th>₹</th></tr>` +
+    st.trades.map(t => {
+      const next = t.exit_reason ? "–" : (t.targets.length ? `${t.targets[0][0]} ${t.targets[0][1].toFixed(0)}` : "–") + (t.trail_level ? ` (SL at ${t.trail_level[0]})` : "");
+      const cls = t.pnl_points >= 0 ? "up" : "down";
+      return `<tr><td>${t.kind}</td><td>${Number(t.strike)} ${t.side}</td><td>${esc(t.pattern)}</td><td>${t.entry_time.slice(11, 16)}</td>
+        <td>${fmt(t.entry_fill)}</td><td>${fmt(t.sl_premium)} <span class="muted">(${esc(t.sl_rule)})</span></td><td>${next}</td>
+        <td>${t.exit_reason ? fmt(t.exit_premium) : "open"}</td><td>${esc(t.exit_reason || "–")}</td>
+        <td class="${cls}">${t.exit_reason ? signed(t.pnl_points) : "–"}</td><td class="${cls}">${t.exit_reason ? rupees(t.pnl_points) : "–"}</td></tr>`;
+    }).join("") + `</table><p class="muted" style="font-size:12px;margin:8px 0 0">₹ for ${QTY} qty per trade, before charges.</p>`;
+}
+
+async function refreshHistory() {
+  let h; try { h = await (await fetch("/api/history", {cache: "no-store"})).json(); } catch { return; }
+  if (!h.days.length) { $("history").innerHTML = `<div class="empty">No days recorded yet.</div>`; return; }
+  const money = v => (num(v) >= 0 ? "+₹" : "−₹") + Math.abs(num(v)).toLocaleString("en-IN", {maximumFractionDigits: 0});
+  const pts = h.days.reduce((a, d) => a + num(d.pnl_points), 0), rs = h.days.reduce((a, d) => a + num(d.pnl_rupees), 0);
+  const rows = h.days.slice().sort((a, b) => (b.date + b.market).localeCompare(a.date + a.market)).map(d =>
+    `<tr><td>${d.date}</td><td>${d.market}</td><td>${d.atm}</td><td>${d.ce_label} / ${d.pe_label}</td><td>${d.buyers_day}</td>
+     <td>${d.trades}</td><td class="${num(d.pnl_points) >= 0 ? "up" : "down"}">${signed(num(d.pnl_points))}</td>
+     <td class="${num(d.pnl_rupees) >= 0 ? "up" : "down"}"><b>${money(d.pnl_rupees)}</b></td><td>${esc(d.status)}</td></tr>`).join("");
+  $("history").className = "";
+  $("history").innerHTML = `<p style="margin:0 0 8px">All days: <b class="${pts >= 0 ? "up" : "down"}">${signed(pts)} pts · ${money(rs)}</b> <span class="muted">(paper)</span></p>
+    <div class="scroll"><table><tr><th>Date</th><th>Market</th><th>ATM</th><th>CE / PE</th><th>Buyer's day</th><th>Trades</th><th>Points</th><th>₹</th><th>Status</th></tr>${rows}</table></div>`;
+}
+
+async function refresh() {
+  let st;
+  try { st = await (await fetch("/api/state", {cache: "no-store"})).json(); }
+  catch { $("status").textContent = "⚠ Bot not reachable — is the HLC bot window still running?"; return; }
+  QTY = st.quantity || QTY;
+  $("title").textContent = `HLC Bot · ${st.market}`; document.title = `HLC ${st.market}`;
+  $("mode").textContent = `${st.mode} · ${st.day}`;
+  $("status").textContent = st.status;
+  $("index-title").textContent = `${st.market} with HLC levels`;
+  const closed = st.trades.filter(t => t.exit_reason), pnl = closed.reduce((a, t) => a + t.pnl_points, 0);
+  $("pnl").innerHTML = st.trades.length ? `P&amp;L <span class="${pnl >= 0 ? "up" : "down"}">${signed(pnl)} pts · ${rupees(pnl)}</span>` : "Paper P&amp;L: no trades yet";
+  renderPlan(st); renderCharts(st); renderTrades(st);
+  $("log").innerHTML = st.log.slice().reverse().map(l => `<div><span class="t">${l.time}</span>${esc(l.text)}</div>`).join("");
+  $("updated").textContent = st.updated;
+}
+refresh(); setInterval(refresh, 3000);
+refreshHistory(); setInterval(refreshHistory, 15000);
+</script>
+</body>
+</html>

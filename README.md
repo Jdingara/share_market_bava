@@ -18,9 +18,9 @@ The bot is in **paper mode**: it uses real Zerodha market data but only reports 
 
 Double-click **`start_bot.bat`**. It:
 1. opens Zerodha login — log in, then copy the address the browser lands on (`https://127.0.0.1/?...request_token=...`; the page itself shows an error, that's normal) and paste it into the window;
-2. starts the **SENSEX** bot in a second window and the **NIFTY** bot in the first.
+2. starts four bots in their own windows: **Sniper NIFTY, Sniper SENSEX, HLC NIFTY, HLC SENSEX**.
 
-Keep both windows open and the laptop awake until 15:00.
+Keep all the windows open and the laptop awake until 15:00.
 
 Or step by step in cmd:
 ```
@@ -53,6 +53,17 @@ It shows the morning plan, the 4 possible trades, premium charts with entry/SL/t
 ### Raw output
 
 `data\paper_trades\`: `plan_<date>.json`, `log_<date>.txt`, `trades_<date>.csv` (SENSEX files are prefixed `SENSEX_`, replays `replay_`).
+
+## HLC bot
+
+Second strategy (rules in PROJECT_STATUS.md, "HLC strategy"). `start_bot.bat` starts it with Sniper. Manually:
+```
+py src\hlc_live.py --market NIFTY
+py src\hlc_live.py --market SENSEX
+```
+Dashboard: NIFTY http://127.0.0.1:8052, SENSEX http://127.0.0.1:8053. History: `history\hlc\HLC_HISTORY.md`.
+
+Replay a recent day on its real candles: `py src\hlc_live.py --replay 2026-09-29 --market NIFTY` — add `--dashboard` to view it on the dashboard, `--record` to save it to history.
 
 ## Backtest
 

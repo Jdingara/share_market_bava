@@ -1,4 +1,4 @@
 date,market,index_close,previous_day,expiry,atm,shifts,sniper,plan,trades,pnl_points,pnl_rupees,qty,status,last_update,note
 2026-09-28,NIFTY,23140.5,2026-09-25,2026-09-29,23200,1,54.0,yes,1,58.75,19094,325,stopped early,2026-09-29 09:24,Bot stopped after 10:45 (window closed or laptop asleep) - second half not watched. Restarted at 09:23 and 09:49 for rule changes; the entry was found on the 09:49 catch-up.
-2026-09-29,NIFTY,22780.25,2026-09-28,2026-09-29,22800,0,39.58,yes,2,29.0,9425,325,watching,2026-09-29 12:45,
-2026-09-29,SENSEX,72771.72,2026-09-28,2026-10-01,72800,2,295.7,yes,2,29.0,8700,300,watching,2026-09-29 14:05,
+2026-09-29,NIFTY,22780.25,2026-09-28,2026-09-29,22800,0,39.58,yes,2,29.0,9425,325,finished,2026-09-29 15:00,
+2026-09-29,SENSEX,72771.72,2026-09-28,2026-10-01,72800,2,295.7,yes,2,29.0,8700,300,finished,2026-09-29 15:00,

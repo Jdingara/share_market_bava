@@ -178,7 +178,9 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 - **Pushed to GitHub** (github.com/Jdingara/share_market_bava, `main`, commit `7d2469c`, author Sasikumar). The first push needed a one-time GitHub browser login in a fresh cmd window (Finding 13); later pushes use the stored credential.
 - **The NIFTY bot died after its 09:40 entry** (no traceback captured; likely an unhandled Kite/network error on a poll). Data-fetch errors now log and retry at the next candle instead of ending the day.
 - **Entry rules reworked with the owner during the session** (see §2): the candle closing at 09:30 counts, the signal is a close above the trigger, and the buy is at the upcoming square (limit back to it, or the next square if it runs). Under the old rules the bot had bought 22700 PE at 139.70 (09:35 candle, crossing 121). Each change was applied by restarting the bot, which replays the day's candles (catch-up). Final: **signal 101.90 on the 09:30 close → bought at 100 → 144 target, +44 points = +₹14,300**.
-- Day's result: pending (15:00) — see `history/TRADE_HISTORY.md`.
+- **Day's result (paper, before charges):** Sniper NIFTY +29 pts = **+₹9,425** (first half 22700 PE 100→144 +44, second half 64→SL 49 −15); Sniper SENSEX +29 pts = **+₹8,700** (after the 14:00 restart with the new ±OTM rule, catch-up: 72500 PE 576→SL 529 −47 on the fill candle, then 324→400 +76); HLC NIFTY **+₹14,820** and HLC SENSEX **−₹15,000** (replayed after the close and recorded — the live HLC bot was only finished at ~16:00).
+- **HLC live bot built** (`hlc_live.py` live mode, `hlc_dashboard.html` on :8052/:8053, `hlc_history.py` → `history/hlc/`). `start_bot.bat` now starts all four bots after one login. Not yet run live — first live day 30-09.
+- Data note: Zerodha's 28-09 high for SENSEX 72900 PE is 488; the owner's sheet shows 448 (asked). — see `history/TRADE_HISTORY.md`.
 
 ## Open Decisions
 
@@ -202,7 +204,7 @@ PROJECT_STATUS.md        # this file - single source of truth (rules, findings, 
 CLAUDE.md, AGENTS.md     # pointers for AI tools to this file (keep word-for-word in sync)
 README.md                # how to install and run
 SNIPER_SPEC.md           # stub pointing here (the rules moved into Core Decisions on 2026-09-29)
-start_bot.bat            # daily login, then SENSEX (2nd window) + NIFTY paper bots
+start_bot.bat            # daily login, then 4 paper bots: Sniper NIFTY/SENSEX (:8050/:8051), HLC NIFTY/SENSEX (:8052/:8053)
 .env.example             # credentials template -> copy to .env (gitignored)
 requirements.txt
 Bava Details for bot.docx  # an earlier write-up of the strategy - superseded by this file
@@ -213,10 +215,16 @@ src/
   kite_auth.py           # daily Kite Connect login
   dashboard.py/.html     # local dashboard (NIFTY :8050, SENSEX :8051)
   history.py             # writes history/ (per-day plan, trades, P&L)
+  hlc_signal.py          # HLC: ATM choice, levels, labels, candlestick patterns
+  hlc_engine.py          # HLC: gap/reversal trades, level targets and trailing, SL rules, PANIC block
+  hlc_live.py            # HLC paper bot (live and --replay), dashboard state
+  hlc_history.py         # writes history/hlc/
+  hlc_dashboard.html     # HLC dashboard page
   sniper_backtester.py   # backtest on cached NIFTY candles with estimated premiums
   options_pricing.py     # Black-Scholes estimates, expiry helpers
 tests/                   # 58 tests: rules (§5), engine/backtest, live bot (fake Kite + fake clock)
 history/                 # permanent record, committed: days.csv, trades.csv, TRADE_HISTORY.md (all days, newest first)
+  hlc/                   # HLC's own record: days.csv, trades.csv, HLC_HISTORY.md
 data/
   historical/            # cached NIFTY daily + 5-minute candles (committed)
   backtest_results/      # backtest output (gitignored)
