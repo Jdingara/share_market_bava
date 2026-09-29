@@ -108,6 +108,7 @@ class TradeResult:
     pnl_points: float = 0.0
     pnl_pct: float = 0.0
     note: str = ""  # e.g. "catch-up" when the live bot found this entry while replaying candles after a restart
+    atm_below_sniper: bool = False  # at the signal: the falling ATM was already below Sniper = extra confidence
 
 
 @dataclass(frozen=True)
@@ -120,6 +121,7 @@ class Event:
     next_square: int = 0  # or buy stop here
     signal_close: float = 0.0
     when: Optional[datetime] = None
+    atm_below_sniper: bool = False
 
 
 @dataclass
@@ -128,6 +130,7 @@ class _Pending:
     k: int  # stop at (k+1)^2; limit at k^2 only if has_limit
     signal_close: float
     has_limit: bool = True
+    atm_below_sniper: bool = False
 
 
 def _otm_key(option_type: OptionType) -> str:
@@ -222,7 +225,8 @@ class SniperDay:
                 self.pending.append(pending)
             else:
                 k, price = fill
-                events += self._open(pending.setup, k, when, price, bars[_otm_key(pending.setup.buy_type)], True)
+                events += self._open(pending.setup, k, when, price, bars[_otm_key(pending.setup.buy_type)], True,
+                                     pending.atm_below_sniper)
 
         if closes_at_exit:
             self.done = True
@@ -243,13 +247,16 @@ class SniperDay:
             otm_key = _otm_key(setup.buy_type)
             buy_close = current[otm_key]
             k = highest_square_below(buy_close)  # the highest square this close is above
+            # Owner, 2026-09-29: ATM below Sniper = ATM sellers strong -> OTM profit-booking/panic = buying chance.
+            # Recorded as extra confidence, not required.
+            confident = current[falling_key] < self.row.sniper
             if self.fill_at_square:
                 if buy_close <= setup.levels.trigger:
                     continue
                 if k < setup.levels.n:  # between the trigger and the plan square: wait for it to rise to n^2
-                    pending = _Pending(setup, setup.levels.n - 1, buy_close, has_limit=False)
+                    pending = _Pending(setup, setup.levels.n - 1, buy_close, has_limit=False, atm_below_sniper=confident)
                 else:
-                    pending = _Pending(setup, k, buy_close)
+                    pending = _Pending(setup, k, buy_close, atm_below_sniper=confident)
                 self.halves_used.add(half)
                 self.pending.append(pending)
                 events.append(self._order_event("ORDER", pending, when))
@@ -259,7 +266,7 @@ class SniperDay:
             if self.require_cross and previous_otm_close[otm_key] > k * k:
                 continue
             self.halves_used.add(half)
-            events += self._open(setup, k, when, buy_close, bars[otm_key], False)
+            events += self._open(setup, k, when, buy_close, bars[otm_key], False, confident)
             break
 
         return events
@@ -267,7 +274,8 @@ class SniperDay:
     @staticmethod
     def _order_event(kind: str, pending: _Pending, when: datetime) -> Event:
         return Event(kind, setup=pending.setup, square=pending.k ** 2 if pending.has_limit else 0,
-                     next_square=(pending.k + 1) ** 2, signal_close=pending.signal_close, when=when)
+                     next_square=(pending.k + 1) ** 2, signal_close=pending.signal_close, when=when,
+                     atm_below_sniper=pending.atm_below_sniper)
 
     @staticmethod
     def _pending_fill(pending: _Pending, bar: Bar) -> Optional[tuple[int, float]]:
@@ -287,7 +295,8 @@ class SniperDay:
             return k + 1, max(float(stop), bar.open) if bar.open is not None else float(stop)
         return None
 
-    def _open(self, setup: TradeSetup, k: int, when: datetime, price: float, bar: Bar, fill_candle: bool) -> list[Event]:
+    def _open(self, setup: TradeSetup, k: int, when: datetime, price: float, bar: Bar, fill_candle: bool,
+              atm_below_sniper: bool = False) -> list[Event]:
         trade = TradeResult(
             date=self.day.isoformat(),
             half=setup.half,
@@ -301,6 +310,7 @@ class SniperDay:
             entry_time=when.isoformat(),
             entry_fill=round(price, 2),
             trail_stop=float((k - 1) ** 2),
+            atm_below_sniper=atm_below_sniper,
         )
         self.trades.append(trade)
         events = [Event("ENTRY", trade)]

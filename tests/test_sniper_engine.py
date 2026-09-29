@@ -119,3 +119,18 @@ def test_waits_several_candles_for_the_pullback():
         ("09:40", (107, 99, 103, 106)),  # back to 100 two candles later
     ])
     assert (engine.trades[0].entry_time[11:16], engine.trades[0].entry_fill) == ("09:40", 100)
+
+
+def test_atm_below_sniper_marks_high_confidence():
+    """Owner, 29-09: ATM below Sniper (54 here) = extra confidence. _bars keeps the ATM CE at 20."""
+    engine, events = _run([("09:25", (104, 71, 101.9, 72)), ("09:30", (110, 95, 105, 101))])
+    assert events[0].atm_below_sniper and engine.trades[0].atm_below_sniper
+
+
+def test_atm_still_above_sniper_is_normal_confidence():
+    engine = SniperDay(date(2026, 9, 29), ROW)
+    bars = lambda pe: {"atm_ce": Bar(60, 60, 60, 60), "atm_pe": Bar(200, 200, 200, 200),
+                       "otm_ce": Bar(5, 5, 5, 5), "otm_pe": Bar(*pe)}  # ATM CE 60: below its 89.15 close, above Sniper 54
+    engine.on_candle(_at("09:25"), bars((104, 71, 101.9, 72)))
+    engine.on_candle(_at("09:30"), bars((110, 95, 105, 101)))
+    assert engine.trades[0].atm_below_sniper is False

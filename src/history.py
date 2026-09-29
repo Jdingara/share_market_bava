@@ -34,7 +34,7 @@ DAY_FIELDS = [
 TRADE_FIELDS = [
     "date", "market", "half", "direction", "symbol", "qty", "entry_time", "entry_fill", "entry_square",
     "stop_loss", "trail_stop", "target", "exit_time", "exit_premium", "exit_reason", "pnl_points",
-    "pnl_rupees", "note",
+    "pnl_rupees", "confidence", "note",
 ]
 
 
@@ -116,6 +116,7 @@ def record_day(
             "exit_reason": t.exit_reason or "OPEN",
             "pnl_points": t.pnl_points if t.exit_reason else "",
             "pnl_rupees": round(t.pnl_points * qty) if t.exit_reason else "",
+            "confidence": "HIGH (ATM below Sniper)" if getattr(t, "atm_below_sniper", False) else "normal",
             "note": getattr(t, "note", ""),
         }
         for t in trades
@@ -189,6 +190,8 @@ def write_markdown(folder: Optional[Path] = None) -> Path:
                     pts = f"{_num(t['pnl_points']):+.2f}" if t["pnl_points"] else "–"
                     rs = f"₹{_num(t['pnl_rupees']):+,.0f}" if t["pnl_rupees"] else "–"
                     note = f" ({t['note']})" if t["note"] else ""
+                    if t.get("confidence", "").startswith("HIGH"):
+                        note += " ★ HIGH"
                     lines.append(
                         f"| {t['half']} | {t['qty']} × {t['symbol']} | {t['entry_time']}{note} | {t['entry_fill']} | "
                         f"{t['entry_square']} | {sl} | {t['target']} | {exit_cell} | {t['exit_reason']} | {pts} | {rs} |"

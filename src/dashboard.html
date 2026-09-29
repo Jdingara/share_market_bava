@@ -107,12 +107,13 @@ function renderPlan(p) {
 function setupState(s, st) {
   const trade = st.trades.find(t => t.half === s.half && t.direction === s.direction);
   if (trade) {
+    const conf = trade.atm_below_sniper ? ` <span class="up">★ HIGH confidence (ATM below Sniper)</span>` : "";
     if (!trade.exit_reason) {
       const sl = trade.trail_stop || trade.stop_loss;
-      return `🟡 Bought at <b>${fmt(trade.entry_fill)}</b> (${trade.entry_time.slice(11, 16)}) — open · SL now <b>${sl}</b>${sl > trade.stop_loss ? " (trailed ▲)" : ""}`;
+      return `🟡 Bought at <b>${fmt(trade.entry_fill)}</b> (${trade.entry_time.slice(11, 16)}) — open · SL now <b>${sl}</b>${sl > trade.stop_loss ? " (trailed ▲)" : ""}${conf}`;
     }
     const cls = trade.pnl_points >= 0 ? "up" : "down";
-    return `Bought ${fmt(trade.entry_fill)} → exited ${fmt(trade.exit_premium)} (${trade.exit_reason}) <b class="${cls}">${signed(trade.pnl_points)} pts · ${rupees(trade.pnl_points)}</b>`;
+    return `Bought ${fmt(trade.entry_fill)} → exited ${fmt(trade.exit_premium)} (${trade.exit_reason}) <b class="${cls}">${signed(trade.pnl_points)} pts · ${rupees(trade.pnl_points)}</b>${conf}`;
   }
   if (st.trades.some(t => t.half === s.half)) return "Other side traded this half";
   const last = st.candles.length ? st.candles[st.candles.length - 1].time : null;

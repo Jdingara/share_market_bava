@@ -50,6 +50,7 @@ When one side's ATM premium falls from its yesterday close, watch the **opposite
   - signal close still **below** the plan square n² (e.g. trigger 84.20, close 90, n² = 100) → buy when price **rises to 100**;
   - signal close already **above** a square k² (e.g. 101.90 > 100) → buy at **100 if price comes back**, or at the **next square 121 if it runs up first**;
   - SL/target are measured from the square actually bought (100 → SL 81, target 144; 121 → SL 100, target 169). Unfilled at the window's end → cancelled, no trade.
+- **ATM below Sniper = extra confidence** (2026-09-29, owner's concept): when the falling ATM is already below Sniper, ATM sellers are strong, so the opposite OTM sees profit-booking / panic exits — a buying opportunity for us as buyers. **Recorded as a HIGH-confidence tag on the signal/trade, not a required condition**, so results with and without it can be compared in `history/`.
 - Worked case, 29-09-2026: 22700 PE, trigger 84.20. The 09:25–09:30 candle closed 101.90 → signal. The next candle's low was 90.45 → **bought at 100**. The 09:35 candle's high was 148.85 → **144 target, +44**.
 - Superseded the same week: "the candle must cross the square, then buy at the close" (28-09) and "buy at the next square it crosses" (28-09). The engine keeps the old behaviour behind `fill_at_square=False` for comparison only.
 
@@ -96,7 +97,7 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 6. **Stop before target** if one candle's range crosses both. Stop/target fill at their level.
 7. **Shift oscillation** (PE fails at one ATM, CE at the next) is followed literally until the 3-shift limit → no plan.
 8. **Previous close** = Zerodha's official daily close for each contract.
-9. **"Falling ATM"** is the only ATM condition at the signal. The owner noted on 29-09 that the ATM CE had also fallen below the Sniper; it's not a condition unless confirmed (see Open Decisions).
+9. **"Falling ATM"** (below its yesterday close) is the only required ATM condition at the signal; ATM below Sniper only adds the HIGH-confidence tag (§2).
 
 ## Non-Obvious Technical Findings
 
@@ -158,7 +159,7 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 - **Order mode for Phase 3:** fully automatic, or alert + manual confirm?
 - **Where the bot runs** (laptop vs cloud VPS) and SEBI algo/static-IP compliance with Zerodha.
 - **Implementation conventions 1–9** above: confirm, especially #1 (worse price when a candle touches both squares).
-- **ATM below Sniper:** the owner mentioned on 29-09 that the ATM had also fallen below the Sniper — should that be an extra entry condition?
+- **HIGH-confidence tag as a filter?** After enough days in `history/`, compare HIGH vs normal trades and decide whether to trade only HIGH ones.
 - **SENSEX gap check** keeps failing with ±100 strikes: accept "no plan" days, or change something?
 - **Excel morning plan:** the old spec mentioned `sniper_phase1.py` (plan → Excel), not in this repo — still wanted?
 - **Real option data** for a meaningful backtest (Kite has none for expired contracts).

@@ -224,6 +224,7 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
     if event.kind in ("ORDER", "CANCEL"):
         symbol = contracts["otm_ce" if event.setup.buy_type == "CE" else "otm_pe"]["tradingsymbol"]
         trigger = event.setup.levels.trigger
+        note = (" - HIGH confidence: ATM already below Sniper" if event.atm_below_sniper else "") + note
         if event.kind == "ORDER" and event.square:
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
                     f"WOULD BUY {qty} at {event.square} if it comes back, or at {event.next_square} if it runs up{note}")
@@ -235,8 +236,9 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
     t = event.trade
     symbol = contracts["otm_ce" if t.buy_type == "CE" else "otm_pe"]["tradingsymbol"]
     if event.kind == "ENTRY":
+        conf = " - HIGH confidence: ATM below Sniper" if t.atm_below_sniper else ""
         return (f"WOULD BUY {qty} x {symbol} at {t.entry_fill:.2f} ({t.half} half, candle {t.entry_time[11:16]}) - "
-                f"SL {t.stop_loss} (trails up), target {t.target}{note}")
+                f"SL {t.stop_loss} (trails up), target {t.target}{conf}{note}")
     return (f"WOULD EXIT {qty} x {symbol} at {t.exit_premium:.2f} - {t.exit_reason} "
             f"(bought {t.entry_fill:.2f}, P&L {t.pnl_points:+.2f} points = Rs {t.pnl_points * qty:+,.0f}){note}")
 
