@@ -106,7 +106,8 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 10. **SENSEX with ±100 OTM often fails the gap check**: at ~72,800 adjacent strikes differ by only ~50 in premium, so the shift loop oscillates (72900 ↔ 73000) and ends in no plan — happened on 2026-09-29 at both 45 and 35 min gap.
 11. **Restarting the live bot mid-day is safe:** it replays today's closed candles in order and marks any entry from that replay as "catch-up" in the log. Python code changes need a restart; `dashboard.html` is re-read on every request, so page edits apply on refresh.
 12. **Windows environment:** Python 3.12 and Git were installed with winget on 2026-09-27. `py`/`git` only work in shells opened after the install. PowerShell 5.1 mangles quotes in `python -c "..."` — put scripts in files. `.bat` files need CRLF line endings.
-13. **Refreshing cached CSVs by overwrite can silently truncate history** (happened in the sibling project). Any future fetch script must fetch a range larger than the existing cache.
+13. **Git push from Claude's shell can't prompt for GitHub login** (`GCM_INTERACTIVE=never`, `GIT_TERMINAL_PROMPT=0`), and cmd windows Claude opens inherit that. The one-time login must happen in a cmd the owner opens (Win+R → cmd). After that, the stored credential lets Claude push.
+14. **Refreshing cached CSVs by overwrite can silently truncate history** (happened in the sibling project). Any future fetch script must fetch a range larger than the existing cache.
 
 ## Full Roadmap
 
@@ -136,6 +137,7 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 - **SENSEX support added** (`--market SENSEX`, 300 qty, BFO contracts, own dashboard port). The owner lowered the SENSEX min gap 45 → 35 and kept ±100 strikes. SENSEX still had **no plan** today (gap check oscillated, Finding 10).
 - `start_bot.bat` now starts both markets after one login.
 - **Permanent day-by-day history added** (`history/`, written by the bot after every entry/exit so a mid-day stop still leaves a record). 28-09 was backfilled from its log. Both bots were restarted at 09:24, before the entry window, to start recording.
+- **Pushed to GitHub** (github.com/Jdingara/share_market_bava, `main`, commit `7d2469c`, author Sasikumar). The first push needed a one-time GitHub browser login in a fresh cmd window (Finding 13); later pushes use the stored credential.
 - Day's result: pending (15:00) — see `history/TRADE_HISTORY.md`.
 
 ## Open Decisions
@@ -151,7 +153,6 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 - **SENSEX gap check** keeps failing with ±100 strikes: accept "no plan" days, or change something?
 - **Excel morning plan:** the old spec mentioned `sniper_phase1.py` (plan → Excel), not in this repo — still wanted?
 - **Real option data** for a meaningful backtest (Kite has none for expired contracts).
-- **Commit and push:** nothing since 2026-09-27 is committed yet.
 
 ## Repo Structure
 
