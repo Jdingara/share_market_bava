@@ -1,3 +1,5 @@
 date,market,close,atm,r1,r2,r3,s1,s2,s3,ce_label,pe_label,buyers_day,big_gap,trades,pnl_points,pnl_rupees,qty,status,last_update,note
 2026-09-29,NIFTY,22780.25,22800,22884.2,22955.65,23039.85,22728.55,22644.35,22572.9,PROFIT BOOKING,PANIC,yes,no,1,45.6,14820,325,replayed,2026-09-29 15:44,Replayed on the day's real candles after the close (the live HLC bot wasn't running).
 2026-09-29,SENSEX,72771.72,72900,73344.2,73746.3,74190.5,72497.9,72053.7,71651.6,PROFIT BOOKING,PANIC,yes,no,1,-50.0,-15000,300,replayed,2026-09-29 15:45,Replayed on the day's real candles after the close (the live HLC bot wasn't running).
+2026-09-30,NIFTY,22716.2,22800,22956.1,23107.0,23263.1,22649.1,22493.0,22342.1,PANIC,PROFIT BOOKING,yes,no,1,0.15,49,325,watching,2026-09-30 09:55,
+2026-09-30,SENSEX,72529.07,72800,73126.15,73486.8,73812.95,72439.35,72113.2,71752.55,PANIC,PROFIT BOOKING,yes,no,1,-50.0,-15000,300,watching,2026-09-30 10:00,

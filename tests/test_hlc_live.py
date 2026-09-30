@@ -13,47 +13,47 @@ from hlc_live import HlcState, feed, info_lines
 from hlc_signal import HLC_MARKETS, Candle, hlc_levels
 
 IST = timezone(timedelta(hours=5, minutes=30))
-LEVELS = hlc_levels(22780.25, 22800, 84.20, 71.45)
-YESTERDAY = {"CE": (298.5, 77.05, 84.20), "PE": (94.0, 8.4, 71.45)}
+LEVELS = hlc_levels(22716.25, 22800, 156.10, 150.90)  # 30-09-2026 NIFTY (data 29-09)
+YESTERDAY = {"CE": (189.0, 111.9, 156.1), "PE": (273.4, 134.85, 150.9)}
 
 
 def _row(hhmm, o, h, l, c):
     hh, mm = map(int, hhmm.split(":"))
-    return {"date": datetime(2026, 9, 29, hh, mm, tzinfo=IST), "open": o, "high": h, "low": l, "close": c}
+    return {"date": datetime(2026, 9, 30, hh, mm, tzinfo=IST), "open": o, "high": h, "low": l, "close": c}
 
 
-INDEX = [_row("09:15", 22732.45, 22753, 22680, 22684), _row("09:20", 22683, 22686, 22656, 22667),
-         _row("09:25", 22667, 22668, 22624, 22624.2), _row("09:30", 22624, 22638, 22611, 22620),
-         _row("09:35", 22619, 22619.5, 22569.7, 22577.3), _row("09:40", 22577, 22628, 22573, 22613)]
-PE = {datetime(2026, 9, 29, 9, 15) + timedelta(minutes=5 * i): Candle(*c) for i, c in enumerate(
-    [(77, 133.9, 76.5, 132), (132, 149, 127, 139.8), (139, 180, 138, 177.1), (177, 190, 164, 186.8),
-     (186, 233, 186, 222.7), (222, 225, 177, 189.8)])}
-CE = {t: Candle(20, 21, 19, 20) for t in PE}
+INDEX = [_row("09:15", 22665, 22718.45, 22659.8, 22702.7), _row("09:20", 22702.85, 22733.35, 22697.2, 22727.95),
+         _row("09:25", 22727.8, 22736.65, 22714.45, 22721.65), _row("09:30", 22720.4, 22720.4, 22681.15, 22690),
+         _row("09:35", 22690, 22700, 22655, 22660)]
+TIMES = [datetime(2026, 9, 30, 9, 15) + timedelta(minutes=5 * i) for i in range(5)]
+CE = dict(zip(TIMES, [Candle(141, 142, 128, 135), Candle(135, 140, 133, 139), Candle(139, 141, 136, 137),
+                      Candle(137, 138, 128, 130), Candle(130, 131, 110, 111)]))
+PE = {t: Candle(150, 152, 148, 150) for t in TIMES}
 
 
 def test_feed_processes_closed_candles_once_and_updates_state_and_history(tmp_path):
-    engine = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"], YESTERDAY)
-    state = HlcState("NIFTY", "LIVE", "2026-09-29", 325)
-    state.set_plan(LEVELS, "2026-09-28", "2026-09-29", YESTERDAY, {"CE": "NIFTY26SEP22800CE", "PE": "NIFTY26SEP22800PE"})
+    engine = HlcDay(date(2026, 9, 30), LEVELS, HLC_MARKETS["NIFTY"], YESTERDAY)
+    state = HlcState("NIFTY", "LIVE", "2026-09-30", 325)
+    state.set_plan(LEVELS, "2026-09-29", "2026-10-06", YESTERDAY, {"CE": "NIFTY26O0622800CE", "PE": "NIFTY26O0622800PE"})
     premiums = {(22800.0, "CE"): CE, (22800.0, "PE"): PE}
     processed = set()
 
-    events = feed(engine, INDEX, premiums, processed, datetime(2026, 9, 29, 9, 33), state, None)  # 09:30 candle still forming
-    assert len(processed) == 3 and any("BUY PE 22800 at 177.10" in e for e in events)
-    assert feed(engine, INDEX, premiums, processed, datetime(2026, 9, 29, 9, 33), state, None) == []  # nothing new
-    events = feed(engine, INDEX, premiums, processed, datetime(2026, 9, 29, 9, 46), state, None)
-    assert any("TARGET S3" in e for e in events)
+    events = feed(engine, INDEX, premiums, processed, datetime(2026, 9, 30, 9, 38), state, None)  # 09:35 still forming
+    assert len(processed) == 4 and any("BUY CE 22800 at 130.00 (FIB" in e for e in events)
+    assert feed(engine, INDEX, premiums, processed, datetime(2026, 9, 30, 9, 38), state, None) == []  # nothing new
+    events = feed(engine, INDEX, premiums, processed, datetime(2026, 9, 30, 9, 41), state, None)
+    assert any("SL (index below first low 22659.8)" in e for e in events)
 
     state.set_engine(engine)
     data = json.loads(state.to_json())
-    assert data["trades"][0]["pnl_points"] == 45.6 and data["blocked"] == {"CE": "PE PANIC yesterday and above its high 94 today"}
+    assert data["trades"][0]["pnl_points"] == -19.0
     assert "★ Buyer's day" in data["info"][-1]
 
-    record_hlc_day(date(2026, 9, 29), "NIFTY", LEVELS, YESTERDAY, engine.big_gap, engine.trades, 325, "finished", folder=tmp_path)
+    record_hlc_day(date(2026, 9, 30), "NIFTY", LEVELS, YESTERDAY, engine.big_gap, engine.trades, 325, "finished", folder=tmp_path)
     md = (tmp_path / "HLC_HISTORY.md").read_text(encoding="utf-8")
-    assert "All days: 1 trade(s), +45.60 points, ₹+14,820" in md and "PROFIT BOOKING / PANIC | yes" in md
+    assert "All days: 1 trade(s), -19.00 points, ₹-6,175" in md and "PANIC / PROFIT BOOKING | yes" in md
 
 
 def test_info_lines_flag_a_buyers_day():
     lines = info_lines(LEVELS, YESTERDAY)
-    assert lines[0].startswith("CE 22800 = PROFIT BOOKING") and lines[1].startswith("PE 22800 = PANIC")
+    assert lines[0].startswith("CE 22800 = PANIC") and lines[1].startswith("PE 22800 = PROFIT BOOKING")

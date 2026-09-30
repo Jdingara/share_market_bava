@@ -5,9 +5,15 @@ Per 5-minute candle the engine gets the index candle and the option candles of
 the strikes around the index. Trades (max 2 a day, one at a time, entries on
 candles closing 09:30-14:55):
 
-  GAP trade   - on the candle closing 09:30: day opened below yesterday's close
-                -> buy ATM PE; above -> ATM CE. No pattern needed (owner's
-                29-09 example; to be confirmed).
+  FIB trade   - (owner, 2026-09-30; replaced the 09:30 gap trade) the first
+                5-minute index candle's range, reverse Fibonacci 0.618. Side =
+                where the last closed candle sits against yesterday's close
+                (above -> CE, below -> PE; can change until the entry, e.g. a
+                gap-down open whose 2nd/3rd candles close above -> CE). From
+                09:30: CE when the index dips to high - 0.618 x range, PE when
+                it rises to low + 0.618 x range. SL on the INDEX: CE = first
+                candle low, PE = first candle high. Targets R1 then R2 (CE) /
+                S1 then S2 (PE) - never beyond R2/S2. One FIB trade a day.
   REVERSAL    - index shows a support pattern at S1/S2/S3 AND the ATM CE premium
                 shows an up-reversal pattern -> buy ATM CE. Index shows a
                 resistance pattern at R1/R2/R3 AND the ATM PE premium shows an
@@ -78,6 +84,7 @@ class HlcTrade:
     trail_level: Optional[tuple[str, float]] = None
     big_gap: bool = False  # big-gap day: strike near the index, exit when the index pattern turns
     sl_rule: str = ""
+    index_sl: Optional[float] = None  # FIB trade: exit when the index crosses this
     exit_time: str = ""
     exit_premium: float = 0.0
     exit_reason: str = ""
@@ -100,7 +107,7 @@ class HlcDay:
         self.trades: list[HlcTrade] = []
         self.open_trade: Optional[HlcTrade] = None
         self.day_open: Optional[float] = None
-        self.gap_done = False
+        self.gap_done = False  # the day's FIB trade has been taken
         self.big_gap = False
         self.index_history: list[Candle] = []
         self.premium_history: dict[tuple[float, str], list[Candle]] = {}
@@ -227,16 +234,10 @@ class HlcDay:
         if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
 
-        if not self.gap_done and closes == FIRST_ENTRY_CLOSE:
-            self.gap_done = True
-            if self.day_open != self.levels.close:
-                side: OptionType = "PE" if self.day_open < self.levels.close else "CE"
-                final = self.levels.ladder()[0][0] if side == "PE" else self.levels.ladder()[-1][0]
-                size = "BIG gap" if self.big_gap else "gap"
-                event = self._enter("GAP", side, atm, when, chain[(atm, side)], index,
-                                    f"{size} {'down' if side == 'PE' else 'up'} open {self.day_open:.2f}", final)
-                if event:
-                    return events + [event]
+        if not self.gap_done and len(self.index_history) >= 2:
+            event = self._fib_entry(when, index, chain, atm)
+            if event:
+                return events + [event]
 
         up = bullish_pattern(self.index_history[-3:])
         if up:
@@ -263,6 +264,44 @@ class HlcDay:
                     return events + [event]
         return events
 
+    def fib_levels(self) -> Optional[tuple[float, float, float, float]]:
+        """(CE entry, PE entry, first low, first high) from the first 5-minute candle."""
+        if not self.index_history:
+            return None
+        first = self.index_history[0]
+        rng = first.high - first.low
+        return first.high - 0.618 * rng, first.low + 0.618 * rng, first.low, first.high
+
+    def _fib_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], atm: float) -> Optional[str]:
+        ce_entry, pe_entry, first_low, first_high = self.fib_levels()
+        side: OptionType = "CE" if self.index_history[-2].close > self.levels.close else "PE"
+        if side in self.blocked:
+            return None
+        if side == "CE" and index.low <= ce_entry and index.close > first_low:
+            names = ("R1", "R2")
+            fib, sl = ce_entry, first_low
+        elif side == "PE" and index.high >= pe_entry and index.close < first_high:
+            names = ("S1", "S2")
+            fib, sl = pe_entry, first_high
+        else:
+            return None
+        targets = [(n, v) for n, v in self.levels.ladder() if n in names and (v > index.close if side == "CE" else v < index.close)]
+        if side == "PE":
+            targets.reverse()
+        if not targets:
+            return None
+        prem = chain[(atm, side)]
+        self.gap_done = True
+        trade = HlcTrade(date=self.day.isoformat(), kind="FIB", side=side, strike=atm,
+                         pattern=f"first candle 0.618 at {fib:.2f}", entry_time=when.isoformat(),
+                         entry_fill=round(prem.close, 2), entry_index=index.close, sl_premium=0.0,
+                         sl_rule=f"index {'below first low' if side == 'CE' else 'above first high'} {sl:g}",
+                         index_sl=sl, targets=targets, big_gap=self.big_gap)
+        self.trades.append(trade)
+        self.open_trade = trade
+        return (f"BUY {side} {atm:g} at {prem.close:.2f} (FIB 0.618 of the first candle at {fib:.2f}; index {index.close:.2f}) - "
+                f"SL index {sl:g}, targets " + " -> ".join(f"{n} {v:g}" for n, v in targets))
+
     def _open_filled(self, order: dict, when: datetime, fill: Candle, index: Candle) -> Optional[str]:
         """A low-premium buy stop filled at fill.close; managed from the next candle."""
         targets = self._targets(order["side"], index.close, order["final"])
@@ -278,7 +317,10 @@ class HlcDay:
         return f"BUY {trade.side} {trade.strike:g} at {trade.entry_fill:.2f} (broke the confirmation high) - SL {trade.sl_premium:.2f}, targets {names}"
 
     def _manage(self, trade: HlcTrade, when: datetime, index: Candle, prem: Candle, closes: time) -> list[str]:
-        if prem.low <= trade.sl_premium:
+        if trade.index_sl is not None:
+            if (trade.side == "CE" and index.low <= trade.index_sl) or (trade.side == "PE" and index.high >= trade.index_sl):
+                return [self._exit(trade, when, prem.close, f"SL ({trade.sl_rule})")]
+        elif prem.low <= trade.sl_premium:
             return [self._exit(trade, when, trade.sl_premium, f"SL ({trade.sl_rule})")]
         pe = trade.side == "PE"
         if trade.big_gap:

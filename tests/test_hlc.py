@@ -59,43 +59,58 @@ def _chain(pe):
             (22650.0, "CE"): Candle(70, 72, 68, 71), (22650.0, "PE"): Candle(70, 72, 68, 71)}
 
 
-def test_gap_down_buys_pe_at_0930_and_exits_at_the_last_level():
-    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
-    day.on_candle(_at("09:15"), Candle(22732.45, 22753, 22680, 22684), _chain((60, 62, 55, 58)))
-    day.on_candle(_at("09:20"), Candle(22683, 22686, 22656, 22667), _chain((58, 66, 57, 65)))
-    events = day.on_candle(_at("09:25"), Candle(22667, 22668, 22624, 22624.2), _chain((65, 74, 64, 72.55)))
-    assert events and events[0].startswith("BUY PE 22800 at 72.55 (GAP")  # our ATM, not the balanced 22650
-    t = day.open_trade
-    assert (t.sl_premium, [n for n, _ in t.targets]) == (47.55, ["S3"])  # 72.55 - 25
-    day.on_candle(_at("09:30"), Candle(22624, 22638, 22611, 22620), _chain((72, 80, 70, 78)))
-    events = day.on_candle(_at("09:35"), Candle(22619, 22619.5, 22569.7, 22577.3), _chain((78, 110, 77, 104.3)))
-    assert "TARGET S3" in events[0]
-    assert (t.exit_premium, t.pnl_points) == (104.3, pytest.approx(31.75))
+LEVELS30 = hlc_levels(22716.25, 22800, 156.10, 150.90)  # 30-09-2026 NIFTY (data 29-09)
 
 
-def test_breaking_a_level_moves_the_sl_to_it():
-    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
-    day.on_candle(_at("09:20"), Candle(22760, 22762, 22740, 22745), _chain((60, 62, 55, 58)))  # opens below 22780.25
-    day.on_candle(_at("09:25"), Candle(22745, 22750, 22735, 22740), _chain((58, 66, 57, 60)))  # GAP PE, targets S1..S3
+def _chain30(ce_close=130.0):
+    return {(22800.0, "CE"): Candle(ce_close, ce_close + 2, ce_close - 2, ce_close), (22800.0, "PE"): Candle(150, 152, 148, 150)}
+
+
+def test_fib_trade_30_09_nifty_ce_after_the_2nd_candle_closes_above():
+    """Owner's 30-09 example: opened below the 22716.25 close, 2nd/3rd candles closed above -> CE side;
+    first candle H 22718.45 L 22659.80 -> 0.618 entry 22682.20, touched on the 09:30 candle."""
+    day = HlcDay(date(2026, 9, 30), LEVELS30, HLC_MARKETS["NIFTY"])
+    assert day.on_candle(_at("09:15"), Candle(22665, 22718.45, 22659.8, 22702.7), _chain30()) == []
+    assert day.on_candle(_at("09:20"), Candle(22702.85, 22733.35, 22697.2, 22727.95), _chain30()) == []
+    assert day.on_candle(_at("09:25"), Candle(22727.8, 22736.65, 22714.45, 22721.65), _chain30()) == []  # not down to 22682
+    events = day.on_candle(_at("09:30"), Candle(22720.4, 22720.4, 22681.15, 22690), _chain30())
+    assert events[0].startswith("BUY CE 22800 at 130.00 (FIB 0.618 of the first candle at 22682.20")
     t = day.open_trade
-    assert [n for n, _ in t.targets] == ["S1", "S2", "S3"]
-    events = day.on_candle(_at("09:30"), Candle(22740, 22741, 22700, 22705), _chain((60, 75, 59, 74)))  # closes below S1
+    assert (t.index_sl, [n for n, _ in t.targets]) == (22659.8, ["R1", "R2"])
+    events = day.on_candle(_at("09:35"), Candle(22690, 22700, 22655, 22660), _chain30(110))  # below the first low
+    assert "SL (index below first low 22659.8)" in events[0] and t.pnl_points == -20
+
+
+def test_no_fib_trade_before_0930():
+    day = HlcDay(date(2026, 9, 30), LEVELS30, HLC_MARKETS["NIFTY"])
+    day.on_candle(_at("09:15"), Candle(22665, 22718.45, 22659.8, 22702.7), _chain30())
+    assert day.on_candle(_at("09:20"), Candle(22727, 22733, 22675, 22727.95), _chain30()) == []  # touches 22682 but closes 09:25
+
+
+def test_pe_fib_trade_trails_through_s1():
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
+    day.on_candle(_at("09:15"), Candle(22760, 22770, 22740, 22745), _chain((60, 62, 55, 58)))  # below close -> PE
+    day.on_candle(_at("09:20"), Candle(22745, 22750, 22738, 22742), _chain((58, 60, 57, 59)))
+    events = day.on_candle(_at("09:25"), Candle(22742, 22760, 22740, 22748), _chain((59, 61, 57, 60)))  # up to 22758.54
+    t = day.open_trade
+    assert "FIB" in events[0] and (t.side, t.index_sl, [n for n, _ in t.targets]) == ("PE", 22770, ["S1", "S2"])
+    events = day.on_candle(_at("09:30"), Candle(22748, 22749, 22700, 22705), _chain((60, 75, 59, 74)))  # closes below S1
     assert "S1 22728.5 broken" in events[0] and t.trail_level[0] == "S1"
-    events = day.on_candle(_at("09:35"), Candle(22705, 22740, 22700, 22735), _chain((74, 76, 62, 63)))  # back above S1 (SL 35 not hit)
-    assert "closed back across S1" in events[0] and t.pnl_points == pytest.approx(3)
+    events = day.on_candle(_at("09:35"), Candle(22705, 22740, 22700, 22735), _chain((74, 76, 62, 63)))  # back above S1
+    assert "closed back across S1" in events[0] and t.pnl_points == 3
 
 
 def test_big_gap_uses_the_strike_near_the_market_and_exits_when_the_pattern_turns():
-    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
-    chain = lambda pe: {(22600.0, "CE"): Candle(40, 42, 38, 41), (22600.0, "PE"): Candle(*pe),
-                        (22800.0, "CE"): Candle(5, 6, 4, 5), (22800.0, "PE"): Candle(190, 195, 185, 190)}
-    day.on_candle(_at("09:15"), Candle(22610, 22620, 22590, 22600), chain((50, 52, 48, 50)))  # opens 170 below 22780.25
-    events = day.on_candle(_at("09:25"), Candle(22600, 22605, 22595, 22598), chain((50, 60, 49, 58)))
-    assert day.big_gap and events[0].startswith("BUY PE 22600 at 58.00 (GAP, BIG gap down")
-    day.on_candle(_at("09:30"), Candle(22598, 22600, 22580, 22585), chain((58, 66, 57, 65)))  # red, nothing
-    events = day.on_candle(_at("09:35"), Candle(22584, 22603, 22583, 22602), chain((65, 66, 58, 59)))  # bullish engulfing
-    assert "pattern turned: index Bullish Engulfing" in events[0]
-    assert day.trades[0].pnl_points == pytest.approx(1)
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, R2 22955.65
+    chain = lambda ce: {(22950.0, "CE"): Candle(*ce), (22950.0, "PE"): Candle(40, 42, 38, 40),
+                        (22800.0, "CE"): Candle(150, 155, 148, 150), (22800.0, "PE"): Candle(5, 6, 4, 5)}
+    day.on_candle(_at("09:15"), Candle(22950, 22960, 22930, 22940), chain((60, 62, 55, 58)))  # opens 170 above
+    day.on_candle(_at("09:20"), Candle(22940, 22945, 22935, 22944), chain((58, 60, 57, 59)))
+    events = day.on_candle(_at("09:25"), Candle(22944, 22946, 22940, 22942), chain((59, 61, 57, 60)))  # dips to 22941.46
+    assert day.big_gap and events[0].startswith("BUY CE 22950 at 60.00 (FIB")
+    day.on_candle(_at("09:30"), Candle(22942, 22950, 22941, 22949), chain((60, 66, 59, 65)))
+    events = day.on_candle(_at("09:35"), Candle(22950, 22951, 22935, 22938), chain((65, 66, 58, 59)))  # bearish engulfing
+    assert "pattern turned: index Bearish Engulfing" in events[0]
 
 
 def test_small_gap_keeps_the_morning_atm():
