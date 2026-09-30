@@ -232,7 +232,7 @@ class SniperDay:
             self.done = True
             return events
 
-        if half is None or half in self.halves_used:
+        if half is None or half in self.halves_used or not self._next_trade_allowed():
             return events
 
         current = {key: bars[key].close for key in CONTRACT_KEYS}
@@ -270,6 +270,13 @@ class SniperDay:
             break
 
         return events
+
+    def _next_trade_allowed(self) -> bool:
+        """Owner, 2026-09-30: after the day's first trade, trade again only if it was stopped out.
+        A target, trailing stop or time exit ends the day; an open trade blocks new entries."""
+        if not self.trades:
+            return True
+        return not self.open_trades and self.trades[-1].exit_reason == "STOPLOSS"
 
     @staticmethod
     def _order_event(kind: str, pending: _Pending, when: datetime) -> Event:

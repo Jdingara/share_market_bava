@@ -225,7 +225,9 @@ class HlcDay:
         if closes >= EXIT_CLOSE:
             self.done = True
             return events
-        if self.open_trade is not None or self.pending is not None or len(self.trades) >= MAX_TRADES:
+        if (self.open_trade is not None or self.pending is not None or len(self.trades) >= MAX_TRADES
+                or (self.trades and not self.trades[-1].exit_reason.startswith("SL"))):
+            # owner, 2026-09-30: after the first trade, trade again only if it was stopped out
             return events
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events

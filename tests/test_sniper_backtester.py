@@ -156,7 +156,21 @@ def test_one_trade_per_half_max_two_per_day():
         }
     )
     trades, _ = simulate_day(DAY, ROW, candles, _price)
-    assert [(t.half, t.exit_reason) for t in trades] == [("first", "TARGET"), ("second", "TARGET")]
+    # Owner, 30-09: the first trade hit its target, so no second trade that day.
+    assert [(t.half, t.exit_reason) for t in trades] == [("first", "TARGET")]
+
+
+def test_second_trade_only_after_the_first_is_stopped_out():
+    candles = _day(
+        {
+            "09:40": (23100, 23090, 23095),  # first-half entry at 105 (SL 81)
+            "09:45": (23125, 23100, 23110),  # stop: OTM PE worst 75 <= 81
+            "12:30": (23275, 23265, 23270),  # second-half entry
+            "12:35": (23305, 23265, 23300),  # target
+        }
+    )
+    trades, _ = simulate_day(DAY, ROW, candles, _price)
+    assert [(t.half, t.exit_reason) for t in trades] == [("first", "STOPLOSS"), ("second", "TARGET")]
 
 
 def test_already_above_square_needs_a_fresh_cross():
@@ -167,10 +181,8 @@ def test_already_above_square_needs_a_fresh_cross():
     # Without the crossing rule, 09:30 "enters" at 105, and 12:30 buys the same PE again at 105. Levels come
     # from the square actually above (100), so the second-half target is 144, not the plan's 100.
     trades, _ = simulate_day(DAY, ROW, candles, _price, require_cross=False)
-    assert [(t.half, t.entry_fill, t.entry_square, t.target) for t in trades] == [
-        ("first", 105, 100, 144),
-        ("second", 105, 100, 144),
-    ]
+    # The first trade never exits (no stop, no target), so no second trade (owner, 30-09).
+    assert [(t.half, t.entry_fill, t.entry_square, t.target) for t in trades] == [("first", 105, 100, 144)]
 
 
 def test_already_above_buys_the_next_square_it_crosses():

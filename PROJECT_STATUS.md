@@ -64,6 +64,7 @@ When one side's ATM premium falls from its yesterday close, watch the **opposite
 ### §4 Limits and exits
 
 - Max **2 trades/day** (one per half). **Exit everything by 15:00.**
+- **A second trade only after the first is stopped out** (owner, 30-09, Sniper and HLC): first trade hits its target → no more trades that day; only a stop-loss exit allows the next trade. Implemented strictly: any other exit (trailing stop, level exit, 15:00) also ends the day, and an open trade blocks new entries.
 - **Sideways** (all 4 strikes — ATM CE, ATM PE, OTM CE, OTM PE — below their yesterday close) = no trade. Expiry day: same rules.
 - **Trailing SL** (2026-09-28): each time a 5-minute candle **closes above** a square k², SL moves up to (k − 1)². **Only moves up, never down.** Entry 100: close above 121 → SL 100; above 144 → SL 121; above 169 → SL 144.
 - **Target stays — book the profit there** (2026-09-28): a trade in profit must not give it back.
