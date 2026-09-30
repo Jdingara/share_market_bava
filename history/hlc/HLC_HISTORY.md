@@ -2,31 +2,35 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 3 trade(s), -4.40 points, ₹-180**
+**All days: 4 trade(s), -82.40 points, ₹-24,632**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-30 | SENSEX | 72800 | PANIC / PROFIT BOOKING | yes | 0 | +0.00 | ₹+0 | watching |
-| 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | +0.00 | ₹+0 | watching |
+| 2026-09-30 | SENSEX | 72800 | PANIC / PROFIT BOOKING | yes | 1 | -35.90 | ₹-10,770 | finished |
+| 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | -42.10 | ₹-13,682 | finished |
 | 2026-09-29 | SENSEX | 72900 | PROFIT BOOKING / PANIC | yes | 1 | -50.00 | ₹-15,000 | replayed |
 | 2026-09-29 | NIFTY | 22800 | PROFIT BOOKING / PANIC | yes | 1 | +45.60 | ₹+14,820 | replayed |
 
 ## 2026-09-30 (Wed)
 
-### NIFTY — watching (last update 2026-09-30 12:40)
+### NIFTY — finished (last update 2026-09-30 15:00)
 
 - Close 22716.2, ATM 22800. R3 23263.1 · R2 23107.0 · R1 22956.1 · S1 22649.1 · S2 22493.0 · S3 22342.1.
 - CE PANIC, PE PROFIT BOOKING — buyer’s day.
 
 | Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|---|---|
-| FIB | 325 × 22800 CE | first candle 0.618 at 22682.20 | 09:30 | 130 | 0.0 (index below first low 22659.8) | open | OPEN | – | – |
+| FIB | 325 × 22800 CE | first candle 0.618 at 22682.20 | 09:30 | 130 | 0.0 (index below first low 22659.8) | 87.9 (14:25) | SL (index below first low 22659.8) | -42.10 | ₹-13,682 |
 
-### SENSEX — watching (last update 2026-09-30 12:50)
+### SENSEX — finished (last update 2026-09-30 14:40)
 
 - Close 72529.07, ATM 72800. R3 73812.95 · R2 73486.8 · R1 73126.15 · S1 72439.35 · S2 72113.2 · S3 71752.55.
 - CE PANIC, PE PROFIT BOOKING — buyer’s day.
-- No trade.
+- Note: Final row lost to a simultaneous write by the NIFTY bot; status restored after the close (trade and P&L were already final).
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| FIB | 300 × 72800 CE | first candle 0.618 at 72514.68 | 14:25 | 167.4 | 0.0 (index below first low 72440.1) | 131.5 (14:35) | SL (index below first low 72440.1) | -35.90 | ₹-10,770 |
 
 ## 2026-09-29 (Tue)
 

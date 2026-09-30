@@ -7,15 +7,15 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
-| 2026-09-30 | SENSEX | 72500 | 173.72 | 2 | +29.00 | ₹+8,700 | watching |
-| 2026-09-30 | NIFTY | 22800 | 109.75 | 1 | -21.00 | ₹-6,825 | watching |
+| 2026-09-30 | SENSEX | 72500 | 173.72 | 2 | +29.00 | ₹+8,700 | finished |
+| 2026-09-30 | NIFTY | 22800 | 109.75 | 1 | -21.00 | ₹-6,825 | finished |
 | 2026-09-29 | SENSEX | 72800 | 295.7 | 2 | +29.00 | ₹+8,700 | finished |
 | 2026-09-29 | NIFTY | 22800 | 39.58 | 2 | +29.00 | ₹+9,425 | finished |
 | 2026-09-28 | NIFTY | 23200 | 54.0 | 1 | +58.75 | ₹+19,094 | stopped early |
 
 ## 2026-09-30 (Wed)
 
-### NIFTY — watching (last update 2026-09-30 12:25)
+### NIFTY — finished (last update 2026-09-30 15:00)
 
 - NIFTY close 22716.2 on 2026-09-29, expiry 2026-10-06, qty 325.
 - Plan: ATM 22800 after 1 shift(s), Sniper 109.75.
@@ -24,7 +24,7 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 |---|---|---|---|---|---|---|---|---|---|---|
 | second | 325 × NIFTY26O0622700PE | 12:15 | 121.0 | 121 | 100 | 169 | 100 (12:20) | STOPLOSS | -21.00 | ₹-6,825 |
 
-### SENSEX — watching (last update 2026-09-30 12:25)
+### SENSEX — finished (last update 2026-09-30 15:00)
 
 - SENSEX close 72529.07 on 2026-09-29, expiry 2026-10-01, qty 300.
 - Plan: ATM 72500 after 4 shift(s), Sniper 173.72.

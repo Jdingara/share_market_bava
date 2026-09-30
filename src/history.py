@@ -17,6 +17,9 @@ duplicates.
 from __future__ import annotations
 
 import csv
+import os
+import time as time_module
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable, Optional
@@ -38,6 +41,34 @@ TRADE_FIELDS = [
 ]
 
 
+@contextmanager
+def folder_lock(folder: Path, timeout: float = 15.0):
+    """One writer at a time: the NIFTY and SENSEX bots share these files and each
+    rewrites them whole, so without this one bot's update can overwrite the
+    other's (30-09: HLC SENSEX's final row was lost)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    lock = folder / ".lock"
+    deadline = time_module.monotonic() + timeout
+    while True:
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            break
+        except FileExistsError:
+            try:
+                if time_module.time() - lock.stat().st_mtime > 30:  # left behind by a killed bot
+                    lock.unlink(missing_ok=True)
+                    continue
+            except FileNotFoundError:
+                continue
+            if time_module.monotonic() > deadline:
+                raise TimeoutError(f"history lock {lock} busy")
+            time_module.sleep(0.05)
+    try:
+        yield
+    finally:
+        lock.unlink(missing_ok=True)
+
+
 def _read(path: Path) -> list[dict]:
     if not path.exists():
         return []
@@ -55,7 +86,12 @@ def _write(path: Path, fields: list[str], rows: Iterable[dict]) -> None:
     tmp.replace(path)
 
 
-def record_day(
+def record_day(*args, **kwargs) -> None:
+    with folder_lock(kwargs.get("history_dir") or HISTORY_DIR):
+        _record_day(*args, **kwargs)
+
+
+def _record_day(
     day: date,
     market: str,
     plan: DailyPlan,

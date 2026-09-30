@@ -7,3 +7,5 @@ data/backtest_results/
 data/paper_trades/
 data/models/
 ~$*
+history/.lock
+history/**/.lock

@@ -17,7 +17,7 @@ from typing import Optional
 
 from hlc_engine import HlcTrade
 from hlc_signal import HlcLevels, leg_label
-from history import _read, _write
+from history import _read, _write, folder_lock
 
 HLC_HISTORY_DIR = Path(__file__).resolve().parent.parent / "history" / "hlc"
 
@@ -34,7 +34,12 @@ def _num(value) -> float:
         return 0.0
 
 
-def record_hlc_day(day: date, market: str, levels: HlcLevels, yesterday: dict[str, tuple[float, float, float]],
+def record_hlc_day(*args, **kwargs) -> None:
+    with folder_lock(kwargs.get("folder") or HLC_HISTORY_DIR):
+        _record_hlc_day(*args, **kwargs)
+
+
+def _record_hlc_day(day: date, market: str, levels: HlcLevels, yesterday: dict[str, tuple[float, float, float]],
                    big_gap: bool, trades: list[HlcTrade], qty: int, status: str, note: str = "",
                    folder: Optional[Path] = None) -> None:
     folder = folder or HLC_HISTORY_DIR

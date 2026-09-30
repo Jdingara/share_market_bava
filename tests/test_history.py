@@ -56,3 +56,16 @@ def test_days_and_markets_accumulate(tmp_path):
     md = (tmp_path / "TRADE_HISTORY.md").read_text(encoding="utf-8")
     assert md.index("## 2026-09-30") < md.index("## 2026-09-29") < md.index("## 2026-09-28")  # newest first
     assert "- No trade (no square crossed in the entry windows)." in md
+
+
+def test_two_bots_writing_at_once_keep_both_rows(tmp_path):
+    """30-09: the NIFTY and SENSEX bots rewrote the shared file at the same moment and one row was lost."""
+    import threading
+    threads = [threading.Thread(target=_record, args=(tmp_path, [], "finished", date(2026, 9, 30), market))
+               for market in ("NIFTY", "SENSEX") for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(d["market"] for d in _read(tmp_path / "days.csv")) == ["NIFTY", "SENSEX"]
+    assert not (tmp_path / ".lock").exists()
