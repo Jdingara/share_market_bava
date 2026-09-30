@@ -2,34 +2,31 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 4 trade(s), -54.25 points, ₹-15,131**
+**All days: 3 trade(s), -4.40 points, ₹-180**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
-| 2026-09-30 | SENSEX | 72800 | PANIC / PROFIT BOOKING | yes | 1 | -50.00 | ₹-15,000 | watching |
-| 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | +0.15 | ₹+49 | watching |
+| 2026-09-30 | SENSEX | 72800 | PANIC / PROFIT BOOKING | yes | 0 | +0.00 | ₹+0 | watching |
+| 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | +0.00 | ₹+0 | watching |
 | 2026-09-29 | SENSEX | 72900 | PROFIT BOOKING / PANIC | yes | 1 | -50.00 | ₹-15,000 | replayed |
 | 2026-09-29 | NIFTY | 22800 | PROFIT BOOKING / PANIC | yes | 1 | +45.60 | ₹+14,820 | replayed |
 
 ## 2026-09-30 (Wed)
 
-### NIFTY — watching (last update 2026-09-30 09:55)
+### NIFTY — watching (last update 2026-09-30 12:40)
 
 - Close 22716.2, ATM 22800. R3 23263.1 · R2 23107.0 · R1 22956.1 · S1 22649.1 · S2 22493.0 · S3 22342.1.
 - CE PANIC, PE PROFIT BOOKING — buyer’s day.
 
 | Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|---|---|
-| GAP | 325 × 22800 PE | gap down open 22665.00 | 09:25 | 162.2 | 137.2 (25 points) | 162.35 (09:50) | closed back across Close 22716.2 | +0.15 | ₹+49 |
+| FIB | 325 × 22800 CE | first candle 0.618 at 22682.20 | 09:30 | 130 | 0.0 (index below first low 22659.8) | open | OPEN | – | – |
 
-### SENSEX — watching (last update 2026-09-30 10:00)
+### SENSEX — watching (last update 2026-09-30 12:50)
 
 - Close 72529.07, ATM 72800. R3 73812.95 · R2 73486.8 · R1 73126.15 · S1 72439.35 · S2 72113.2 · S3 71752.55.
 - CE PANIC, PE PROFIT BOOKING — buyer’s day.
-
-| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
-|---|---|---|---|---|---|---|---|---|---|
-| GAP | 300 × 72800 PE | gap down open 72441.15 | 09:25 | 338.8 | 288.8 (50 points) | 288.8 (09:55) | SL (50 points) | -50.00 | ₹-15,000 |
+- No trade.
 
 ## 2026-09-29 (Tue)
 

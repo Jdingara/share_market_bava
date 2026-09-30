@@ -1,5 +1,4 @@
 date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_time,exit_premium,exit_reason,pnl_points,pnl_rupees
 2026-09-29,NIFTY,GAP,PE,22800,gap down open 22732.45,325,09:25,177.1,152.1,25 points,09:35,222.7,TARGET S3 22572.9,45.6,14820
 2026-09-29,SENSEX,GAP,PE,72900,gap down open 72633.68,300,09:25,724.5,674.5,50 points,11:10,674.5,SL (50 points),-50.0,-15000
-2026-09-30,NIFTY,GAP,PE,22800,gap down open 22665.00,325,09:25,162.2,137.2,25 points,09:50,162.35,closed back across Close 22716.2,0.15,49
-2026-09-30,SENSEX,GAP,PE,72800,gap down open 72441.15,300,09:25,338.8,288.8,50 points,09:55,288.8,SL (50 points),-50.0,-15000
+2026-09-30,NIFTY,FIB,CE,22800,first candle 0.618 at 22682.20,325,09:30,130,0.0,index below first low 22659.8,,,OPEN,,

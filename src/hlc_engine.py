@@ -6,12 +6,13 @@ the strikes around the index. Trades (max 2 a day, one at a time, entries on
 candles closing 09:30-14:55):
 
   FIB trade   - (owner, 2026-09-30; replaced the 09:30 gap trade) the first
-                5-minute index candle's range, reverse Fibonacci 0.618. Side =
+                5-minute index candle's range, reverse Fibonacci FIB_ENTRY
+                (0.75 - changed from 0.618 the same day for a smaller SL). Side =
                 where the last closed candle sits against yesterday's close
                 (above -> CE, below -> PE; can change until the entry, e.g. a
                 gap-down open whose 2nd/3rd candles close above -> CE). From
-                09:30: CE when the index dips to high - 0.618 x range, PE when
-                it rises to low + 0.618 x range. SL on the INDEX: CE = first
+                09:30: CE when the index dips to high - 0.75 x range, PE when
+                it rises to low + 0.75 x range. SL on the INDEX: CE = first
                 candle low, PE = first candle high. Targets R1 then R2 (CE) /
                 S1 then S2 (PE) - never beyond R2/S2. One FIB trade a day.
   REVERSAL    - index shows a support pattern at S1/S2/S3 AND the ATM CE premium
@@ -62,6 +63,7 @@ from hlc_signal import (DIRECTIONLESS, Candle, HlcLevels, HlcMarket, OptionType,
 
 FIRST_ENTRY_CLOSE = time(9, 30)
 DAY_LOW_SL_FROM = time(13, 30)
+FIB_ENTRY = 0.75  # owner, 2026-09-30: 0.75 of the first candle (was 0.618) - entry nearer its low/high, smaller SL
 LAST_ENTRY_CLOSE = time(14, 55)
 EXIT_CLOSE = time(15, 0)
 MAX_TRADES = 2
@@ -270,7 +272,7 @@ class HlcDay:
             return None
         first = self.index_history[0]
         rng = first.high - first.low
-        return first.high - 0.618 * rng, first.low + 0.618 * rng, first.low, first.high
+        return first.high - FIB_ENTRY * rng, first.low + FIB_ENTRY * rng, first.low, first.high
 
     def _fib_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], atm: float) -> Optional[str]:
         ce_entry, pe_entry, first_low, first_high = self.fib_levels()
@@ -293,13 +295,13 @@ class HlcDay:
         prem = chain[(atm, side)]
         self.gap_done = True
         trade = HlcTrade(date=self.day.isoformat(), kind="FIB", side=side, strike=atm,
-                         pattern=f"first candle 0.618 at {fib:.2f}", entry_time=when.isoformat(),
+                         pattern=f"first candle {FIB_ENTRY:g} at {fib:.2f}", entry_time=when.isoformat(),
                          entry_fill=round(prem.close, 2), entry_index=index.close, sl_premium=0.0,
                          sl_rule=f"index {'below first low' if side == 'CE' else 'above first high'} {sl:g}",
                          index_sl=sl, targets=targets, big_gap=self.big_gap)
         self.trades.append(trade)
         self.open_trade = trade
-        return (f"BUY {side} {atm:g} at {prem.close:.2f} (FIB 0.618 of the first candle at {fib:.2f}; index {index.close:.2f}) - "
+        return (f"BUY {side} {atm:g} at {prem.close:.2f} (FIB {FIB_ENTRY:g} of the first candle at {fib:.2f}; index {index.close:.2f}) - "
                 f"SL index {sl:g}, targets " + " -> ".join(f"{n} {v:g}" for n, v in targets))
 
     def _open_filled(self, order: dict, when: datetime, fill: Candle, index: Candle) -> Optional[str]:
