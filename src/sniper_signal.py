@@ -43,6 +43,7 @@ class MarketConfig:
     options_exchange: str  # Kite exchange holding the index's option contracts
     widen_otm: bool = False  # SENSEX (owner, 2026-09-29): keep the nearest ATM, move the OTMs out instead of shifting
     max_otm_steps: int = 5  # widen_otm: try OTM = ATM +- 1..5 strike steps
+    widen_otm_fallback: bool = False  # NIFTY (owner, 2026-10-01): if the ATM shifts still fail, move one OTM out
 
     @property
     def quantity(self) -> int:
@@ -51,7 +52,7 @@ class MarketConfig:
 
 MARKETS = {
     "NIFTY": MarketConfig(name="NIFTY", strike_step=100, min_gap=25, expiry_weekday=1, lot_size=65, max_lots=5,
-                          index_token=256265, options_exchange="NFO"),  # NSE, Tuesday expiry, 325 qty
+                          index_token=256265, options_exchange="NFO", widen_otm_fallback=True),  # NSE, Tuesday expiry, 325 qty
     "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=40, expiry_weekday=3, lot_size=20, max_lots=15,
                            index_token=265, options_exchange="BFO", widen_otm=True),  # BSE, Thursday expiry, 300 qty
 }
@@ -93,10 +94,11 @@ class StrikeRow:
 
 
 def evaluate_strike(atm_strike: float, market: MarketConfig, premium: PremiumLookup,
-                    otm_distance: Optional[float] = None) -> StrikeRow:
+                    otm_distance: Optional[float] = None, pe_distance: Optional[float] = None) -> StrikeRow:
+    """otm_distance sets both OTMs; pe_distance (if given) moves the OTM PE separately."""
     distance = otm_distance or market.strike_step
     otm_ce_strike = atm_strike + distance
-    otm_pe_strike = atm_strike - distance
+    otm_pe_strike = atm_strike - (pe_distance or distance)
     atm_ce_close = premium(atm_strike, "CE")
     atm_pe_close = premium(atm_strike, "PE")
     otm_ce_close = premium(otm_ce_strike, "CE")
@@ -136,20 +138,17 @@ def build_daily_plan(index_close: float, market: MarketConfig, premium: PremiumL
 
     SENSEX (widen_otm, owner 2026-09-29): the ATM stays the nearest round
     strike; the OTMs move out one strike at a time (+-100, +-200, ...) until
-    both gaps reach the minimum (40)."""
+    both gaps reach the minimum (40).
+
+    NIFTY (widen_otm_fallback, owner 2026-10-01): the shifts above come first
+    (so §5 is unchanged); only if they still fail, keep the nearest ATM and move
+    the OTMs out one strike at a time - CE up or PE down - taking the nearest
+    combination where both gaps reach the minimum (see _move_one_otm_out)."""
     atm = nearest_atm(index_close, market.strike_step)
     attempts: list[StrikeRow] = []
 
     if market.widen_otm:
-        for k in range(1, market.max_otm_steps + 1):
-            row = evaluate_strike(atm, market, premium, k * market.strike_step)
-            attempts.append(row)
-            if row.ce_ok and row.pe_ok:
-                return DailyPlan(market.name, index_close, tuple(attempts), row,
-                                 f"ATM {atm:g}, OTM +-{k * market.strike_step:g}")
-        return DailyPlan(market.name, index_close, tuple(attempts), None,
-                         f"no OTM distance up to +-{market.max_otm_steps * market.strike_step:g} gives both gaps "
-                         f">= {market.min_gap:g}")
+        return _widen_otms(index_close, market, premium, attempts)
 
     for shift in range(MAX_SHIFTS + 1):
         row = evaluate_strike(atm, market, premium)
@@ -162,7 +161,51 @@ def build_daily_plan(index_close: float, market: MarketConfig, premium: PremiumL
 
         atm += market.strike_step if not row.pe_ok else -market.strike_step
 
+    if market.widen_otm_fallback:
+        return _move_one_otm_out(index_close, market, premium, attempts)
     return DailyPlan(market.name, index_close, tuple(attempts), None, f"still failing after {MAX_SHIFTS} shifts")
+
+
+def _move_one_otm_out(index_close: float, market: MarketConfig, premium: PremiumLookup,
+                      attempts: list[StrikeRow]) -> DailyPlan:
+    """Owner, 01-10: from OTM +-100, move the CE up or the PE down one strike at a time, nearest
+    combinations first (+200/-100 and +100/-200, then +300/-100, +200/-200, +100/-300, ...). The first
+    distance where both gaps pass wins; if several pass at that distance, the one whose smaller gap is
+    biggest (01-10: 22800 CE / 22500 PE, gaps 88.47 / 38.62, over 22700 CE / 22400 PE, 81.87 / 32.02)."""
+    atm = nearest_atm(index_close, market.strike_step)
+    step = market.strike_step
+    for total in range(3, 2 * market.max_otm_steps + 1):
+        passing = []
+        for ce_k in range(min(total - 1, market.max_otm_steps), 0, -1):
+            pe_k = total - ce_k
+            if pe_k > market.max_otm_steps:
+                continue
+            row = evaluate_strike(atm, market, premium, ce_k * step, pe_k * step)
+            attempts.append(row)
+            if row.ce_ok and row.pe_ok:
+                passing.append(row)
+        if passing:
+            best = max(passing, key=lambda r: min(r.ce_gap, r.pe_gap))
+            return DailyPlan(market.name, index_close, tuple(attempts), best,
+                             f"ATM {atm:g}, OTM CE +{best.otm_ce_strike - atm:g} / PE -{atm - best.otm_pe_strike:g}")
+    return DailyPlan(market.name, index_close, tuple(attempts), None,
+                     f"no OTM CE/PE combination up to +-{market.max_otm_steps * step:g} gives both gaps "
+                     f">= {market.min_gap:g}")
+
+
+def _widen_otms(index_close: float, market: MarketConfig, premium: PremiumLookup,
+                attempts: list[StrikeRow]) -> DailyPlan:
+    """Keep the nearest ATM and move the OTMs out one strike at a time until both gaps pass."""
+    atm = nearest_atm(index_close, market.strike_step)
+    for k in range(1, market.max_otm_steps + 1):
+        row = evaluate_strike(atm, market, premium, k * market.strike_step)
+        attempts.append(row)
+        if row.ce_ok and row.pe_ok:
+            return DailyPlan(market.name, index_close, tuple(attempts), row,
+                             f"ATM {atm:g}, OTM +-{k * market.strike_step:g}")
+    return DailyPlan(market.name, index_close, tuple(attempts), None,
+                     f"no OTM distance up to +-{market.max_otm_steps * market.strike_step:g} gives both gaps "
+                     f">= {market.min_gap:g}")
 
 
 # --- §3 Square-number rule --------------------------------------------------

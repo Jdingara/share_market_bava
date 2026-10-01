@@ -3,15 +3,40 @@
 **Paper trades — no real orders.** Written automatically by the bot (`src/history.py`) after every entry/exit;
 don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. ₹ = points × qty, before brokerage and charges.
 
-**All days: 8 trade(s), +124.75 points, ₹+39,094**
+**All days: 13 trade(s), +222.75 points, ₹+70,269**
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
+| 2026-10-01 | SENSEX | 72500 | 170.45 | 2 | +27.00 | ₹+8,100 | finished |
+| 2026-10-01 | NIFTY | 22600 | 76.03 | 3 | +71.00 | ₹+23,075 | finished |
 | 2026-09-30 | SENSEX | 72500 | 173.72 | 2 | +29.00 | ₹+8,700 | finished |
 | 2026-09-30 | NIFTY | 22800 | 109.75 | 1 | -21.00 | ₹-6,825 | finished |
 | 2026-09-29 | SENSEX | 72800 | 295.7 | 2 | +29.00 | ₹+8,700 | finished |
 | 2026-09-29 | NIFTY | 22800 | 39.58 | 2 | +29.00 | ₹+9,425 | finished |
 | 2026-09-28 | NIFTY | 23200 | 54.0 | 1 | +58.75 | ₹+19,094 | stopped early |
+
+## 2026-10-01 (Thu)
+
+### NIFTY — finished (last update 2026-10-01 15:00)
+
+- NIFTY close 22620.45 on 2026-09-30, expiry 2026-10-06, qty 325.
+- Plan: ATM 22600 after 5 shift(s), Sniper 76.03.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| second | 325 × NIFTY26O0622500PE | 12:05 (catch-up) | 100.0 | 100 | 81 → 100 | 144 | 144 (12:40) | TARGET | +44.00 | ₹+14,300 |
+| second | 325 × NIFTY26O0622500PE | 12:45 (catch-up) | 169.0 | 169 | 144 → 169 | 225 | 225 (12:50) | TARGET | +56.00 | ₹+18,200 |
+| second | 325 × NIFTY26O0622500PE | 13:00 (catch-up) | 225.0 | 225 | 196 | 289 | 196 (13:00) | STOPLOSS | -29.00 | ₹-9,425 |
+
+### SENSEX — finished (last update 2026-10-01 15:00)
+
+- SENSEX close 72480.29 on 2026-09-30, expiry 2026-10-01, qty 300.
+- Plan: ATM 72500 after 1 shift(s), Sniper 170.45.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| second | 300 × SENSEX26O0172300PE | 12:10 (catch-up) ★ HIGH | 196.0 | 196 | 169 → 196 | 256 | 256 (12:20) | TARGET | +60.00 | ₹+18,000 |
+| second | 300 × SENSEX26O0172300PE | 12:25 (catch-up) | 289.0 | 289 | 256 | 361 | 256 (12:25) | STOPLOSS | -33.00 | ₹-9,900 |
 
 ## 2026-09-30 (Wed)
 

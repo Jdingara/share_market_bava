@@ -150,6 +150,27 @@ def is_hanging_man(c: Candle) -> bool:  # same shape, at resistance
     return _hammer_shape(c)
 
 
+def _inverted_hammer_shape(c: Candle) -> bool:
+    return c.range > 0 and c.upper >= HAMMER_WICK * max(c.body, 0.01) and c.lower <= 0.1 * c.range
+
+
+def is_inverted_hammer(c: Candle) -> bool:  # at support (owner, 2026-10-01)
+    return _inverted_hammer_shape(c)
+
+
+def is_shooting_star(c: Candle) -> bool:  # same shape, at resistance
+    return _inverted_hammer_shape(c)
+
+
+def is_piercing_line(prev: Candle, c: Candle) -> bool:
+    """Red candle, then a green one opening at/below its close and closing above its midpoint (not engulfing it)."""
+    return prev.red and c.green and c.open <= prev.close and (prev.open + prev.close) / 2 < c.close < prev.open
+
+
+def is_dark_cloud_cover(prev: Candle, c: Candle) -> bool:
+    return prev.green and c.red and c.open >= prev.close and prev.open < c.close < (prev.open + prev.close) / 2
+
+
 def is_bullish_engulfing(prev: Candle, c: Candle) -> bool:
     return prev.red and c.green and c.open <= prev.close and c.close >= prev.open and c.body > prev.body
 
@@ -182,7 +203,8 @@ DIRECTIONLESS = ("Doji", "Spinning Top")  # count for entries at a level, not as
 def bullish_pattern(candles: Sequence[Candle]) -> Optional[tuple[str, int]]:
     """Name of a support (up-reversal) pattern ending on the last candle, and how
     many candles it spans; None if none. Owner's list: Morning Star, Hammer,
-    Bullish Engulfing, Bullish Harami, plus Doji / Spinning Top at a level."""
+    Bullish Engulfing, Bullish Harami, plus Doji / Spinning Top at a level;
+    2026-10-01 "all reversal patterns": + Inverted Hammer, Piercing Line."""
     if not candles:
         return None
     c = candles[-1]
@@ -190,10 +212,14 @@ def bullish_pattern(candles: Sequence[Candle]) -> Optional[tuple[str, int]]:
         return "Morning Star", 3
     if len(candles) >= 2 and is_bullish_engulfing(candles[-2], c):
         return "Bullish Engulfing", 2
+    if len(candles) >= 2 and is_piercing_line(candles[-2], c):
+        return "Piercing Line", 2
     if len(candles) >= 2 and is_bullish_harami(candles[-2], c):
         return "Bullish Harami", 2
     if is_hammer(c):
         return "Hammer", 1
+    if is_inverted_hammer(c):
+        return "Inverted Hammer", 1
     if is_doji(c):
         return "Doji", 1
     if is_spinning_top(c):
@@ -203,7 +229,8 @@ def bullish_pattern(candles: Sequence[Candle]) -> Optional[tuple[str, int]]:
 
 def bearish_pattern(candles: Sequence[Candle]) -> Optional[tuple[str, int]]:
     """Resistance (down-reversal) patterns: Evening Star, Bearish Engulfing,
-    Bearish Harami, Hanging Man, Spinning Top, Doji."""
+    Bearish Harami, Hanging Man, Spinning Top, Doji; 2026-10-01: + Shooting Star,
+    Dark Cloud Cover."""
     if not candles:
         return None
     c = candles[-1]
@@ -211,10 +238,14 @@ def bearish_pattern(candles: Sequence[Candle]) -> Optional[tuple[str, int]]:
         return "Evening Star", 3
     if len(candles) >= 2 and is_bearish_engulfing(candles[-2], c):
         return "Bearish Engulfing", 2
+    if len(candles) >= 2 and is_dark_cloud_cover(candles[-2], c):
+        return "Dark Cloud Cover", 2
     if len(candles) >= 2 and is_bearish_harami(candles[-2], c):
         return "Bearish Harami", 2
     if is_hanging_man(c):
         return "Hanging Man", 1
+    if is_shooting_star(c):
+        return "Shooting Star", 1
     if is_doji(c):
         return "Doji", 1
     if is_spinning_top(c):

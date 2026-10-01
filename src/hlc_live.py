@@ -186,6 +186,31 @@ def _fetch(kite, chain: OptionChain, market_name: str, levels: HlcLevels, start:
     return index_rows, premiums
 
 
+def daily_highs(kite, chain: OptionChain, strike: float, side: str, before: date) -> list[float]:
+    """The option's daily highs before `before`, most recent first (owner, 2026-10-01: PANIC-side premium targets)."""
+    contract = chain.by_key.get((float(strike), side))
+    if not contract:
+        return []
+    rows = _historical(kite, contract["instrument_token"], datetime.combine(before - timedelta(days=90), time(9, 0)),
+                       datetime.combine(before - timedelta(days=1), time(23, 59)), "day")
+    return [r["high"] for r in reversed(rows) if _naive(r["date"]).date() < before]
+
+
+def first_swing(kite, market_name: str, day: date) -> Optional[str]:
+    """Owner, 2026-10-01: in the first 5-minute candle, did the index make its low first (up move -> "CE")
+    or its high first ("PE")? From the 09:15-09:19 one-minute candles; None if they aren't there yet."""
+    start = datetime.combine(day, time(9, 15))
+    rows = _historical(kite, MARKETS[market_name].index_token, start, start + timedelta(minutes=5), "minute")
+    rows = [r for r in rows if _naive(r["date"]) < start + timedelta(minutes=5)]
+    if len(rows) < 5:
+        return None
+    low_at = min(range(len(rows)), key=lambda i: rows[i]["low"])
+    high_at = max(range(len(rows)), key=lambda i: rows[i]["high"])
+    if low_at == high_at:  # both in the same minute - that minute's candle colour shows the order
+        return "CE" if rows[low_at]["close"] >= rows[low_at]["open"] else "PE"
+    return "CE" if low_at < high_at else "PE"
+
+
 # --- Live ---------------------------------------------------------------------
 
 
@@ -213,6 +238,11 @@ def live(market_name: str, open_browser: bool) -> None:
                 + "  ".join(f"{n} {v:g}" for n, v in reversed(levels.ladder())) + "\n  " + "\n  ".join(info_lines(levels, yesterday)))
 
     engine = HlcDay(day, levels, market, yesterday)
+    for side in ("CE", "PE"):
+        try:
+            engine.daily_highs[side] = daily_highs(kite, chain, levels.atm, side, day)
+        except Exception as error:
+            print(f"  (daily highs for {side} failed: {error})", flush=True)
 
     def record(status: str) -> None:
         try:
@@ -242,6 +272,14 @@ def live(market_name: str, open_browser: bool) -> None:
             if not index_rows and now.time() >= NO_DATA_GIVE_UP:
                 notify.send("No index candles today - market holiday? Stopping.")
                 break
+            if engine.first_swing is None and now.time() >= time(9, 20):
+                try:
+                    engine.first_swing = first_swing(kite, market_name, day)
+                    if engine.first_swing:
+                        notify.send(f"First candle: {'low then high (up) -> FIB level from the high down' if engine.first_swing == 'CE' else 'high then low (down) -> FIB level from the low up'}",
+                                    phone=False)
+                except Exception as error:
+                    notify.send(f"1-minute data fetch failed ({type(error).__name__}: {error}) - retrying.", phone=False)
             events = feed(engine, index_rows, premiums, processed, now, state, notify, late_before=started)
             state.set_engine(engine)
             if events:
@@ -290,6 +328,10 @@ def replay(day: date, market_name: str, record: bool = False, dashboard: bool = 
                 premiums[(strike, option_type)] = _series(_historical(kite, contract["instrument_token"], start, end, "5minute"))
 
     engine = HlcDay(day, lv, market, yesterday)
+    for side in ("CE", "PE"):
+        engine.daily_highs[side] = daily_highs(kite, chain, lv.atm, side, day)
+    engine.first_swing = first_swing(kite, market_name, day)
+    print(f"  First candle swing: {engine.first_swing or '? (guessed from the 5-minute candle)'}")
     state = None
     if dashboard:
         state = HlcState(market_name, "REPLAY", day.isoformat(), market.quantity)

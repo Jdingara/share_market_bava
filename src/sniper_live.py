@@ -137,6 +137,22 @@ def previous_daily_close(kite, token: int, today: date) -> tuple[date, float]:
     return _naive(last["date"]).date(), float(last["close"])
 
 
+def is_buyers_day(kite, contracts: dict[str, dict], today: date) -> bool:
+    """Owner, 2026-10-01: yesterday's ATM CE and PE legs - one closed near its low (PROFIT BOOKING), the other
+    near its high (PANIC) -> a buyer's day."""
+    from hlc_signal import leg_label
+    labels = []
+    for key in ("atm_ce", "atm_pe"):
+        start = datetime.combine(today - timedelta(days=14), time(0, 0))
+        end = datetime.combine(today - timedelta(days=1), time(23, 59))
+        rows = [c for c in _historical(kite, contracts[key]["instrument_token"], start, end, "day")
+                if _naive(c["date"]).date() < today]
+        if not rows:
+            return False
+        labels.append(leg_label(rows[-1]["high"], rows[-1]["low"], rows[-1]["close"]))
+    return labels[0] != labels[1]
+
+
 def build_morning_plan(kite, today: date, market: MarketConfig = MARKETS["NIFTY"]) -> tuple[DailyPlan, OptionChain, date]:
     options = OptionChain(kite, today, market)
     previous_day, index_close = previous_daily_close(kite, market.index_token, today)
@@ -464,6 +480,13 @@ def main() -> None:
 
     notify.send("Watching " + ", ".join(c["tradingsymbol"] for c in contracts.values()) + " until 15:00.", phone=False)
     engine = SniperDay(day, plan.final)
+    try:
+        engine.buyers_day = is_buyers_day(kite, contracts, day)
+    except Exception as error:
+        print(f"  (buyer's day check failed: {error})", flush=True)
+    if engine.buyers_day:
+        notify.send("Buyer's day (ATM CE / PE: one PROFIT BOOKING, one PANIC yesterday) - after a target the bot "
+                    "re-enters when the premium closes above it.", phone=False)
     record("watching")
     status = "finished"
     try:

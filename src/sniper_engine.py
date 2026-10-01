@@ -174,6 +174,8 @@ class SniperDay:
         self.halves_used: set[str] = set()
         self.sideways_candles = 0
         self.done = False
+        self.buyers_day = False  # owner, 2026-10-01: set by the live bot - keep riding the move after a target
+        self.continuation: Optional[tuple[TradeSetup, float]] = None  # (setup, target booked) awaiting a close above
         # Each OTM's previous candle close, for the crossing check. Seeded with yesterday's close.
         self._last_otm_close = {"otm_ce": row.otm_ce_close, "otm_pe": row.otm_pe_close}
 
@@ -213,6 +215,9 @@ class SniperDay:
                     trade.trail_stop = trailed_stop(trade.trail_stop, bar.close)
                 continue
             self.open_trades.remove((setup, trade))
+            if self.buyers_day and trade.exit_reason == "TARGET":
+                # (re-entering after stops too was tried on 01-10 SENSEX: 11 trades, -Rs 23,700 - dropped)
+                self.continuation = (setup, trade.target)
 
         half = entry_window_for(when)
         for pending in list(self.pending):
@@ -231,6 +236,17 @@ class SniperDay:
         if closes_at_exit:
             self.done = True
             return events
+
+        if self.continuation and not self.open_trades and not self.pending and half is not None:
+            # Owner, 2026-10-01 (buyer's day): after a target, a candle closing above it -> buy the next square again.
+            setup, booked = self.continuation
+            close = bars[_otm_key(setup.buy_type)].close
+            if close > booked:
+                self.continuation = None
+                pending = _Pending(setup, highest_square_below(close), close)
+                self.pending.append(pending)
+                events.append(self._order_event("ORDER", pending, when))
+                return events
 
         if half is None or half in self.halves_used or not self._next_trade_allowed():
             return events

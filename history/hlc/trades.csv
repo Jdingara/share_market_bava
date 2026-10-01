@@ -3,3 +3,11 @@ date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_t
 2026-09-29,SENSEX,GAP,PE,72900,gap down open 72633.68,300,09:25,724.5,674.5,50 points,11:10,674.5,SL (50 points),-50.0,-15000
 2026-09-30,NIFTY,FIB,CE,22800,first candle 0.618 at 22682.20,325,09:30,130,0.0,index below first low 22659.8,14:25,87.9,SL (index below first low 22659.8),-42.1,-13682
 2026-09-30,SENSEX,FIB,CE,72800,first candle 0.618 at 72514.68,300,14:25,167.4,0.0,index below first low 72440.1,14:35,131.5,SL (index below first low 72440.1),-35.9,-10770
+2026-10-01,NIFTY,FIB,PE,22650,first candle 0.75 at 22539.12,325,09:30,176,0.0,index above first high 22590,10:00,142.7,SL (index above first high 22590),-33.3,-10822
+2026-10-01,NIFTY,CONFIRM,PE,22650,"index in Fib 0.75-0.786 zone 22573.08-22575.52, PE Doji",325,10:10,155.45,130.45,25 points,12:10,189.1,TARGET premium high 193.15,33.65,10936
+2026-10-01,NIFTY,BREAKOUT,PE,22650,PE closed above the high 193.15,325,12:15,202.85,177.85,25 points,12:45,308.65,TARGET S2 22375.2,105.8,34385
+2026-10-01,NIFTY,BREAKOUT,PE,22650,index closed beyond S2 22375.2,325,12:50,326.65,301.65,25 points,13:00,301.65,SL (25 points),-25.0,-8125
+2026-10-01,SENSEX,CONFIRM,PE,72500,"index in Fib 0.75-0.786 zone 72384.66-72394.12, PE Bullish Engulfing",300,10:20,249.1,199.1,50 points,10:30,199.1,SL (50 points),-50.0,-15000
+2026-10-01,SENSEX,CONFIRM,PE,72500,"index in Fib 0.75-0.786 zone 72384.66-72394.12, PE Doji",300,10:35,200.8,150.8,50 points,12:10,337.25,TARGET premium high 358,136.45,40935
+2026-10-01,SENSEX,FIB,PE,72500,first candle 0.75 at 72253.30,300,12:10,337.25,0.0,index above first high 72450.3,12:40,573.25,TARGET S2 71988.4,236.0,70800
+2026-10-01,SENSEX,BREAKOUT,PE,72500,index closed beyond S2 71988.4,300,12:40,573.25,523.25,50 points,12:50,807.05,TARGET S3 71709.4,233.8,70140

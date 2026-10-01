@@ -137,3 +137,4 @@ def test_atm_still_above_sniper_is_normal_confidence():
     engine.on_candle(_at("09:25"), bars((104, 71, 101.9, 72)))
     engine.on_candle(_at("09:30"), bars((110, 95, 105, 101)))
     assert engine.trades[0].atm_below_sniper is False
+

@@ -130,8 +130,20 @@ def test_nifty_still_shifts_the_atm():
     assert not MARKETS["NIFTY"].widen_otm and MARKETS["SENSEX"].min_gap == 40
 
 
+def test_nifty_moves_one_otm_out_when_the_shifts_oscillate():
+    """Owner, 01-10: 30-09 close 22620.5 flips between ATM 22600 (PE gap 19.33) and 22700 (CE gap 18.55);
+    then keep ATM 22600 and move the CE up or the PE down - both pass, the bigger smaller-gap wins."""
+    closes = {(22600, "CE"): 164.50, (22600, "PE"): 114.65, (22700, "CE"): 113.15, (22500, "PE"): 77.50,
+              (22700, "PE"): 163.35, (22800, "CE"): 74.55, (22400, "PE"): 52.10}
+    plan = build_daily_plan(22620.5, NIFTY, _lookup(closes))
+    assert [a.atm_strike for a in plan.attempts[:4]] == [22600, 22700, 22600, 22700]
+    assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (22600, 22800, 22500)
+    assert plan.final.sniper == pytest.approx(76.025)
+    assert (plan.final.ce_gap, plan.final.pe_gap) == (pytest.approx(88.475), pytest.approx(38.625))
+
+
 def test_max_three_shifts_then_no_plan():
-    # PE gap always fails, CE always passes -> keeps shifting up.
+    # PE gap always fails, CE always passes -> keeps shifting up; widening never helps either.
     def lookup(strike, option_type):
         if strike % 100 == 0 and option_type == "CE" and strike >= 23100:
             return 100.0
@@ -139,7 +151,8 @@ def test_max_three_shifts_then_no_plan():
 
     plan = build_daily_plan(23100, NIFTY, lookup)
     assert plan.final is None
-    assert [a.atm_strike for a in plan.attempts] == [23100, 23200, 23300, 23400]
+    assert [a.atm_strike for a in plan.attempts[:4]] == [23100, 23200, 23300, 23400]
+    assert len(plan.attempts) > 4
 
 
 @pytest.mark.parametrize(
