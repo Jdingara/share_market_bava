@@ -41,9 +41,10 @@ candles closing 09:30-14:55):
   Strike = the morning ATM (owner, 2026-09-29: even if the balanced strike
   has moved by 09:30). Except on a BIG GAP day (opens above R2 or below S2 -
   owner, 2026-10-05; was |open - close| >= 150 NIFTY / 300 SENSEX): every trade uses the strike nearest the index at
-  entry, the levels stay the same, and the trade also exits when the index
-  pattern turns against it (a directional reversal pattern - Doji/Spinning
-  Top don't count). Fill = the option's candle close.
+  entry, and the trade has no level targets (owner, 2026-10-05): it exits on
+  the next index reversal pattern against it (Doji/Spinning Top don't
+  count), or on a trailing SL once the premium is 100 (SENSEX) / 50 (NIFTY)
+  points up - that far below the premium's high. Fill = the option's candle close.
   SL = entry premium - 25 points (NIFTY) / 50 (SENSEX) (owner, 2026-09-29).
   If the premium is too low for that (entry - points <= 0) (owner, 2026-09-29):
     * from 13:30 (about 4 hours of trading, so the day low means something):
@@ -114,6 +115,7 @@ class HlcTrade:
     sl_rule: str = ""
     index_sl: Optional[float] = None  # FIB trade: exit when the index crosses this
     premium_targets: list[float] = field(default_factory=list)  # PANIC side: earlier daily highs, next one first
+    premium_high: float = 0.0  # big-gap trade: highest premium since entry (for the trailing SL)
     premium_trail: Optional[float] = None  # PANIC side: last premium high closed above (information)
     exit_time: str = ""
     exit_premium: float = 0.0
@@ -476,9 +478,20 @@ class HlcDay:
             return [self._exit(trade, when, trade.sl_premium, f"SL ({trade.sl_rule})")]
         pe = trade.side == "PE"
         if trade.big_gap:
+            # Owner, 2026-10-05: on a big-gap day ride the move - exit on the next reversal candle; once the
+            # premium is big_gap_trail points up (SENSEX 100 / NIFTY 50), trail the SL that far below its high.
+            # No level targets.
+            trail = self.market.big_gap_trail
+            if trade.premium_high >= trade.entry_fill + trail and prem.low <= trade.premium_high - trail:
+                return [self._exit(trade, when, trade.premium_high - trail,
+                                   f"trailing SL {trade.premium_high - trail:.2f} ({trail:g} below the high {trade.premium_high:g})")]
+            trade.premium_high = max(trade.premium_high, prem.high)
             turned = bullish_pattern(self.index_history[-3:]) if pe else bearish_pattern(self.index_history[-3:])
             if turned and turned[0] not in DIRECTIONLESS:
                 return [self._exit(trade, when, prem.close, f"pattern turned: index {turned[0]}")]
+            if closes >= EXIT_CLOSE:
+                return [self._exit(trade, when, prem.close, "15:00 exit")]
+            return []
         if trade.trail_level is not None:
             name, value = trade.trail_level
             if (pe and index.close > value) or (not pe and index.close < value):

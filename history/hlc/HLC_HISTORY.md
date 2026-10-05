@@ -2,11 +2,11 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 14 trade(s), +671.25 points, ₹+204,618**
+**All days: 14 trade(s), +812.40 points, ₹+246,963**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
-| 2026-10-05 | SENSEX | 72100 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +71.20 | ₹+21,360 | watching |
+| 2026-10-05 | SENSEX | 72100 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +212.35 | ₹+63,705 | watching |
 | 2026-10-05 | NIFTY | 22450 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +45.05 | ₹+14,641 | watching |
 | 2026-10-01 | SENSEX | 72500 | PROFIT BOOKING / PANIC | yes | 4 | +556.25 | ₹+166,875 | finished |
 | 2026-10-01 | NIFTY | 22650 | PROFIT BOOKING / PANIC | yes | 4 | +81.15 | ₹+26,374 | finished |
@@ -26,14 +26,14 @@
 |---|---|---|---|---|---|---|---|---|---|
 | REVERSAL | 325 × 22450 PE | index Hanging Man at R1, PE Inverted Hammer | 09:35 | 41.55 | 16.55 (25 points) | 86.6 (12:00) | TARGET Close 22422 | +45.05 | ₹+14,641 |
 
-### SENSEX — watching (last update 2026-10-05 14:20)
+### SENSEX — watching (last update 2026-10-05 14:45)
 
-- Close 71909.7, ATM 72100 — BIG GAP day. R3 73775.3 · R2 73221.65 · R1 72653.65 · S1 71532 · S2 70978.35 · S3 70410.35.
+- Close 71909.7, ATM 72100. R3 73775.3 · R2 73221.65 · R1 72653.65 · S1 71532 · S2 70978.35 · S3 70410.35.
 - CE PROFIT BOOKING, PE PROFIT BOOKING.
 
 | Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|---|---|
-| REVERSAL | 300 × 72600 PE | index Bearish Harami at R1, PE Bullish Harami | 09:50 | 442.75 | 392.75 (50 points) | 513.95 (10:05) | pattern turned: index Bullish Harami | +71.20 | ₹+21,360 |
+| REVERSAL | 300 × 72100 PE | index Bearish Harami at R1, PE Bullish Harami | 09:50 | 259.5 | 209.5 (50 points) | 471.85 (12:00) | TARGET Close 71909.7 | +212.35 | ₹+63,705 |
 
 ## 2026-10-01 (Thu)
 

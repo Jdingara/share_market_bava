@@ -1,7 +1,7 @@
 """HLC strategy: the owner's 29-09 sheet, ATM choice, labels, patterns, and the engine's trade flow."""
 
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 
 import pytest
@@ -281,3 +281,19 @@ def test_big_gap_only_when_opening_beyond_r2_or_s2():
     day = HlcDay(date(2026, 10, 5), levels, HLC_MARKETS["SENSEX"])
     day.on_candle(_at("09:15"), Candle(73300, 73350, 73250, 73320), {})
     assert day.big_gap
+
+
+def test_big_gap_trade_trails_100_below_the_high_once_100_up():
+    """Owner, 05-10: big-gap day - no level targets; once the premium is 100 up (SENSEX), SL = high - 100."""
+    from hlc_engine import HlcTrade
+    levels = hlc_levels(71909.7, 72100, 553.65, 568.0)
+    day = HlcDay(date(2026, 10, 5), levels, HLC_MARKETS["SENSEX"])
+    for t in ("09:15", "09:20", "09:25"):
+        day.index_history.append(Candle(73300, 73310, 73290, 73300))
+    trade = HlcTrade(date="2026-10-05", kind="FIB", side="CE", strike=73300, pattern="", entry_time="x",
+                     entry_fill=300, entry_index=73300, sl_premium=250, big_gap=True)
+    day.index_history.append(Candle(73290, 73300, 73289, 73299))
+    assert day._manage(trade, _at("09:30"), day.index_history[-1], Candle(300, 380, 299, 370), time(9, 35)) == []
+    assert day._manage(trade, _at("09:35"), Candle(73299, 73320, 73298, 73318), Candle(370, 450, 365, 440), time(9, 40)) == []
+    events = day._manage(trade, _at("09:40"), Candle(73318, 73330, 73317, 73329), Candle(440, 445, 340, 345), time(9, 45))
+    assert "trailing SL 350.00" in events[0] and trade.pnl_points == 50
