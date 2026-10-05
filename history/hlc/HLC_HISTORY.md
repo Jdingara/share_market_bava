@@ -6,7 +6,7 @@
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
-| 2026-10-05 | SENSEX | 72100 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +212.35 | ₹+63,705 | watching |
+| 2026-10-05 | SENSEX | 72100 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +212.35 | ₹+63,705 | finished |
 | 2026-10-05 | NIFTY | 22450 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +45.05 | ₹+14,641 | watching |
 | 2026-10-01 | SENSEX | 72500 | PROFIT BOOKING / PANIC | yes | 4 | +556.25 | ₹+166,875 | finished |
 | 2026-10-01 | NIFTY | 22650 | PROFIT BOOKING / PANIC | yes | 4 | +81.15 | ₹+26,374 | finished |
@@ -26,7 +26,7 @@
 |---|---|---|---|---|---|---|---|---|---|
 | REVERSAL | 325 × 22450 PE | index Hanging Man at R1, PE Inverted Hammer | 09:35 | 41.55 | 16.55 (25 points) | 86.6 (12:00) | TARGET Close 22422 | +45.05 | ₹+14,641 |
 
-### SENSEX — watching (last update 2026-10-05 14:45)
+### SENSEX — finished (last update 2026-10-05 15:00)
 
 - Close 71909.7, ATM 72100. R3 73775.3 · R2 73221.65 · R1 72653.65 · S1 71532 · S2 70978.35 · S3 70410.35.
 - CE PROFIT BOOKING, PE PROFIT BOOKING.

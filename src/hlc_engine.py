@@ -267,10 +267,9 @@ class HlcDay:
             return events
         if self.open_trade is not None or self.pending is not None:
             return events
-        if not self.buyers_day() and (len(self.trades) >= MAX_TRADES
-                                      or (self.trades and not self.trades[-1].exit_reason.startswith("SL"))):
-            # owner, 2026-09-30: after the first trade, trade again only if it was stopped out.
-            # Owner, 2026-10-01: not on a buyer's day - keep trading the day's signals.
+        if not self.buyers_day() and len(self.trades) >= MAX_TRADES:
+            # Owner, 2026-10-05: a second trade is allowed after a target too (30-09 had "only after a stop-out").
+            # Owner, 2026-10-01: no limit on a buyer's day - keep trading the day's signals.
             return events
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
@@ -281,7 +280,9 @@ class HlcDay:
         if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
 
-        if not self.gap_done and len(self.index_history) >= 2:
+        if not self.gap_done and not self.trades and len(self.index_history) >= 2:
+            # Owner, 2026-10-05: the FIB trade is only ever the day's FIRST entry (05-10 it fired as a second
+            # trade at 12:10, far below the level, and lost)
             event = self._fib_entry(when, index, chain, atm)
             if event:
                 return events + [self._with_premium_targets(event)]

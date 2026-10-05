@@ -7,8 +7,8 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
-| 2026-10-05 | SENSEX | 71900 | 435.1 | 1 | +0.00 | ₹+0 | watching |
-| 2026-10-05 | NIFTY | 22400 | 66.65 | 2 | -36.00 | ₹-11,700 | watching |
+| 2026-10-05 | SENSEX | 71900 | 435.1 | 1 | +0.00 | ₹+0 | finished |
+| 2026-10-05 | NIFTY | 22400 | 66.65 | 2 | -36.00 | ₹-11,700 | finished |
 | 2026-10-01 | SENSEX | 72500 | 170.45 | 2 | +27.00 | ₹+8,100 | finished |
 | 2026-10-01 | NIFTY | 22600 | 76.03 | 3 | +71.00 | ₹+23,075 | finished |
 | 2026-09-30 | SENSEX | 72500 | 173.72 | 2 | +29.00 | ₹+8,700 | finished |
@@ -19,7 +19,7 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 ## 2026-10-05 (Mon)
 
-### NIFTY — watching (last update 2026-10-05 14:05)
+### NIFTY — finished (last update 2026-10-05 15:00)
 
 - NIFTY close 22421.95 on 2026-10-01, expiry 2026-10-06, qty 325.
 - Plan: ATM 22400 after 5 shift(s), Sniper 66.65.
@@ -29,7 +29,7 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 | first | 325 × NIFTY26O0622600CE | 09:35 ★ HIGH | 100.0 | 100 | 81 | 144 | 81 (10:00) | STOPLOSS | -19.00 | ₹-6,175 |
 | second | 325 × NIFTY26O0622600CE | 13:45 ★ HIGH | 81.0 | 81 | 64 | 121 | 64 (14:00) | STOPLOSS | -17.00 | ₹-5,525 |
 
-### SENSEX — watching (last update 2026-10-05 10:00)
+### SENSEX — finished (last update 2026-10-05 15:00)
 
 - SENSEX close 71909.7 on 2026-10-01, expiry 2026-10-08, qty 300.
 - Plan: ATM 71900 after 2 shift(s), Sniper 435.1.

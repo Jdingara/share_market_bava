@@ -203,7 +203,7 @@ def test_panic_pe_above_yesterdays_high_blocks_ce_trades():
     assert day.trades == []  # the S3 Bullish Engulfing CE reversal is blocked
 
 
-def test_hlc_no_second_trade_after_a_winning_first_trade():
+def test_hlc_second_trade_allowed_after_a_target_but_not_a_third():
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
     day.on_candle(_at("09:15"), Candle(22760, 22770, 22740, 22745), _chain((60, 62, 55, 58)))
     day.on_candle(_at("09:20"), Candle(22745, 22750, 22738, 22742), _chain((58, 60, 57, 59)))
@@ -212,10 +212,16 @@ def test_hlc_no_second_trade_after_a_winning_first_trade():
     day.on_candle(_at("09:35"), Candle(22748, 22749, 22700, 22705), _chain((60, 75, 59, 74)))  # S1 broken -> trail
     day.on_candle(_at("09:40"), Candle(22705, 22706, 22640, 22650), _chain((74, 95, 73, 90)))  # S2 touched: final target
     assert day.trades[0].exit_reason.startswith("TARGET S2")
-    # A textbook S-level reversal afterwards must not open a second trade.
+    # Owner, 05-10: a second trade is allowed after a target (not a buyer's day: no yesterday data here) ...
+    calls = []
+    day._confirm_entry = lambda *a: calls.append(1)  # reaching the entry checks = the gate let it through
     day.on_candle(_at("09:45"), Candle(22650, 22655, 22640, 22642), _chain((90, 91, 85, 86)))
+    assert calls
+    # ... but not a third
+    day.trades.append(day.trades[0])
+    calls.clear()
     day.on_candle(_at("09:50"), Candle(22641, 22660, 22640, 22658), _chain((86, 92, 85, 91)))
-    assert len(day.trades) == 1
+    assert not calls
 
 
 def test_confirm_trade_index_back_in_the_fib_zone_plus_premium_pattern():
