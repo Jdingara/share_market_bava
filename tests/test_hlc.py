@@ -134,14 +134,14 @@ def test_big_gap_uses_the_strike_near_the_market_and_exits_when_the_pattern_turn
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, R2 22955.65
     chain = lambda ce: {(22950.0, "CE"): Candle(*ce), (22950.0, "PE"): Candle(40, 42, 38, 40),
                         (22800.0, "CE"): Candle(150, 155, 148, 150), (22800.0, "PE"): Candle(5, 6, 4, 5)}
-    day.first_swing = "CE"  # up swing -> level 22941.46
-    day.on_candle(_at("09:15"), Candle(22950, 22960, 22930, 22940), chain((60, 62, 55, 58)))  # opens 170 above
+    day.first_swing = "CE"  # up swing -> level 22947.5
+    day.on_candle(_at("09:15"), Candle(22960, 22970, 22940, 22950), chain((60, 62, 55, 58)))  # opens above R2
     day.on_candle(_at("09:20"), Candle(22940, 22945, 22935, 22944), chain((58, 60, 57, 59)))
     day.on_candle(_at("09:25"), Candle(22944, 22946, 22943, 22945), chain((59, 61, 57, 60)))
-    events = day.on_candle(_at("09:30"), Candle(22944, 22946, 22936, 22942), chain((59, 61, 57, 60)))  # dips below 22941.46
+    events = day.on_candle(_at("09:30"), Candle(22944, 22946, 22936, 22942), chain((59, 61, 57, 60)))  # dips below 22947.5
     assert day.big_gap and events[0].startswith("BUY CE 22950 at 60.00 (FIB")
     day.on_candle(_at("09:35"), Candle(22942, 22950, 22941, 22949), chain((60, 66, 59, 65)))
-    events = day.on_candle(_at("09:40"), Candle(22950, 22951, 22935, 22938), chain((65, 66, 58, 59)))  # bearish engulfing
+    events = day.on_candle(_at("09:40"), Candle(22950, 22951, 22941, 22941.5), chain((65, 66, 58, 59)))  # bearish engulfing, above the first low
     assert "pattern turned: index Bearish Engulfing" in events[0]
 
 
@@ -270,3 +270,14 @@ def test_reversal_at_r1_targets_beyond_r1_not_r1_itself():
     # every strike the index has been near today stays watched
     rows = [{"low": 72100, "high": 72650}, {"low": 72200, "high": 72300}]
     assert {72000.0, 72600.0, 72700.0} <= _strikes_to_watch(levels, 100, rows)
+
+
+def test_big_gap_only_when_opening_beyond_r2_or_s2():
+    """Owner, 05-10: 431 points up (SENSEX 72341 vs close 71910) is NOT a big gap - it opened below R2 73221.6."""
+    levels = hlc_levels(71909.7, 72100, 553.65, 568.0)
+    day = HlcDay(date(2026, 10, 5), levels, HLC_MARKETS["SENSEX"])
+    day.on_candle(_at("09:15"), Candle(72340.95, 72402.27, 72171.93, 72359.79), {})
+    assert not day.big_gap
+    day = HlcDay(date(2026, 10, 5), levels, HLC_MARKETS["SENSEX"])
+    day.on_candle(_at("09:15"), Candle(73300, 73350, 73250, 73320), {})
+    assert day.big_gap

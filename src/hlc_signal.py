@@ -28,7 +28,7 @@ class HlcMarket:
     level_tolerance: float  # how close to a level a pattern must form (index points)
     quantity: int
     sl_points: float  # stop loss = entry premium - this (owner, 2026-09-29)
-    big_gap: float  # |open - yesterday's close| at least this = big gap day (owner: NIFTY 150-200, SENSEX 300-500)
+    big_gap: float  # no longer used: since 2026-10-05 a big gap day = open above R2 / below S2
 
 
 HLC_MARKETS = {

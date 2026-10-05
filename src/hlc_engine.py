@@ -39,8 +39,8 @@ candles closing 09:30-14:55):
                 up-reversal pattern -> buy ATM PE.
 
   Strike = the morning ATM (owner, 2026-09-29: even if the balanced strike
-  has moved by 09:30). Except on a BIG GAP day (|open - yesterday's close| >=
-  150 NIFTY / 300 SENSEX): every trade uses the strike nearest the index at
+  has moved by 09:30). Except on a BIG GAP day (opens above R2 or below S2 -
+  owner, 2026-10-05; was |open - close| >= 150 NIFTY / 300 SENSEX): every trade uses the strike nearest the index at
   entry, the levels stay the same, and the trade also exits when the index
   pattern turns against it (a directional reversal pattern - Doji/Spinning
   Top don't count). Fill = the option's candle close.
@@ -226,7 +226,9 @@ class HlcDay:
         closes = _closes_at(when)
         if self.day_open is None:
             self.day_open = index.open
-            self.big_gap = abs(index.open - self.levels.close) >= self.market.big_gap
+            # Owner, 2026-10-05: a big gap = the day OPENS above R2 or below S2 (was |open - close| >= 150/300)
+            ladder = dict(self.levels.ladder())
+            self.big_gap = index.open > ladder["R2"] or index.open < ladder["S2"]
         self.index_history.append(index)
         for key, candle in chain.items():
             self.premium_history.setdefault(key, []).append(candle)
