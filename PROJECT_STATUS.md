@@ -216,6 +216,8 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 - `live_account.py`: shared day file `.cache/live/account_<date>.json` - each bot registers its estimated 1-lot cost (Sniper: highest plan entry square; HLC: higher of the ATM CE/PE closes); from 09:20 (when all 4 have registered, at 09:28 at the latest) the first bot reads `kite.margins("equity")["net"]` and splits it. 50% loss or a `STOP` file (`stop_all.bat`) halts all bots.
 - Real sells are logged to `history/live/trades.csv`. 27 new offline tests (26 with a fake Zerodha + 1 full Sniper day); 127 tests pass.
 - **Not yet tested against real Zerodha** - next: a 1-lot run with a small amount once the owner is ready, and the static-IP question below.
+- Pushed to GitHub as branch **`live-orders`** (commit `c4162ea`); `main` keeps the paper bots. Rule changes made on `main` must be merged into `live-orders` until it is merged back after the first real test.
+- **Live trading will use a different Zerodha ID** (not UTC038; owner, 2026-10-05). It needs its own Kite Connect app (type Connect, redirect `https://127.0.0.1`, Client ID = that ID - Finding 4); its key/secret go in `.env` on the computer that trades. Which computer trades is not decided yet.
 
 ## Open Decisions
 - **SEBI / Zerodha static IP:** API orders may have to come from a static IP registered with Zerodha - if so the laptop plan needs a static IP from the ISP (or the cloud server earlier). Owner to ask Zerodha.
