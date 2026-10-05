@@ -18,7 +18,7 @@ Spec sections implemented here:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, time, timedelta
 from typing import Callable, Literal, Optional
 
@@ -43,6 +43,7 @@ class MarketConfig:
     options_exchange: str  # Kite exchange holding the index's option contracts
     widen_otm: bool = False  # SENSEX (owner, 2026-09-29): keep the nearest ATM, move the OTMs out instead of shifting
     max_otm_steps: int = 5  # widen_otm: try OTM = ATM +- 1..5 strike steps
+    relaxed_min_gap: Optional[float] = None  # owner, 2026-10-05: if the plan fails at min_gap, try again at this
     widen_otm_fallback: bool = False  # NIFTY (owner, 2026-10-01): if the ATM shifts still fail, move one OTM out
 
     @property
@@ -52,9 +53,11 @@ class MarketConfig:
 
 MARKETS = {
     "NIFTY": MarketConfig(name="NIFTY", strike_step=100, min_gap=25, expiry_weekday=1, lot_size=65, max_lots=5,
-                          index_token=256265, options_exchange="NFO", widen_otm_fallback=True),  # NSE, Tuesday expiry, 325 qty
+                          index_token=256265, options_exchange="NFO", widen_otm_fallback=False,  # owner 05-10: dropped
+                          relaxed_min_gap=20),  # NSE, Tuesday expiry, 325 qty
     "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=40, expiry_weekday=3, lot_size=20, max_lots=15,
-                           index_token=265, options_exchange="BFO", widen_otm=True),  # BSE, Thursday expiry, 300 qty
+                           index_token=265, options_exchange="BFO", widen_otm=True,
+                           relaxed_min_gap=32),  # BSE, Thursday expiry, 300 qty
 }
 
 MAX_SHIFTS = 3
@@ -143,13 +146,32 @@ def build_daily_plan(index_close: float, market: MarketConfig, premium: PremiumL
     NIFTY (widen_otm_fallback, owner 2026-10-01): the shifts above come first
     (so §5 is unchanged); only if they still fail, keep the nearest ATM and move
     the OTMs out one strike at a time - CE up or PE down - taking the nearest
-    combination where both gaps reach the minimum (see _move_one_otm_out)."""
-    atm = nearest_atm(index_close, market.strike_step)
+    combination where both gaps reach the minimum (see _move_one_otm_out).
+
+    Owner, 2026-10-05: before that fallback, the same search is repeated at the
+    relaxed minimum gap (NIFTY 20, SENSEX 32)."""
     attempts: list[StrikeRow] = []
-
     if market.widen_otm:
-        return _widen_otms(index_close, market, premium, attempts)
+        plan = _widen_otms(index_close, market, premium, attempts)
+    else:
+        plan = _shift_atm(index_close, market, premium, attempts)
+    if plan.final is None and market.relaxed_min_gap:
+        # Owner, 2026-10-05: the minimum gap is 25 (NIFTY) / 40 (SENSEX), but 20 / 32 can be taken - try the
+        # same search again at the relaxed gap before the OTM fallback. 05-10 NIFTY: ATM 22500 passes at 20
+        # (CE gap 23.60), Sniper 83.30 - the owner's plan that day.
+        relaxed = replace(market, min_gap=market.relaxed_min_gap)
+        retry = _widen_otms(index_close, relaxed, premium, attempts) if market.widen_otm else             _shift_atm(index_close, relaxed, premium, attempts)
+        if retry.final is not None:
+            return DailyPlan(retry.market, index_close, retry.attempts, retry.final,
+                             retry.reason + f" (gap >= {market.relaxed_min_gap:g})")
+    if plan.final is None and market.widen_otm_fallback and not plan.reason.startswith("both gaps fail"):
+        return _move_one_otm_out(index_close, market, premium, attempts)
+    return plan
 
+
+def _shift_atm(index_close: float, market: MarketConfig, premium: PremiumLookup,
+               attempts: list[StrikeRow]) -> DailyPlan:
+    atm = nearest_atm(index_close, market.strike_step)
     for shift in range(MAX_SHIFTS + 1):
         row = evaluate_strike(atm, market, premium)
         attempts.append(row)
@@ -160,9 +182,6 @@ def build_daily_plan(index_close: float, market: MarketConfig, premium: PremiumL
             return DailyPlan(market.name, index_close, tuple(attempts), None, f"both gaps fail at ATM {atm:g}")
 
         atm += market.strike_step if not row.pe_ok else -market.strike_step
-
-    if market.widen_otm_fallback:
-        return _move_one_otm_out(index_close, market, premium, attempts)
     return DailyPlan(market.name, index_close, tuple(attempts), None, f"still failing after {MAX_SHIFTS} shifts")
 
 

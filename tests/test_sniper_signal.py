@@ -104,7 +104,8 @@ def test_ce_fail_shifts_down():
 def test_both_fail_is_no_plan():
     plan = build_daily_plan(23100, NIFTY, _flat_premiums(10, 10, 23100))
     assert plan.final is None
-    assert len(plan.attempts) == 1
+    assert not plan.attempts[0].ce_ok and not plan.attempts[0].pe_ok  # 20 fails too; no OTM fallback
+    assert plan.reason.startswith("both gaps fail")
 
 
 def test_gap_exactly_min_passes():
@@ -135,8 +136,12 @@ def test_nifty_moves_one_otm_out_when_the_shifts_oscillate():
     then keep ATM 22600 and move the CE up or the PE down - both pass, the bigger smaller-gap wins."""
     closes = {(22600, "CE"): 164.50, (22600, "PE"): 114.65, (22700, "CE"): 113.15, (22500, "PE"): 77.50,
               (22700, "PE"): 163.35, (22800, "CE"): 74.55, (22400, "PE"): 52.10}
+    # Owner, 05-10: the fallback was dropped for NIFTY ("only our trades") - 01-10 is now a no-plan day ...
     plan = build_daily_plan(22620.5, NIFTY, _lookup(closes))
-    assert [a.atm_strike for a in plan.attempts[:4]] == [22600, 22700, 22600, 22700]
+    assert plan.final is None and [a.atm_strike for a in plan.attempts[:4]] == [22600, 22700, 22600, 22700]
+    # ... the fallback itself still works if switched back on
+    from dataclasses import replace
+    plan = build_daily_plan(22620.5, replace(NIFTY, widen_otm_fallback=True), _lookup(closes))
     assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (22600, 22800, 22500)
     assert plan.final.sniper == pytest.approx(76.025)
     assert (plan.final.ce_gap, plan.final.pe_gap) == (pytest.approx(88.475), pytest.approx(38.625))
@@ -152,7 +157,6 @@ def test_max_three_shifts_then_no_plan():
     plan = build_daily_plan(23100, NIFTY, lookup)
     assert plan.final is None
     assert [a.atm_strike for a in plan.attempts[:4]] == [23100, 23200, 23300, 23400]
-    assert len(plan.attempts) > 4
 
 
 @pytest.mark.parametrize(
@@ -207,3 +211,12 @@ def test_expiry_day_uses_same_day():
     assert next_weekly_expiry(tuesday, 1) == tuesday
     assert next_weekly_expiry(date(2026, 9, 28), 1) == tuesday
     assert next_weekly_expiry(date(2026, 9, 30), 1) == date(2026, 10, 6)
+
+
+def test_relaxed_gap_20_before_the_otm_fallback_05_10_nifty():
+    """Owner, 05-10: 25 first, then 20, then the OTM fallback. 01-10 closes: ATM 22500 passes at 20."""
+    closes = {(22400, "CE"): 161.50, (22400, "PE"): 99.30, (22500, "CE"): 106.90, (22300, "PE"): 66.00,
+              (22500, "PE"): 144.10, (22600, "CE"): 67.30}
+    plan = build_daily_plan(22422, NIFTY, _lookup(closes))
+    assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (22500, 22600, 22400)
+    assert plan.final.sniper == pytest.approx(83.30) and "(gap >= 20)" in plan.reason

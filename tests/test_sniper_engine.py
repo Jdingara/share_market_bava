@@ -138,3 +138,27 @@ def test_atm_still_above_sniper_is_normal_confidence():
     engine.on_candle(_at("09:30"), bars((110, 95, 105, 101)))
     assert engine.trades[0].atm_below_sniper is False
 
+
+
+def test_sniper_body_entry_05_10_nifty():
+    """Owner, 05-10: ATM 22500 PE's 10:20 body crosses the Sniper 83.30 -> 22400 PE @ 49 (limit), fixed SL 36,
+    target 81 (hit at 12:00, high 84.55)."""
+    from datetime import date, datetime
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22400, "CE"): 161.50, (22400, "PE"): 99.30, (22500, "CE"): 106.90, (22300, "PE"): 66.00,
+              (22500, "PE"): 144.10, (22600, "CE"): 67.30}
+    row = build_daily_plan(22422, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
+    day = SniperDay(date(2026, 10, 5), row)
+    at = lambda hm: datetime(2026, 10, 5, int(hm[:2]), int(hm[3:]))
+    ce = Bar(70, 60, 62, 65)
+    events = day.on_candle(at("10:20"), {"atm_ce": Bar(140.35, 114, 115.45, 140.35), "atm_pe": Bar(85.3, 65, 84, 65.1),
+                                         "otm_ce": ce, "otm_pe": Bar(51.5, 38.15, 51.05, 38.15)})
+    assert [e.kind for e in events] == ["ORDER"] and events[0].square == 49
+    events = day.on_candle(at("10:25"), {"atm_ce": Bar(124.85, 101.15, 119.1, 115.45), "atm_pe": Bar(105.8, 76.8, 81.75, 84),
+                                         "otm_ce": ce, "otm_pe": Bar(66.35, 45.6, 49.2, 51.05)})
+    trade = events[0].trade
+    assert (trade.entry_fill, trade.stop_loss, trade.target) == (49, 36, 81)
+    events = day.on_candle(at("12:00"), {"atm_ce": Bar(89.3, 75.55, 87.9, 83.75), "atm_pe": Bar(131.9, 106.5, 109.1, 118.25),
+                                         "otm_ce": ce, "otm_pe": Bar(84.55, 65.95, 67.7, 74.85)})
+    assert events[0].trade.exit_reason == "TARGET" and events[0].trade.pnl_points == 32
