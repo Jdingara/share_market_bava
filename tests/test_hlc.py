@@ -259,3 +259,14 @@ def test_reversal_patterns_include_inverted_hammer_piercing_shooting_star_dark_c
     assert bearish_pattern([Candle(100, 111, 99, 110), Candle(111, 112, 102, 103)])[0] == "Dark Cloud Cover"
     assert bullish_pattern([Candle(110, 111, 99, 100), Candle(99, 113, 98, 112)])[0] == "Bullish Engulfing"
     assert bearish_pattern([Candle(100, 111, 99, 110), Candle(111, 112, 97, 98)])[0] == "Bearish Engulfing"
+
+
+def test_reversal_at_r1_targets_beyond_r1_not_r1_itself():
+    """05-10 NIFTY: a PE reversal at R1 with the index a touch above R1 must target Close, not R1."""
+    from hlc_live import _strikes_to_watch
+    levels = hlc_levels(22422, 22450, 160.5, 120.3)  # R1 22582.5
+    day = HlcDay(date(2026, 10, 5), levels, HLC_MARKETS["NIFTY"])
+    assert [n for n, _ in day._targets("PE", 22582.5 - 0.01, "Close")] == ["Close"]
+    # every strike the index has been near today stays watched
+    rows = [{"low": 72100, "high": 72650}, {"low": 72200, "high": 72300}]
+    assert {72000.0, 72600.0, 72700.0} <= _strikes_to_watch(levels, 100, rows)

@@ -187,8 +187,13 @@ class HlcDay:
                 f"(bought {trade.entry_fill:.2f}, {trade.pnl_points:+.2f} points)")
 
     def _enter(self, kind: str, side: OptionType, strike: float, when: datetime, prem: Candle, index: Candle,
-               pattern: str, final: str) -> Optional[str]:
-        targets = self._targets(side, index.close, final)
+               pattern: str, final: str, from_level: Optional[float] = None) -> Optional[str]:
+        # A reversal AT a level targets the levels beyond it, never that level itself (05-10 NIFTY: a PE at R1
+        # with the index just above R1 took R1 as its target and exited one candle later at +1.55).
+        start = index.close if from_level is None else (min(index.close, from_level) if side == "PE" else max(index.close, from_level))
+        if from_level is not None:
+            start = start - 0.01 if side == "PE" else start + 0.01
+        targets = self._targets(side, start, final)
         if not targets or side in self.blocked:
             return None
         sl, sl_rule = prem.close - self.market.sl_points, f"{self.market.sl_points:g} points"
@@ -293,7 +298,8 @@ class HlcDay:
             prem_pattern = bullish_pattern(ce_history[-3:])
             if level and prem_pattern:
                 event = self._enter("REVERSAL", "CE", atm, when, chain[(atm, "CE")], index,
-                                    f"index {up[0]} at {level}, CE {prem_pattern[0]}", "Close")
+                                    f"index {up[0]} at {level}, CE {prem_pattern[0]}", "Close",
+                                    dict(self.levels.ladder())[level])
                 if event:
                     return events + [event]
 
@@ -305,7 +311,8 @@ class HlcDay:
             prem_pattern = bullish_pattern(pe_history[-3:])
             if level and prem_pattern:
                 event = self._enter("REVERSAL", "PE", atm, when, chain[(atm, "PE")], index,
-                                    f"index {down[0]} at {level}, PE {prem_pattern[0]}", "Close")
+                                    f"index {down[0]} at {level}, PE {prem_pattern[0]}", "Close",
+                                    dict(self.levels.ladder())[level])
                 if event:
                     return events + [event]
         return events

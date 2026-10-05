@@ -2,12 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 12 trade(s), +555.00 points, ₹+168,617**
+**All days: 14 trade(s), +671.25 points, ₹+204,618**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
-| 2026-10-05 | SENSEX | 72100 | PROFIT BOOKING / PROFIT BOOKING | no | 0 | +0.00 | ₹+0 | watching |
-| 2026-10-05 | NIFTY | 22450 | PROFIT BOOKING / PROFIT BOOKING | no | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-05 | SENSEX | 72100 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +71.20 | ₹+21,360 | watching |
+| 2026-10-05 | NIFTY | 22450 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +45.05 | ₹+14,641 | watching |
 | 2026-10-01 | SENSEX | 72500 | PROFIT BOOKING / PANIC | yes | 4 | +556.25 | ₹+166,875 | finished |
 | 2026-10-01 | NIFTY | 22650 | PROFIT BOOKING / PANIC | yes | 4 | +81.15 | ₹+26,374 | finished |
 | 2026-09-30 | SENSEX | 72800 | PANIC / PROFIT BOOKING | yes | 1 | -35.90 | ₹-10,770 | finished |
@@ -17,17 +17,23 @@
 
 ## 2026-10-05 (Mon)
 
-### NIFTY — watching (last update 2026-10-05 09:19)
+### NIFTY — watching (last update 2026-10-05 14:20)
 
 - Close 22421.95, ATM 22450. R3 22835.2 · R2 22702.75 · R1 22582.45 · S1 22329.7 · S2 22197.25 · S3 22076.95.
 - CE PROFIT BOOKING, PE PROFIT BOOKING.
-- No trade.
 
-### SENSEX — watching (last update 2026-10-05 09:19)
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| REVERSAL | 325 × 22450 PE | index Hanging Man at R1, PE Inverted Hammer | 09:35 | 41.55 | 16.55 (25 points) | 86.6 (12:00) | TARGET Close 22422 | +45.05 | ₹+14,641 |
 
-- Close 71909.7, ATM 72100. R3 73775.3 · R2 73221.65 · R1 72653.65 · S1 71532 · S2 70978.35 · S3 70410.35.
+### SENSEX — watching (last update 2026-10-05 14:20)
+
+- Close 71909.7, ATM 72100 — BIG GAP day. R3 73775.3 · R2 73221.65 · R1 72653.65 · S1 71532 · S2 70978.35 · S3 70410.35.
 - CE PROFIT BOOKING, PE PROFIT BOOKING.
-- No trade.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| REVERSAL | 300 × 72600 PE | index Bearish Harami at R1, PE Bullish Harami | 09:50 | 442.75 | 392.75 (50 points) | 513.95 (10:05) | pattern turned: index Bullish Harami | +71.20 | ₹+21,360 |
 
 ## 2026-10-01 (Thu)
 

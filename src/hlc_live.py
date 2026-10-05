@@ -139,10 +139,13 @@ def _series(rows: list[dict]) -> dict[datetime, Candle]:
     return {_naive(r["date"]): Candle(r["open"], r["high"], r["low"], r["close"]) for r in rows}
 
 
-def _strikes_to_watch(levels: HlcLevels, step: int, index_price: float) -> set[float]:
-    """The morning ATM, plus the round strikes around the market (needed on a big-gap day)."""
-    nearest = round(index_price / step) * step
-    return {float(levels.atm)} | {float(nearest + i * step) for i in (-1, 0, 1)}
+def _strikes_to_watch(levels: HlcLevels, step: int, index_rows: list[dict]) -> set[float]:
+    """The morning ATM plus every round strike the index has been near today (a big-gap day trades the strike
+    nearest the market, and an open trade's strike must keep being fetched after the index moves away -
+    05-10 SENSEX: 72600 PE bought at 09:50 stopped being fetched, so its Close target at 12:00 was missed)."""
+    lo = int(min(r["low"] for r in index_rows) // step - 1) * step
+    hi = int(max(r["high"] for r in index_rows) // step + 2) * step
+    return {float(levels.atm)} | {float(s) for s in range(lo, hi + step, step)}
 
 
 def feed(engine: HlcDay, index_rows: list[dict], premiums: dict[tuple[float, str], dict[datetime, Candle]],
@@ -177,7 +180,7 @@ def _fetch(kite, chain: OptionChain, market_name: str, levels: HlcLevels, start:
         return index_rows, {}
     step = HLC_MARKETS[market_name].strike_step
     premiums = {}
-    for strike in _strikes_to_watch(levels, step, index_rows[-1]["close"]):
+    for strike in _strikes_to_watch(levels, step, index_rows):
         for option_type in ("CE", "PE"):
             contract = chain.by_key.get((strike, option_type))
             if contract:
