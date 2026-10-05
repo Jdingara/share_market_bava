@@ -20,6 +20,14 @@ Decided and stable — **do not change without the owner's explicit confirmation
 - **Independent of the sibling "share-market-bro" bot** (older XGBoost/rule-based NIFTY bot, its own Kite app/account). No runtime code is shared; anything reused is copied here. Never import from that project's folder.
 - **Security:** API key/secret, tokens → `.env` only (gitignored). Never in code, commits or chats. If exposed, regenerate the secret on developers.kite.trade.
 
+### Real-money rules (owner, 2026-10-05)
+
+- **Plan:** paper until ~25 Oct 2026, then **real orders on the laptop from ~25 Oct to 25 Nov**, then move to a cloud server. **All 4 bots** go live. **Fully automatic** orders (no Telegram approval).
+- **Money = what is in the Zerodha account in the morning** (read at 09:20; the owner deposits anything from ~₹20,000 to ₹5 lakh+). Shared in priority order **1 Sniper SENSEX, 2 Sniper NIFTY, 3 HLC SENSEX, 4 HLC NIFTY**: try **4 equal parts, then 3, then 2, then 1** - the first split where every chosen bot (picked in that order) can buy at least 1 lot. The owner proposed 4 → 2 → 1; the 3-part step was added with his OK.
+- **More money → more lots**, up to **NIFTY 5 lots (325) / SENSEX 15 lots (300)**. Not even 1 lot → that bot doesn't trade and says "not enough money".
+- **Daily max loss = 50% of the morning money**, all bots together (booked + open). Hit → every bot sells and stops for the day. Per-trade stops stay as the strategy rules.
+- Rough cost of 1 lot (prices 28-09 → 05-10): NIFTY ₹7,000–13,000 (up to ₹21,000), SENSEX ₹4,000–8,000 (up to ₹14,500). ~₹50,000 = 1 lot for all 4 bots on most days; ~₹6.5 lakh = full quantity even on expensive days.
+
 ### §1 Daily setup (previous trading day's data)
 
 | Step | Rule |
@@ -167,7 +175,7 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 | 0 | Replace SPFS with the Sniper rules; pure logic + tests; backtest on estimated premiums | ✅ Done 2026-09-27 |
 | 1 | Morning plan from real previous-day closes | ✅ Done — `sniper_live.py --plan-only`, dashboard, JSON; matched §5 on real Zerodha data |
 | 2 | Paper mode: live 5-min watch, "would buy/exit" alerts, dashboard, ₹ P&L | 🟡 **Running since 2026-09-28** (NIFTY; SENSEX added 2026-09-29). Needs several full days of clean results |
-| 3 | Real orders via Zerodha, owner's quantity, daily max-loss stop | ⏳ Not started — needs owner go-ahead, daily max loss, order mode, SEBI algo/static-IP compliance |
+| 3 | Real orders via Zerodha, owner's quantity, daily max-loss stop | 🟡 **Built 2026-10-05** on branch `live-orders` (`--real`, tested offline only). Go-live ~25 Oct; open: static-IP check, first small real test |
 | — | Backtest on real option data | ⏳ Blocked on a source of expired-option history |
 
 ## Current Status (last updated: 2026-10-05)
@@ -201,17 +209,23 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 
 **2026-10-05 (Monday; 02-10 holiday).** Login via chat at 09:19; all 4 bots started 09:19 (plans from 01-10 closes). Sniper NIFTY: shifts flipped 22400 ↔ 22500 → the new one-OTM fallback gave ATM 22400, **22600 CE / 22300 PE**, Sniper 66.65. Sniper SENSEX: new weekly expiry 08-10, ATM 71900, OTM ±300, Sniper 435.10. HLC NIFTY ATM 22450, HLC SENSEX ATM 72100. Both legs PROFIT BOOKING in both markets → **not a buyer's day** (2-trade limit applies). First full live day of the 01-10 rules.
 
+**2026-10-05 — real-money layer built (branch `live-orders`, not merged; paper bots unchanged).** `--real` on `sniper_live.py` / `hlc_live.py` (and `start_live.bat`) places real Zerodha orders; it also needs `LIVE_TRADING=YES` in `.env`. Without `--real` nothing changes. How it works:
+- The engines still decide everything. `live_executor.py` follows them: after each candle batch the bot passes what the engine holds (`Want`) and the buys it waits for (`Trigger`: Sniper's square levels, HLC's low-premium buy stop). Every 2 s the executor checks the live price (Kite LTP, shared limit of 1 request/s across the 4 bots): trigger level reached → buy; Sniper target reached → sell. **The stop-loss rests at Zerodha as an SL order** (moved up when the engine trails it). HLC exits at candle closes as in paper.
+- Engine holds and we don't → buy once (only if the price is still between stop and target); engine flat and we hold → sell. **Catch-up trades after a restart are never bought**; the open position is restored from `.cache/live/<bot>_<date>.json`.
+- Orders are **MIS LIMIT orders** priced 1% through the market and re-priced 3 times (no MARKET orders); SL = stop-limit 3% below the trigger. Everything is sold at 15:01 at the latest.
+- `live_account.py`: shared day file `.cache/live/account_<date>.json` - each bot registers its estimated 1-lot cost (Sniper: highest plan entry square; HLC: higher of the ATM CE/PE closes); from 09:20 (when all 4 have registered, at 09:28 at the latest) the first bot reads `kite.margins("equity")["net"]` and splits it. 50% loss or a `STOP` file (`stop_all.bat`) halts all bots.
+- Real sells are logged to `history/live/trades.csv`. 27 new offline tests (26 with a fake Zerodha + 1 full Sniper day); 127 tests pass.
+- **Not yet tested against real Zerodha** - next: a 1-lot run with a small amount once the owner is ready, and the static-IP question below.
+
 ## Open Decisions
+- **SEBI / Zerodha static IP:** API orders may have to come from a static IP registered with Zerodha - if so the laptop plan needs a static IP from the ISP (or the cloud server earlier). Owner to ask Zerodha.
+- **HLC FIB trades have no premium stop** (the stop is on the index, checked at candle closes), so nothing rests at Zerodha for them - if the laptop dies mid-trade, only Zerodha's MIS auto square-off (~15:20) closes it. Option: a backup SL order at entry − 50 (NIFTY) / − 100 (SENSEX), for a crash only. Not built - needs the owner's OK because it can exit earlier than the paper rule.
 - **CONFIRM trade filter:** on 01-10 it fired at 10:20 (−50) before the owner's Morning Star entry — Morning Star only, or another filter?
 - **New re-entry rules** (HLC BREAKOUT, Sniper buyer's-day continuation) have no dedicated unit tests yet — checked only by the 01-10 replay.
-
 - **Big-gap ATM rule:** threshold 100 or 150 points? (Proposed 28-09, not built.)
 - **Previous close source:** Zerodha official close (bot's current choice) or the owner's figure (e.g. 99.80 vs 100.10)?
-- **Daily max loss** at which the bot stops for the day (needed before real orders).
 - **Second-half last entry time:** 15:00 per rules, or 14:30?
 - **ATM reversal trade** (Morning Star / Bullish Engulfing / Bullish Harami on the ATM chart): dropped completely?
-- **Order mode for Phase 3:** fully automatic, or alert + manual confirm?
-- **Where the bot runs** (laptop vs cloud VPS) and SEBI algo/static-IP compliance with Zerodha.
 - **Implementation conventions 1–9** above: confirm, especially #1 (worse price when a candle touches both squares).
 - **HIGH-confidence tag as a filter?** After enough days in `history/`, compare HIGH vs normal trades and decide whether to trade only HIGH ones.
 - **Excel morning plan:** the old spec mentioned `sniper_phase1.py` (plan → Excel), not in this repo — still wanted?
@@ -225,6 +239,8 @@ CLAUDE.md, AGENTS.md     # pointers for AI tools to this file (keep word-for-wor
 README.md                # how to install and run
 SNIPER_SPEC.md           # stub pointing here (the rules moved into Core Decisions on 2026-09-29)
 start_bot.bat            # daily login, then 4 paper bots: Sniper NIFTY/SENSEX (:8050/:8051), HLC NIFTY/SENSEX (:8052/:8053)
+start_live.bat           # the same 4 bots with REAL orders (--real; needs LIVE_TRADING=YES in .env)
+stop_all.bat             # emergency stop for real money: writes STOP -> every bot sells and stops for the day
 .env.example             # credentials template -> copy to .env (gitignored)
 requirements.txt
 Bava Details for bot.docx  # an earlier write-up of the strategy - superseded by this file
@@ -242,9 +258,14 @@ src/
   hlc_dashboard.html     # HLC dashboard page
   sniper_backtester.py   # backtest on cached NIFTY candles with estimated premiums
   options_pricing.py     # Black-Scholes estimates, expiry helpers
-tests/                   # 58 tests: rules (§5), engine/backtest, live bot (fake Kite + fake clock)
+  live_money.py          # real money: split between the 4 bots (4/3/2/1 parts), lots, 50% max loss
+  live_account.py        # real money: shared day file - registration, 09:20 split, combined P&L, halt/STOP
+  broker.py              # real money: the only module that places/modifies/cancels Zerodha orders (MIS, LIMIT/SL)
+  live_executor.py       # real money: follows an engine with real orders, SL resting at Zerodha, restart-safe ledger
+tests/                   # 127 tests: rules (§5), engines/backtest, live bots (fake Kite + fake clock), real-money layer (fake broker)
 history/                 # permanent record, committed: days.csv, trades.csv, TRADE_HISTORY.md (all days, newest first)
   hlc/                   # HLC's own record: days.csv, trades.csv, HLC_HISTORY.md
+  live/                  # REAL trades: trades.csv (one row per real sell)
 data/
   historical/            # cached NIFTY daily + 5-minute candles (committed)
   backtest_results/      # backtest output (gitignored)

@@ -222,6 +222,52 @@ def test_full_day_watch_loop_with_fake_clock(monkeypatch, tmp_path):
     assert "catch-up" not in log
 
 
+def test_real_mode_gets_the_engine_orders_and_trade(monkeypatch, tmp_path):
+    """--real: after each candle batch the executor is told the buy levels the engine waits for (§2: 100 if it
+    comes back, 121 if it runs up), then the trade it holds with its stop and target (29-09 worked case)."""
+    clock = _Clock(datetime(2026, 9, 29, 9, 0))
+
+    class FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock.now
+
+    monkeypatch.setattr(sniper_live, "datetime", FakeDatetime)
+    monkeypatch.setattr(sniper_live, "time_module", type("T", (), {"sleep": staticmethod(clock.sleep)}))
+    monkeypatch.setattr(sniper_live, "OUT_DIR", tmp_path)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    row = _row()
+    quiet = dict(atm_ce=(90, 80, 85), atm_pe=(105, 95, 100), otm_ce=(50, 45, 47), otm_pe=(62, 55, 58))
+    script = {
+        "09:25": dict(atm_ce=(88, 80, 84), atm_pe=(105, 95, 100), otm_ce=(50, 45, 47), otm_pe=(104, 95, 101.9)),
+        "09:30": dict(atm_ce=(84, 70, 75), atm_pe=(105, 95, 100), otm_ce=(50, 45, 47), otm_pe=(115, 90.45, 110)),
+    }
+    contracts = sniper_live.plan_contracts(row, FakeKite_options())
+    token_key = {c["instrument_token"]: key for key, c in contracts.items()}
+
+    class LiveKite:
+        def historical_data(self, token, start, end, interval):
+            out, t = [], datetime(2026, 9, 29, 9, 15)
+            while t + timedelta(minutes=5) <= end and t.time() < sniper_live.time(15, 30):
+                out.append(_candle(t.strftime("%H:%M"), *script.get(t.strftime("%H:%M"), quiet)[token_key[token]]))
+                t += timedelta(minutes=5)
+            return out
+
+    engine = SniperDay(TODAY, row)
+    seen = {}
+    sniper_live.watch(LiveKite(), engine, contracts, sniper_live.Notifier(TODAY),
+                      on_batch=lambda through: seen.setdefault(through.strftime("%H:%M"), sniper_live.sniper_wants(engine, contracts)))
+
+    pe = "NIFTY26092923100PE"
+    want, triggers = seen["09:25"]
+    assert want is None
+    assert [(t.symbol, t.kind, t.level, t.stop, t.target) for t in triggers] == [
+        (pe, "limit", 100, 81, 144), (pe, "stop", 121, 100, 169)]
+    want, triggers = seen["09:30"]
+    assert (want.symbol, want.entry.strftime("%H:%M"), want.stop, want.target, want.late) == (pe, "09:30", 81, 144, False)
+    assert triggers == []
+
+
 def test_watch_survives_a_data_fetch_error(monkeypatch, tmp_path):
     """A Kite error on one poll must not end the day (29-09-2026: the bot stopped after 09:40)."""
     clock = _Clock(datetime(2026, 9, 29, 9, 0))

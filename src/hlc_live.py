@@ -28,6 +28,8 @@ from hlc_engine import HlcDay, HlcTrade
 from hlc_history import HLC_HISTORY_DIR, record_hlc_day
 from hlc_signal import HLC_MARKETS, Candle, HlcLevels, choose_atm, hlc_levels, leg_label
 from kite_auth import PROJECT_ROOT, connected_client
+from live_executor import Trigger, Want, confirm_real_mode, make_executor
+from live_money import lot_cost
 from sniper_live import (CANDLE_MINUTES, MARKET_OPEN, Notifier, OptionChain, _historical, _keep_dashboard_open,
                          _naive, _next_poll, _sleep_until, wait_for_closing_prices)
 from sniper_signal import MARKETS
@@ -211,10 +213,30 @@ def first_swing(kite, market_name: str, day: date) -> Optional[str]:
     return "CE" if low_at < high_at else "PE"
 
 
+def hlc_wants(engine: HlcDay, chain: OptionChain, started: datetime) -> tuple[Optional[Want], list[Trigger]]:
+    """--real: what the engine holds and the buy it is waiting for, for live_executor. HLC exits at candle
+    closes (levels, premium highs, index SL), so only a premium SL rests at Zerodha and no target is watched."""
+    def symbol(strike: float, side: str) -> Optional[str]:
+        contract = chain.by_key.get((float(strike), side))
+        return contract["tradingsymbol"] if contract else None
+
+    want = None
+    trade = engine.open_trade
+    if trade is not None and symbol(trade.strike, trade.side):
+        entry = datetime.fromisoformat(trade.entry_time)
+        want = Want(symbol(trade.strike, trade.side), entry, trade.sl_premium if trade.index_sl is None else None, None,
+                    late=entry + timedelta(minutes=CANDLE_MINUTES) < started)
+    triggers = []
+    order = engine.pending  # low premium: buy only above the confirmation candle's high, on the next candle
+    if order is not None and symbol(order["strike"], order["side"]):
+        triggers.append(Trigger(symbol(order["strike"], order["side"]), "stop", order["stop"], order["sl"], None))
+    return want, triggers
+
+
 # --- Live ---------------------------------------------------------------------
 
 
-def live(market_name: str, open_browser: bool) -> None:
+def live(market_name: str, open_browser: bool, real: bool = False) -> None:
     market = HLC_MARKETS[market_name]
     day = date.today()
     if day.weekday() >= 5:
@@ -226,7 +248,9 @@ def live(market_name: str, open_browser: bool) -> None:
     if open_browser:
         webbrowser.open(url)
     notify = Notifier(day, state, prefix=f"HLC_{market_name}_log")
-    notify.send(f"HLC bot started ({market_name}, {market.quantity} qty) - PAPER MODE, no real orders.", phone=False)
+    notify.send(f"HLC bot started ({market_name}, {market.quantity} qty)"
+                + (" - REAL MONEY MODE: real Zerodha orders, lots sized from the morning money." if real
+                   else " - PAPER MODE, no real orders."), phone=real)
 
     wait_for_closing_prices(market_name, state.set_status)
     state.set_status("Building the morning plan from yesterday's closing prices...")
@@ -251,6 +275,13 @@ def live(market_name: str, open_browser: bool) -> None:
             print(f"  (history update failed: {error})", flush=True)
 
     record("watching")
+    executor = None
+    if real:
+        options = MARKETS[market_name]
+        executor = make_executor(kite, f"HLC_{market_name}", options.options_exchange, options.lot_size,
+                                 options.max_lots, notify.send)
+        executor.account.register(executor.bot, lot_cost(max(ce["close"], pe["close"]), options.lot_size))
+        executor.start()
     processed: set[datetime] = set()
     started = datetime.now()
     session_start = datetime.combine(day, MARKET_OPEN)
@@ -281,12 +312,16 @@ def live(market_name: str, open_browser: bool) -> None:
                 except Exception as error:
                     notify.send(f"1-minute data fetch failed ({type(error).__name__}: {error}) - retrying.", phone=False)
             events = feed(engine, index_rows, premiums, processed, now, state, notify, late_before=started)
+            if executor and processed:
+                executor.sync(*hlc_wants(engine, chain, started), max(processed))
             state.set_engine(engine)
             if events:
                 record("watching")
             state.set_status(f"Last candle {max(processed):%H:%M} processed" if processed else "Waiting for 09:15 data")
     except KeyboardInterrupt:
         status = "stopped early (Ctrl+C)"
+    if executor:
+        executor.finish()
     open_trade = engine.open_trade
     if open_trade is not None and open_trade.exit_reason == "":
         notify.send(f"Bot stopped with an open {open_trade.side} {open_trade.strike:g} trade - no exit recorded", phone=False)
@@ -364,13 +399,19 @@ def main() -> None:
     parser.add_argument("--no-browser", action="store_true", help="don't open the dashboard automatically")
     parser.add_argument("--record", action="store_true", help="replay: write the result to history/hlc/")
     parser.add_argument("--dashboard", action="store_true", help="replay: show it on the HLC dashboard")
+    parser.add_argument("--real", action="store_true",
+                        help="REAL MONEY: place real Zerodha orders (also needs LIVE_TRADING=YES in .env)")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     load_dotenv(PROJECT_ROOT / ".env")
+    if args.real:
+        if args.replay:
+            raise SystemExit("--real can't be combined with --replay")
+        confirm_real_mode()
     if args.replay:
         replay(date.fromisoformat(args.replay), args.market, args.record, args.dashboard)
     else:
-        live(args.market, not args.no_browser)
+        live(args.market, not args.no_browser, args.real)
 
 
 if __name__ == "__main__":

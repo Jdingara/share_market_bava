@@ -54,6 +54,17 @@ It shows the morning plan, the 4 possible trades, premium charts with entry/SL/t
 
 `data\paper_trades\`: `plan_<date>.json`, `log_<date>.txt`, `trades_<date>.csv` (SENSEX files are prefixed `SENSEX_`, replays `replay_`).
 
+## REAL MONEY (from ~25 Oct 2026 - read this first)
+
+`start_live.bat` runs the same 4 bots with **real Zerodha orders**. Rules (owner, 2026-10-05) are in PROJECT_STATUS.md, "Real-money rules".
+
+1. Add `LIVE_TRADING=YES` to `.env` (without it `--real` refuses to start).
+2. Put the day's money in the Zerodha account before 09:20. At 09:20 the bots split it (Sniper SENSEX → Sniper NIFTY → HLC SENSEX → HLC NIFTY; 4, 3, 2 or 1 equal parts) and buy as many lots as each share allows (max NIFTY 5 lots / SENSEX 15 lots). Not enough for 1 lot → that bot says so and doesn't trade.
+3. Double-click **`start_live.bat`** before 09:15 and log in as usual.
+4. **Emergency stop:** double-click **`stop_all.bat`** - every bot sells what it holds and stops for the day. The same happens automatically when all bots together have lost 50% of the morning money.
+
+Every order is intraday (MIS), and the stop-loss sits at Zerodha as an SL order, so a position stays protected if the laptop sleeps. Real trades are recorded in `history\live\trades.csv` and sent to Telegram if configured. One bot by hand: `py src\sniper_live.py --market NIFTY --real` (same for `hlc_live.py`).
+
 ## HLC bot
 
 Second strategy (rules in PROJECT_STATUS.md, "HLC strategy"). `start_bot.bat` starts it with Sniper. Manually:

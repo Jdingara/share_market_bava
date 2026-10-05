@@ -42,6 +42,8 @@ from dashboard import DashboardState, start_dashboard
 from history import record_day
 
 from kite_auth import PROJECT_ROOT, connected_client
+from live_executor import Trigger, Want, confirm_real_mode, make_executor
+from live_money import lot_cost
 from sniper_engine import CONTRACT_KEYS, Bar, Event, SniperDay, TradeResult
 from sniper_signal import (
     CANDLE_MINUTES,
@@ -287,6 +289,28 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
             f"(bought {t.entry_fill:.2f}, P&L {t.pnl_points:+.2f} points = Rs {t.pnl_points * qty:+,.0f}){note}")
 
 
+def sniper_wants(engine: SniperDay, contracts: dict[str, dict]) -> tuple[Optional[Want], list[Trigger]]:
+    """--real: what the engine holds and the buys it is waiting for, for live_executor."""
+    def symbol(option_type: str) -> str:
+        return contracts["otm_ce" if option_type == "CE" else "otm_pe"]["tradingsymbol"]
+
+    def target(k: int) -> Optional[float]:  # §3: bought at k^2 -> target (k+2)^2
+        return float((k + 2) ** 2) if engine.keep_target else None
+
+    want = None
+    if engine.open_trades:
+        _, trade = engine.open_trades[-1]
+        want = Want(symbol(trade.buy_type), datetime.fromisoformat(trade.entry_time), trade.trail_stop,
+                    float(trade.target) if engine.keep_target else None, late=trade.note == "catch-up")
+    triggers = []
+    for pending in engine.pending:  # §2: buy at k^2 if it comes back, or at (k+1)^2 if it runs up
+        s, k = symbol(pending.setup.buy_type), pending.k
+        if pending.has_limit:
+            triggers.append(Trigger(s, "limit", k * k, (k - 1) ** 2, target(k)))
+        triggers.append(Trigger(s, "stop", (k + 1) ** 2, k * k, target(k + 1)))
+    return want, triggers
+
+
 def save_trades(trades: list[TradeResult], today: date, prefix: str = "trades") -> Optional[Path]:
     if not trades:
         return None
@@ -335,7 +359,9 @@ def _feed(engine: SniperDay, when: datetime, bars: dict[str, Bar], contracts: di
 
 def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
           state: Optional[DashboardState] = None, qty: int = MARKETS["NIFTY"].quantity,
-          recorder: Optional[Callable[[str], None]] = None) -> None:
+          recorder: Optional[Callable[[str], None]] = None,
+          on_batch: Optional[Callable[[datetime], None]] = None) -> None:
+    """`on_batch(last candle start)` runs after each batch of new candles (--real: live_executor.sync)."""
     today, row = engine.day, engine.row
     processed: set[datetime] = set()
     started = datetime.now()
@@ -373,6 +399,8 @@ def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
             _feed(engine, when, bars, contracts, notify, state, late, qty, recorder)
             if engine.done:
                 break
+        if new and on_batch:
+            on_batch(last_bars[0])
 
     if engine.open_trades and last_bars:
         for event in engine.finish(*last_bars):
@@ -418,11 +446,17 @@ def main() -> None:
     parser.add_argument("--speed", type=float, default=0.5, help="replay: seconds per candle (default 0.5)")
     parser.add_argument("--no-browser", action="store_true", help="don't open the dashboard automatically")
     parser.add_argument("--market", choices=sorted(MARKETS), default="NIFTY", help="index to trade (default NIFTY)")
+    parser.add_argument("--real", action="store_true",
+                        help="REAL MONEY: place real Zerodha orders (also needs LIVE_TRADING=YES in .env)")
     args = parser.parse_args()
     market = MARKETS[args.market]
     qty = market.quantity
 
     load_dotenv(PROJECT_ROOT / ".env")
+    if args.real:
+        if args.replay or args.plan_only:
+            raise SystemExit("--real can't be combined with --replay or --plan-only")
+        confirm_real_mode()
     day = date.fromisoformat(args.replay) if args.replay else date.today()
     if not args.replay and day.weekday() >= 5:
         raise SystemExit("Today is a weekend - no market. To see the bot work, replay a recent day:\n"
@@ -441,8 +475,9 @@ def main() -> None:
     prefix = ("replay_" if args.replay else "") + ("" if market.name == "NIFTY" else f"{market.name}_")
     notify = Notifier(day, state, prefix=f"{prefix}log", phone=not args.replay)
     notify.send(("REPLAY of " + day.isoformat() if args.replay else f"Sniper bot started ({market.name}, {qty} qty)")
-                + " - PAPER MODE, no real orders.",
-                phone=False)
+                + (" - REAL MONEY MODE: real Zerodha orders, lots sized from the morning money." if args.real
+                   else " - PAPER MODE, no real orders."),
+                phone=args.real)
 
     if not args.replay:
         wait_for_closing_prices(market.name, state.set_status)
@@ -488,15 +523,25 @@ def main() -> None:
         notify.send("Buyer's day (ATM CE / PE: one PROFIT BOOKING, one PANIC yesterday) - after a target the bot "
                     "re-enters when the premium closes above it.", phone=False)
     record("watching")
+    executor = None
+    if args.real:
+        executor = make_executor(kite, f"SNIPER_{market.name}", market.options_exchange, market.lot_size,
+                                 market.max_lots, notify.send)
+        entry_price = max(s.levels.entry for s in trade_setups(plan.final))
+        executor.account.register(executor.bot, lot_cost(entry_price, market.lot_size))
+        executor.start()
     status = "finished"
     try:
         if args.replay:
             replay(kite, engine, contracts, notify, state, args.speed, qty)
         else:
-            watch(kite, engine, contracts, notify, state, qty, record)
+            watch(kite, engine, contracts, notify, state, qty, record,
+                  on_batch=(lambda through: executor.sync(*sniper_wants(engine, contracts), through)) if executor else None)
     except KeyboardInterrupt:
         status = "stopped early (Ctrl+C)"
         notify.send("Stopped by user (Ctrl+C).", phone=False)
+    if executor:
+        executor.finish()
     record(status)
     path = save_trades(engine.trades, day, prefix=f"{prefix}trades")
     total = sum(t.pnl_points for t in engine.trades if t.exit_reason)
