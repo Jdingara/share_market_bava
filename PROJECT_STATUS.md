@@ -89,7 +89,7 @@ NIFTY close 23140.5 → nearest ATM 23100.
 
 `tests/test_sniper_signal.py` reproduces this exactly.
 
-### HLC strategy (second strategy — rules being collected, not built yet)
+### HLC strategy (second strategy — built and running live in paper mode; rules still being refined with the owner)
 
 Owner started it on 2026-09-29. NIFTY 50 and SENSEX only. Runs separately from Sniper (own dashboard/history), paper mode first. The owner's own sheet for 29-09 (data 28-09) is the test example.
 
@@ -138,7 +138,7 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 4. **"Falling" ATM** = below its yesterday close on the entry candle.
 5. A second-half trade **may open while a first-half trade is still running**.
 6. **Stop before target** if one candle's range crosses both. Stop/target fill at their level.
-7. **Shift oscillation** (PE fails at one ATM, CE at the next) is followed literally until the 3-shift limit → no plan.
+7. **Shift oscillation** (PE fails at one ATM, CE at the next) is followed literally until the 3-shift limit; then NIFTY moves one OTM out (owner, 01-10, see §1) and SENSEX widens the OTMs (§1).
 8. **Previous close** = Zerodha's official daily close for each contract.
 9. **"Falling ATM"** (below its yesterday close) is the only required ATM condition at the signal; ATM below Sniper only adds the HIGH-confidence tag (§2).
 
@@ -170,7 +170,7 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 | 3 | Real orders via Zerodha, owner's quantity, daily max-loss stop | ⏳ Not started — needs owner go-ahead, daily max loss, order mode, SEBI algo/static-IP compliance |
 | — | Backtest on real option data | ⏳ Blocked on a source of expired-option history |
 
-## Current Status (last updated: 2026-10-01)
+## Current Status (last updated: 2026-10-05)
 
 **What's built and verified.** The full Sniper rule set (§1–§4) runs in one engine (`sniper_engine.SniperDay`) shared by the backtester and the live paper bot. 56 tests pass, including §5 reproduced exactly, a fake-clock full trading day, and the 28-09 gap-day entry. The live bot logs in to Zerodha, builds the morning plan from real closes, polls real 5-minute option candles, and shows everything on a local dashboard (NIFTY :8050, SENSEX :8051) with ₹ P&L for the configured quantity.
 
@@ -199,7 +199,11 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 
 **2026-10-01 (SENSEX expiry).** Login via chat again; all 4 bots started at 09:00. Sniper SENSEX: ATM 72500, OTM ±200, Sniper 170.45. Sniper NIFTY first gave no plan (shifts flipped 22600 ↔ 22700). The owner OK'd a NIFTY fallback after failed shifts (keeps §5 the same): first both OTMs ±200 (restart 09:06, Sniper 63.33), then refined by the owner to **move only one OTM out — CE up or PE down, whichever gives 25** (restart 09:17 → ATM 22600, 22800 CE / 22500 PE, Sniper 76.03). HLC FIB trade: both live HLC bots bought PE at 09:30 (SENSEX −128.95, NIFTY −33.30); the owner said the SENSEX entry was wrong → FIB direction rule fixed in code (see HLC section), HLC bots restarted at 11:36, 11:43 and 12:03 onto the new rules (FIB 0.75 + swing direction, CONFIRM trade, PANIC premium targets). **Final day result (paper, before charges, from each bot's last restart with the day's rules — catch-up, not all live):** Sniper NIFTY 3 trades +71 = **+₹23,075**; Sniper SENSEX 2 trades +27 = **+₹8,100**; HLC SENSEX 4 trades +556.25 = **+₹1,66,875**; HLC NIFTY 4 trades +81.15 = **+₹26,374**. **Day +₹2,24,424.** What the bots actually did live under the morning rules: Sniper +₹14,300 / +₹18,000 (one trade each); HLC SENSEX PE −128.95 and HLC NIFTY PE −33.30 at 09:30 before the fixes. 100 tests pass. 96 tests pass.
 
+**2026-10-05 (Monday; 02-10 holiday).** Login via chat at 09:19; all 4 bots started 09:19 (plans from 01-10 closes). Sniper NIFTY: shifts flipped 22400 ↔ 22500 → the new one-OTM fallback gave ATM 22400, **22600 CE / 22300 PE**, Sniper 66.65. Sniper SENSEX: new weekly expiry 08-10, ATM 71900, OTM ±300, Sniper 435.10. HLC NIFTY ATM 22450, HLC SENSEX ATM 72100. Both legs PROFIT BOOKING in both markets → **not a buyer's day** (2-trade limit applies). First full live day of the 01-10 rules.
+
 ## Open Decisions
+- **CONFIRM trade filter:** on 01-10 it fired at 10:20 (−50) before the owner's Morning Star entry — Morning Star only, or another filter?
+- **New re-entry rules** (HLC BREAKOUT, Sniper buyer's-day continuation) have no dedicated unit tests yet — checked only by the 01-10 replay.
 
 - **Big-gap ATM rule:** threshold 100 or 150 points? (Proposed 28-09, not built.)
 - **Previous close source:** Zerodha official close (bot's current choice) or the owner's figure (e.g. 99.80 vs 100.10)?
@@ -210,7 +214,6 @@ Not yet explicitly confirmed by the owner — listed again in Open Decisions.
 - **Where the bot runs** (laptop vs cloud VPS) and SEBI algo/static-IP compliance with Zerodha.
 - **Implementation conventions 1–9** above: confirm, especially #1 (worse price when a candle touches both squares).
 - **HIGH-confidence tag as a filter?** After enough days in `history/`, compare HIGH vs normal trades and decide whether to trade only HIGH ones.
-- **SENSEX gap check** keeps failing with ±100 strikes: accept "no plan" days, or change something?
 - **Excel morning plan:** the old spec mentioned `sniper_phase1.py` (plan → Excel), not in this repo — still wanted?
 - **Real option data** for a meaningful backtest (Kite has none for expired contracts).
 
