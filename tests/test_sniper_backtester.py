@@ -91,15 +91,42 @@ def test_first_half_down_hits_target():
 
 
 def test_first_half_down_hits_stop():
-    # 09:45 high 23125 -> OTM PE worst 75 <= stop 81.
-    trades, _ = simulate_day(DAY, ROW, _day({"09:40": (23100, 23090, 23095), "09:45": (23125, 23100, 23110)}), _price)
+    # Owner, 06-10: SL on the close. 09:45 closes 23125 -> OTM PE 75 < stop 81 -> out at the close, 75.
+    trades, _ = simulate_day(DAY, ROW, _day({"09:40": (23100, 23090, 23095), "09:45": (23130, 23100, 23125)}), _price)
     [t] = trades
-    assert t.exit_reason == "STOPLOSS"
-    assert t.pnl_points == pytest.approx(81 - 105)
+    assert (t.exit_reason, t.exit_premium, t.exit_time[11:16]) == ("STOPLOSS", 75, "09:45")
+    assert t.pnl_points == pytest.approx(75 - 105)
 
 
-def test_stop_wins_when_both_cross_in_one_candle():
-    trades, _ = simulate_day(DAY, ROW, _day({"09:40": (23100, 23090, 23095), "09:45": (23125, 23050, 23100)}), _price)
+def test_wick_below_the_stop_does_not_count():
+    # 06-10 SENSEX: a wick 0.35 under the SL, close well above. 09:45 PE low 75 < 81 but closes 90 -> still open.
+    trades, _ = simulate_day(DAY, ROW, _day({"09:40": (23100, 23090, 23095), "09:45": (23125, 23100, 23110)},
+                                            fill=(23110, 23100, 23105)), _price)
+    [t] = trades
+    assert t.exit_reason == "TIME_EXIT_1500"
+
+
+def test_first_sl_exits_at_the_close_however_far_below():
+    # Owner, 06-10: "SL 441, close 420 -> accepted". SL 81, 09:45 closes 23145 -> PE 55 -> out at 55, not 81.
+    trades, _ = simulate_day(DAY, ROW, _day({"09:40": (23100, 23090, 23095), "09:45": (23150, 23100, 23145)}), _price)
+    assert (trades[0].exit_reason, trades[0].exit_premium) == ("STOPLOSS", 55)
+
+
+def test_wick_rule_kept_for_comparison():
+    trades, _ = simulate_day(DAY, ROW, _day({"09:40": (23100, 23090, 23095), "09:45": (23125, 23100, 23110)}), _price,
+                             sl_on_close=False)
+    assert (trades[0].exit_reason, trades[0].exit_premium) == ("STOPLOSS", 81)
+
+
+def test_target_wins_when_both_cross_in_one_candle():
+    # The target is touched during the candle; the SL only counts at its close, which comes last.
+    trades, _ = simulate_day(DAY, ROW, _day({"09:40": (23100, 23090, 23095), "09:45": (23125, 23050, 23125)}), _price)
+    assert (trades[0].exit_reason, trades[0].exit_premium) == ("TARGET", 144)
+
+
+def test_stop_wins_when_both_cross_in_one_candle_with_the_wick_rule():
+    trades, _ = simulate_day(DAY, ROW, _day({"09:40": (23100, 23090, 23095), "09:45": (23125, 23050, 23100)}), _price,
+                             sl_on_close=False)
     assert trades[0].exit_reason == "STOPLOSS"
 
 
@@ -230,7 +257,7 @@ ENTRY = {"09:40": (23100, 23090, 23095)}
 def test_trailing_moves_stop_to_entry_then_exits_there():
     candles = _day({**ENTRY,
                     "09:45": (23080, 23070, 23075),  # PE 120-130, closes 125 > 121 -> SL 100
-                    "09:50": (23105, 23090, 23100)})  # PE low 95 <= 100 -> trailing stop hit
+                    "09:50": (23105, 23090, 23100)})  # PE low 95 <= 100 -> trailing stop hit (a TSL exits on a touch)
     [t] = simulate_day(DAY, ROW, candles, _price)[0]
     assert (t.exit_reason, t.exit_premium, t.trail_stop) == ("TRAIL_STOP", 100, 100)
     assert t.pnl_points == pytest.approx(-5)  # bought 105, out at 100 - instead of the 81 stop

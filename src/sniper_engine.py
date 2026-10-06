@@ -23,7 +23,7 @@ PROJECT_STATUS.md's Open Decisions until the owner confirms them):
         there if it runs up first), with SL/target from the square bought. If one candle touches both and its open doesn't say which came
     first, the worse price (N) is assumed. The order is cancelled if the
     half's window ends first. On the fill candle a low at/below the SL counts
-    as stopped out (conservative); the target is only checked from the next
+    as stopped out (with SL on the close: a close below the SL); the target is only checked from the next
     candle. With fill_at_square=False the old behaviour applies: bought at
     the signal candle's close.
   - With require_cross (the default), the OTM must close above a square
@@ -38,9 +38,16 @@ PROJECT_STATUS.md's Open Decisions until the owner confirms them):
   - No new entry on the candle closing at 15:00: it would be exited instantly.
   - Sideways (all 4 strikes below yesterday close) is checked on each candle
     before any entry - a whole-day check would need to know the future.
-  - Stop/target are checked against each bar's high/low from the candle after
-    entry. If both are crossed within one candle, the stop is assumed to have
-    hit first. Stop/target fill at their level.
+  - Target is checked against each bar's high from the candle after entry and
+    fills at its level.
+  - First SL on the CLOSE (owner decision 2026-10-06): the trade's first stop
+    (SL (k-1)^2, also the body entry's fixed SL) is hit only when a candle
+    CLOSES below it - a wick through it doesn't count - and the trade exits at
+    that candle's close, however far below (SL 441, close 420 -> out at 420).
+    A candle that touches the target exits at the target first (the close comes
+    last). A RAISED (trailing) stop keeps the wick rule: low at/below it exits
+    at the stop, checked before the target. With sl_on_close=False the wick
+    rule applies to the first SL too.
   - Trailing SL (owner decision 2026-09-28): each time the bought option's
     candle closes above a square k^2 (k > n), the stop moves up to (k-1)^2 -
     one square behind - and never moves down. Entry 100 (10^2): close above
@@ -48,6 +55,18 @@ PROJECT_STATUS.md's Open Decisions until the owner confirms them):
     entry candle's own close; a raised stop that is hit exits as TRAIL_STOP.
     Whether the fixed (n+2)^2 target stays alongside it is still open
     (keep_target).
+  - First-half ATM-close trigger (owner decision 2026-10-06), alongside the
+    normal first-half trigger - whichever signals first: once the falling ATM
+    is below the Sniper, the OTM being bought only has to close above the
+    SAME-side ATM's yesterday close (buying the OTM CE -> ATM CE close); entry
+    at the square above it, SL/target as usual. While the index is below its
+    yesterday close, the OTM only has to be NEAR that close (within
+    near_points: NIFTY 20, SENSEX 30) -> buy stop at the square above it.
+    06-10 SENSEX (ATM 72400, 72500 CE, Sniper 404.70): ATM PE below Sniper,
+    72500 CE closed 417.20 at 09:30, 11.60 under the ATM CE close 428.80, index
+    below 72382.47 -> bought 441 at 09:30, SL 400, target 529 hit 09:55.
+    Needs the index: bars["index"] plus index_close; without them only the
+    "close above" form applies.
   - Anything still open is exited at the close of the candle ending 15:00.
   - Up to one trade per half; a second-half trade may open while a first-half
     trade is still running.
@@ -68,6 +87,7 @@ from sniper_signal import (
     candle_close_time,
     entry_window_for,
     is_sideways,
+    square_levels,
     previous_closes,
     trade_setups,
 )
@@ -76,6 +96,7 @@ CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
 TRAILING_SL = True
 KEEP_FIXED_TARGET = True
 FILL_AT_SQUARE = True
+SL_ON_CLOSE = True
 
 
 @dataclass(frozen=True)
@@ -123,6 +144,8 @@ class Event:
     when: Optional[datetime] = None
     atm_below_sniper: bool = False
     body_entry: bool = False  # ORDER from the Sniper body entry (limit at `square` only, fixed SL)
+    atm_close_trigger: float = 0.0  # ORDER from the first-half ATM-close trigger (owner, 06-10): that ATM close
+    near: bool = False  # ... signalled while the OTM was only near it (index below yesterday's close)
 
 
 @dataclass
@@ -133,6 +156,8 @@ class _Pending:
     has_limit: bool = True
     atm_below_sniper: bool = False
     limit_only: bool = False  # Sniper body entry (owner, 05-10): buy at k^2 only, never chase the next square
+    atm_close_trigger: float = 0.0  # first-half ATM-close trigger (owner, 06-10) - becomes the trade's trigger
+    near: bool = False
 
 
 def _otm_key(option_type: OptionType) -> str:
@@ -161,6 +186,9 @@ class SniperDay:
         trailing: bool = TRAILING_SL,
         keep_target: bool = KEEP_FIXED_TARGET,
         fill_at_square: bool = FILL_AT_SQUARE,
+        sl_on_close: bool = SL_ON_CLOSE,
+        index_close: Optional[float] = None,
+        near_points: float = 0,
     ):
         self.day = day
         self.row = row
@@ -168,6 +196,9 @@ class SniperDay:
         self.trailing = trailing
         self.keep_target = keep_target
         self.fill_at_square = fill_at_square
+        self.sl_on_close = sl_on_close
+        self.index_close = index_close  # yesterday's index close, for the ATM-close trigger's "near" form
+        self.near_points = near_points
         self.pending: list[_Pending] = []
         self.setups = trade_setups(row)
         self.prev = previous_closes(row)
@@ -190,6 +221,14 @@ class SniperDay:
         trade.pnl_pct = round((premium - trade.entry_fill) / trade.entry_fill * 100, 2)
         return Event("EXIT", trade)
 
+    def _stop_hit(self, bar: Bar, stop: float, trailed: bool) -> Optional[float]:
+        """The exit price if this candle hits `stop`, else None. Owner, 2026-10-06: for the FIRST SL only a
+        candle CLOSING below it counts (exit at that close); 06-10 SENSEX 72600 CE @ 484, SL 441: the 10:55
+        low 440.65 was only a wick, the candle closed 460.85. A trailed stop still exits on a touch."""
+        if self.sl_on_close and not trailed:
+            return bar.close if bar.close < stop else None
+        return stop if bar.low <= stop else None
+
     def on_candle(self, when: datetime, bars: dict[str, Bar]) -> list[Event]:
         """Feed one completed 5-minute candle (`when` = its start time) with a
         Bar for each of CONTRACT_KEYS. Candles must arrive in time order."""
@@ -206,10 +245,15 @@ class SniperDay:
 
         for setup, trade in list(self.open_trades):
             bar = bars[_otm_key(setup.buy_type)]
-            if bar.low <= trade.trail_stop:
+            trailed = trade.trail_stop > trade.stop_loss
+            stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
+            target_hit = self.keep_target and bar.high >= trade.target
+            if target_hit and self.sl_on_close and not trailed:  # the target is touched before the candle's close
+                events.append(self._close(trade, when, trade.target, "TARGET"))
+            elif stop_exit is not None:
                 reason = "TRAIL_STOP" if trade.trail_stop > trade.stop_loss else "STOPLOSS"
-                events.append(self._close(trade, when, trade.trail_stop, reason))
-            elif self.keep_target and bar.high >= trade.target:
+                events.append(self._close(trade, when, stop_exit, reason))
+            elif target_hit:
                 events.append(self._close(trade, when, trade.target, "TARGET"))
             elif closes_at_exit:
                 events.append(self._close(trade, when, bar.close, "TIME_EXIT_1500"))
@@ -234,7 +278,8 @@ class SniperDay:
             else:
                 k, price = fill
                 events += self._open(pending.setup, k, when, price, bars[_otm_key(pending.setup.buy_type)], True,
-                                     pending.atm_below_sniper, fixed_sl=pending.limit_only)
+                                     pending.atm_below_sniper, fixed_sl=pending.limit_only,
+                                     trigger=pending.atm_close_trigger or None)
 
         if closes_at_exit:
             self.done = True
@@ -275,7 +320,13 @@ class SniperDay:
             confident = current[falling_key] < self.row.sniper
             if self.fill_at_square:
                 if buy_close <= setup.levels.trigger:
-                    continue
+                    pending = self._atm_close_signal(setup, buy_close, confident, bars) if half == "first" else None
+                    if pending is None:
+                        continue
+                    self.halves_used.add(half)
+                    self.pending.append(pending)
+                    events.append(self._order_event("ORDER", pending, when))
+                    break
                 if k < setup.levels.n:  # between the trigger and the plan square: wait for it to rise to n^2
                     pending = _Pending(setup, setup.levels.n - 1, buy_close, has_limit=False, atm_below_sniper=confident)
                 else:
@@ -293,6 +344,26 @@ class SniperDay:
             break
 
         return events
+
+    def _atm_close_signal(self, setup: TradeSetup, buy_close: float, atm_below_sniper: bool,
+                          bars: dict[str, Bar]) -> Optional[_Pending]:
+        """Owner, 2026-10-06: first half, falling ATM below the Sniper -> the OTM closing above the same-side ATM's
+        yesterday close (or, with the index below its yesterday close, within near_points of it) is a signal."""
+        if not atm_below_sniper:
+            return None
+        atm_close = self.prev["atm_ce" if setup.buy_type == "CE" else "atm_pe"]
+        n = square_levels(atm_close).n
+        if buy_close > atm_close:
+            k = highest_square_below(buy_close)
+            if k < n:
+                return _Pending(setup, n - 1, buy_close, has_limit=False, atm_below_sniper=True, atm_close_trigger=atm_close)
+            return _Pending(setup, k, buy_close, atm_below_sniper=True, atm_close_trigger=atm_close)
+        index = bars.get("index")
+        if (index is not None and self.index_close is not None and index.close < self.index_close
+                and atm_close - buy_close <= self.near_points):
+            return _Pending(setup, n - 1, buy_close, has_limit=False, atm_below_sniper=True,
+                            atm_close_trigger=atm_close, near=True)
+        return None
 
     def _sniper_body_entry(self, half: str, bars: dict[str, Bar], when: datetime) -> Optional[Event]:
         """Owner, 2026-10-05: an ATM leg's candle BODY crosses above the Sniper (opens below, closes above) ->
@@ -328,7 +399,8 @@ class SniperDay:
     def _order_event(kind: str, pending: _Pending, when: datetime) -> Event:
         return Event(kind, setup=pending.setup, square=pending.k ** 2 if pending.has_limit else 0,
                      next_square=(pending.k + 1) ** 2, signal_close=pending.signal_close, when=when,
-                     atm_below_sniper=pending.atm_below_sniper, body_entry=pending.limit_only)
+                     atm_below_sniper=pending.atm_below_sniper, body_entry=pending.limit_only,
+                     atm_close_trigger=pending.atm_close_trigger, near=pending.near)
 
     @staticmethod
     def _pending_fill(pending: _Pending, bar: Bar) -> Optional[tuple[int, float]]:
@@ -349,14 +421,14 @@ class SniperDay:
         return None
 
     def _open(self, setup: TradeSetup, k: int, when: datetime, price: float, bar: Bar, fill_candle: bool,
-              atm_below_sniper: bool = False, fixed_sl: bool = False) -> list[Event]:
+              atm_below_sniper: bool = False, fixed_sl: bool = False, trigger: Optional[float] = None) -> list[Event]:
         trade = TradeResult(
             date=self.day.isoformat(),
             half=setup.half,
             direction=setup.direction,
             buy_strike=setup.buy_strike,
             buy_type=setup.buy_type,
-            trigger=round(setup.levels.trigger, 2),
+            trigger=round(trigger or setup.levels.trigger, 2),
             entry_square=k * k,
             stop_loss=(k - 1) ** 2,
             target=(k + 2) ** 2,
@@ -367,8 +439,9 @@ class SniperDay:
         )
         self.trades.append(trade)
         events = [Event("ENTRY", trade, body_entry=fixed_sl)]
-        if fill_candle and bar.low <= trade.stop_loss:  # filled and stopped in the same candle (conservative)
-            events.append(self._close(trade, when, trade.stop_loss, "STOPLOSS"))
+        stop_exit = self._stop_hit(bar, trade.stop_loss, False) if fill_candle else None
+        if stop_exit is not None:  # filled and stopped in the same candle
+            events.append(self._close(trade, when, stop_exit, "STOPLOSS"))
             return events
         if fixed_sl:
             self.fixed_sl.add(id(trade))

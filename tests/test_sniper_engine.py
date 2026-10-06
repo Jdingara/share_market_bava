@@ -94,10 +94,17 @@ def test_touches_both_with_unknown_order_assumes_the_worse_price():
 
 
 def test_filled_and_stopped_in_the_same_candle():
+    # Owner, 06-10: SL on the close - the fill candle closes 80 < SL 81 -> out at the close.
     engine, events = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (102, 78, 80, 101))])
     [t] = engine.trades
     assert [e.kind for e in events] == ["ORDER", "ENTRY", "EXIT"]
-    assert (t.entry_fill, t.exit_reason, t.exit_premium) == (100, "STOPLOSS", 81)
+    assert (t.entry_fill, t.exit_reason, t.exit_premium) == (100, "STOPLOSS", 80)
+
+
+def test_fill_candle_wick_below_the_stop_stays_open():
+    engine, events = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (102, 78, 85, 101))])
+    assert [e.kind for e in events] == ["ORDER", "ENTRY"]
+    assert engine.open_trades
 
 
 def test_order_cancelled_when_the_window_ends_unfilled():
@@ -162,3 +169,67 @@ def test_sniper_body_entry_05_10_nifty():
     events = day.on_candle(at("12:00"), {"atm_ce": Bar(89.3, 75.55, 87.9, 83.75), "atm_pe": Bar(131.9, 106.5, 109.1, 118.25),
                                          "otm_ce": ce, "otm_pe": Bar(84.55, 65.95, 67.7, 74.85)})
     assert events[0].trade.exit_reason == "TARGET" and events[0].trade.pnl_points == 32
+
+
+# --- First-half ATM-close trigger (owner, 2026-10-06) ---------------------------------------------------------
+# 06-10 SENSEX, owner's +-100 plan: ATM 72400 CE 428.80 / PE 477.15, OTM 72500 CE 377.40 / 72300 PE 432.00,
+# Sniper 404.70, index close 72382.47. Normal first-half "up" trigger = ATM PE close 477.15 -> 484.
+SENSEX_PREMIUMS = {(72400, "CE"): 428.80, (72400, "PE"): 477.15, (72500, "CE"): 377.40, (72300, "PE"): 432.00}
+SENSEX_ROW = build_daily_plan(72382.47, MARKETS["SENSEX"], lambda k, t: SENSEX_PREMIUMS.get((k, t), 1.0)).attempts[0]
+
+
+def _sensex_bars(otm_ce, atm_pe_close=347.9, index_close=72300):
+    """ATM PE below the Sniper (347.9 < 404.70), ATM CE up, OTM PE down; the bought 72500 CE as given (H, L, C, O)."""
+    return {"atm_ce": Bar(480, 480, 480, 480), "atm_pe": Bar(atm_pe_close, atm_pe_close, atm_pe_close, atm_pe_close),
+            "otm_ce": Bar(*otm_ce), "otm_pe": Bar(300, 300, 300, 300),
+            "index": Bar(index_close, index_close, index_close, index_close)}
+
+
+def _run_sensex(candles, **bar_options):
+    engine = SniperDay(date(2026, 10, 6), SENSEX_ROW, index_close=72382.47, near_points=30)
+    events = []
+    for hhmm, ce in candles:
+        events += engine.on_candle(_at(hhmm), _sensex_bars(ce, **bar_options))
+    return engine, events
+
+
+def test_06_10_sensex_72500ce_near_the_atm_ce_close_with_the_index_below():
+    """Real 72500 CE candles: 09:25 closes 417.20 (11.60 under 428.80), index below 72382.47 -> buy stop 441;
+    09:30 high 458 -> bought 441 (low 408.9 stays above SL 400); 09:55 high 559.5 -> target 529."""
+    engine, events = _run_sensex([
+        ("09:25", (431.4, 410.6, 417.2, 424.05)),
+        ("09:30", (458.0, 408.9, 448.0, 417.2)),
+        ("09:35", (467.65, 433.15, 464.5, 448.0)),
+        ("09:55", (559.5, 511.1, 530.85, 511.1)),
+    ])
+    assert [e.kind for e in events] == ["ORDER", "ENTRY", "EXIT"]
+    assert (events[0].atm_close_trigger, events[0].near, events[0].next_square) == (428.80, True, 441)
+    [t] = engine.trades
+    assert (t.entry_time[11:16], t.entry_fill, t.stop_loss, t.target, t.trigger) == ("09:30", 441, 400, 529, 428.80)
+    assert (t.exit_reason, t.exit_premium, t.pnl_points) == ("TARGET", 529, 88)
+
+
+def test_near_needs_the_index_below_yesterdays_close():
+    engine, events = _run_sensex([("09:25", (431.4, 410.6, 417.2, 424.05))], index_close=72450)
+    assert events == []
+
+
+def test_near_is_within_30_points_for_sensex():
+    engine, events = _run_sensex([("09:25", (400, 390, 398.0, 395))])  # 30.80 under 428.80
+    assert events == []
+
+
+def test_close_above_the_atm_close_signals_without_the_index():
+    engine, events = _run_sensex([("09:25", (435, 420, 432.0, 425))], index_close=72450)
+    assert [e.kind for e in events] == ["ORDER"]
+    assert (events[0].atm_close_trigger, events[0].near, events[0].next_square) == (428.80, False, 441)
+
+
+def test_atm_close_trigger_needs_the_falling_atm_below_the_sniper():
+    engine, events = _run_sensex([("09:25", (435, 420, 432.0, 425))], atm_pe_close=420)  # 420 > Sniper 404.70
+    assert events == []
+
+
+def test_atm_close_trigger_is_first_half_only():
+    engine, events = _run_sensex([("12:10", (435, 420, 432.0, 425))])
+    assert all(e.atm_close_trigger == 0 for e in events)

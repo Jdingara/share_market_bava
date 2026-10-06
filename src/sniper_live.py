@@ -187,6 +187,8 @@ def completed_bars(
     a contract had no trades in some candle, its last close carries forward
     (yesterday's close if it has not traded yet today)."""
     by_key = {key: {_naive(c["date"]): c for c in candles.get(key, [])} for key in CONTRACT_KEYS}
+    by_index = {_naive(c["date"]): c for c in candles.get("index", [])}
+    last_index: Optional[Bar] = None
     closed_times = sorted(
         t for times in by_key.values() for t in times if t + timedelta(minutes=CANDLE_MINUTES) <= now
     )
@@ -207,6 +209,12 @@ def completed_bars(
                 bars[key] = Bar(float(candle["high"]), float(candle["low"]), float(candle["close"]),
                                float(candle["open"]) if candle.get("open") is not None else None)
                 last_close[key] = bars[key].close
+        index = by_index.get(when)
+        if index is not None:  # the index feeds the first-half ATM-close trigger's "near" form (owner, 06-10)
+            last_index = Bar(float(index["high"]), float(index["low"]), float(index["close"]),
+                             float(index["open"]) if index.get("open") is not None else None)
+        if last_index is not None:
+            bars["index"] = last_index
         if when not in processed:
             result.append((when, bars))
     return result
@@ -267,7 +275,14 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
     note = "  (catch-up: this candle closed before the bot started)" if late else ""
     if event.kind in ("ORDER", "CANCEL"):
         symbol = contracts["otm_ce" if event.setup.buy_type == "CE" else "otm_pe"]["tradingsymbol"]
-        trigger = event.setup.levels.trigger
+        trigger = event.atm_close_trigger or event.setup.levels.trigger
+        if event.kind == "ORDER" and event.atm_close_trigger:
+            how = (f"within {event.atm_close_trigger - event.signal_close:.2f} of" if event.near else "above")
+            return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} ({how} the ATM "
+                    f"{event.setup.buy_type} close {trigger:.2f}; ATM {event.setup.falling_type} below Sniper"
+                    f"{', index below yesterday' if event.near else ''}) - WOULD BUY {qty} at "
+                    + (f"{event.square} if it comes back, or at {event.next_square} if it runs up" if event.square
+                       else f"{event.next_square} when it rises there") + note)
         note = (" - HIGH confidence: ATM already below Sniper" if event.atm_below_sniper else "") + note
         if event.kind == "ORDER" and event.body_entry:
             return (f"SIGNAL {symbol}: ATM {event.setup.buy_type} candle {event.when:%H:%M} body closed above the Sniper - "
@@ -339,7 +354,7 @@ def _feed(engine: SniperDay, when: datetime, bars: dict[str, Bar], contracts: di
 
 def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
           state: Optional[DashboardState] = None, qty: int = MARKETS["NIFTY"].quantity,
-          recorder: Optional[Callable[[str], None]] = None) -> None:
+          recorder: Optional[Callable[[str], None]] = None, index_token: Optional[int] = None) -> None:
     today, row = engine.day, engine.row
     processed: set[datetime] = set()
     started = datetime.now()
@@ -361,6 +376,8 @@ def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
                 key: _historical(kite, c["instrument_token"], session_start, now, f"{CANDLE_MINUTES}minute")
                 for key, c in contracts.items()
             }
+            if index_token is not None:
+                candles["index"] = _historical(kite, index_token, session_start, now, f"{CANDLE_MINUTES}minute")
         except Exception as error:  # network hiccup / Kite error: never let it end the day - retry next candle
             notify.send(f"Zerodha data fetch failed ({type(error).__name__}: {error}) - retrying at the next candle.",
                         phone=False)
@@ -384,7 +401,7 @@ def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
 
 
 def replay(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier, state: DashboardState,
-           seconds_per_candle: float, qty: int = MARKETS["NIFTY"].quantity) -> None:
+           seconds_per_candle: float, qty: int = MARKETS["NIFTY"].quantity, index_token: Optional[int] = None) -> None:
     """Re-runs a past day on its real 5-minute option candles, paced so the
     dashboard can be watched filling in."""
     day = engine.day
@@ -392,6 +409,8 @@ def replay(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier
     candles = {
         key: _historical(kite, c["instrument_token"], start, end, f"{CANDLE_MINUTES}minute") for key, c in contracts.items()
     }
+    if index_token is not None:
+        candles["index"] = _historical(kite, index_token, start, end, f"{CANDLE_MINUTES}minute")
     bars_list = completed_bars(candles, set(), end + timedelta(minutes=CANDLE_MINUTES), engine.row)
     if not bars_list:
         notify.send(f"No option candles for {day} - not a trading day, or the contracts are no longer listed.")
@@ -483,7 +502,7 @@ def main() -> None:
         return
 
     notify.send("Watching " + ", ".join(c["tradingsymbol"] for c in contracts.values()) + " until 15:00.", phone=False)
-    engine = SniperDay(day, plan.final)
+    engine = SniperDay(day, plan.final, index_close=plan.index_close, near_points=market.near_atm_close)
     try:
         engine.buyers_day = is_buyers_day(kite, contracts, day)
     except Exception as error:
@@ -495,9 +514,9 @@ def main() -> None:
     status = "finished"
     try:
         if args.replay:
-            replay(kite, engine, contracts, notify, state, args.speed, qty)
+            replay(kite, engine, contracts, notify, state, args.speed, qty, market.index_token)
         else:
-            watch(kite, engine, contracts, notify, state, qty, record)
+            watch(kite, engine, contracts, notify, state, qty, record, market.index_token)
     except KeyboardInterrupt:
         status = "stopped early (Ctrl+C)"
         notify.send("Stopped by user (Ctrl+C).", phone=False)

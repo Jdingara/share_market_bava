@@ -45,6 +45,7 @@ class MarketConfig:
     max_otm_steps: int = 5  # widen_otm: try OTM = ATM +- 1..5 strike steps
     relaxed_min_gap: Optional[float] = None  # owner, 2026-10-05: if the plan fails at min_gap, try again at this
     widen_otm_fallback: bool = False  # NIFTY (owner, 2026-10-01): if the ATM shifts still fail, move one OTM out
+    near_atm_close: float = 0  # owner, 2026-10-06: first-half ATM-close trigger - "near" = within this many points
 
     @property
     def quantity(self) -> int:
@@ -54,10 +55,10 @@ class MarketConfig:
 MARKETS = {
     "NIFTY": MarketConfig(name="NIFTY", strike_step=100, min_gap=25, expiry_weekday=1, lot_size=65, max_lots=5,
                           index_token=256265, options_exchange="NFO", widen_otm_fallback=False,  # owner 05-10: dropped
-                          relaxed_min_gap=20),  # NSE, Tuesday expiry, 325 qty
+                          relaxed_min_gap=20, near_atm_close=20),  # NSE, Tuesday expiry, 325 qty
     "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=40, expiry_weekday=3, lot_size=20, max_lots=15,
                            index_token=265, options_exchange="BFO", widen_otm=True,
-                           relaxed_min_gap=32),  # BSE, Thursday expiry, 300 qty
+                           relaxed_min_gap=32, near_atm_close=30),  # BSE, Thursday expiry, 300 qty
 }
 
 MAX_SHIFTS = 3
