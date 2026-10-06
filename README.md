@@ -29,13 +29,15 @@ py src\sniper_live.py --market NIFTY
 py src\sniper_live.py --market SENSEX      (in a second window)
 ```
 
+Some days have **no Sniper plan** (the gap check fails even at the relaxed gap) — that's intended: the bot only trades the owner's setups. The window says "NO PLAN TODAY" and keeps the dashboard open.
+
 ### `sniper_live.py` options
 
 | Flag | Meaning |
 |---|---|
 | `--market NIFTY` / `--market SENSEX` | Which index (default NIFTY) |
 | `--plan-only` | Show today's morning plan, don't watch the market |
-| `--replay YYYY-MM-DD` | Re-run a recent day on its real candles (contracts must still be listed — about the current and previous expiry week) |
+| `--replay YYYY-MM-DD` | Re-run a recent day on its real candles (contracts must still be listed; once a day's weekly expiry has passed the replay uses the current expiry's contracts, so old SENSEX replays aren't reliable) |
 | `--speed N` | Replay speed, seconds per candle (default 0.5) |
 | `--no-browser` | Don't open the dashboard automatically |
 
