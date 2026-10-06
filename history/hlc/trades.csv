@@ -13,3 +13,6 @@ date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_t
 2026-10-01,SENSEX,BREAKOUT,PE,72500,index closed beyond S2 71988.4,300,12:40,573.25,523.25,50 points,12:50,807.05,TARGET S3 71709.4,233.8,70140
 2026-10-05,NIFTY,REVERSAL,PE,22450,"index Hanging Man at R1, PE Inverted Hammer",325,09:35,41.55,16.55,25 points,12:00,86.6,TARGET Close 22422,45.05,14641
 2026-10-05,SENSEX,REVERSAL,PE,72100,"index Bearish Harami at R1, PE Bullish Harami",300,09:50,259.5,209.5,50 points,12:00,471.85,TARGET Close 71909.7,212.35,63705
+2026-10-06,NIFTY,FIB,CE,22550,first candle 0.75 at 22611.47,325,09:30,99.9,0.0,index below first low 22561.6,10:05,107,closed back across R1 22632.6,7.1,2308
+2026-10-06,NIFTY,REVERSAL,PE,22550,"index Spinning Top at R2, PE Bullish Harami",325,13:20,6.15,5.35,2-candle low,13:35,5.35,SL (2-candle low),-0.8,-260
+2026-10-06,SENSEX,FIB,CE,72300,first candle 0.75 at 72541.87,300,09:30,569.1,0.0,index below first low 72384.8,12:10,697.05,closed back across R1 72779.9,127.95,38385

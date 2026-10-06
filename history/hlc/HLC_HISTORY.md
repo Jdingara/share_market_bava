@@ -2,12 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 14 trade(s), +812.40 points, ₹+246,963**
+**All days: 17 trade(s), +946.65 points, ₹+287,396**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
-| 2026-10-06 | SENSEX | 72300 | PROFIT BOOKING / PROFIT BOOKING | no | 0 | +0.00 | ₹+0 | watching |
-| 2026-10-06 | NIFTY | 22550 | PROFIT BOOKING / PROFIT BOOKING | no | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-06 | SENSEX | 72300 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +127.95 | ₹+38,385 | finished |
+| 2026-10-06 | NIFTY | 22550 | PROFIT BOOKING / PROFIT BOOKING | no | 2 | +6.30 | ₹+2,048 | finished |
 | 2026-10-05 | SENSEX | 72100 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +212.35 | ₹+63,705 | finished |
 | 2026-10-05 | NIFTY | 22450 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +45.05 | ₹+14,641 | watching |
 | 2026-10-01 | SENSEX | 72500 | PROFIT BOOKING / PANIC | yes | 4 | +556.25 | ₹+166,875 | finished |
@@ -19,17 +19,24 @@
 
 ## 2026-10-06 (Tue)
 
-### NIFTY — watching (last update 2026-10-06 08:33)
+### NIFTY — finished (last update 2026-10-06 15:21)
 
 - Close 22555.75, ATM 22550. R3 22794.55 · R2 22711.95 · R1 22632.6 · S1 22470.65 · S2 22388.05 · S3 22308.7.
 - CE PROFIT BOOKING, PE PROFIT BOOKING.
-- No trade.
 
-### SENSEX — watching (last update 2026-10-06 08:33)
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| FIB | 325 × 22550 CE | first candle 0.75 at 22611.47 | 09:30 | 99.9 | 0.0 (index below first low 22561.6) | 107 (10:05) | closed back across R1 22632.6 | +7.10 | ₹+2,308 |
+| REVERSAL | 325 × 22550 PE | index Spinning Top at R2, PE Bullish Harami | 13:20 | 6.15 | 5.35 (2-candle low) | 5.35 (13:35) | SL (2-candle low) | -0.80 | ₹-260 |
+
+### SENSEX — finished (last update 2026-10-06 15:21)
 
 - Close 72382.47, ATM 72300. R3 73691.7 · R2 73211.85 · R1 72779.85 · S1 71868 · S2 71388.15 · S3 70956.15.
 - CE PROFIT BOOKING, PE PROFIT BOOKING.
-- No trade.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| FIB | 300 × 72300 CE | first candle 0.75 at 72541.87 | 09:30 | 569.1 | 0.0 (index below first low 72384.8) | 697.05 (12:10) | closed back across R1 72779.9 | +127.95 | ₹+38,385 |
 
 ## 2026-10-05 (Mon)
 

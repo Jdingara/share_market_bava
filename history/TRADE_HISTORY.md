@@ -3,11 +3,11 @@
 **Paper trades — no real orders.** Written automatically by the bot (`src/history.py`) after every entry/exit;
 don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. ₹ = points × qty, before brokerage and charges.
 
-**All days: 16 trade(s), +186.75 points, ₹+58,569**
+**All days: 17 trade(s), +186.75 points, ₹+58,569**
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
-| 2026-10-06 | SENSEX | 72400 | 360.23 | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-06 | SENSEX | 72400 | 360.23 | 1 | +0.00 | ₹+0 | finished |
 | 2026-10-06 | NIFTY | no plan | – | 0 | +0.00 | ₹+0 | no plan |
 | 2026-10-05 | SENSEX | 71900 | 435.1 | 1 | +0.00 | ₹+0 | finished |
 | 2026-10-05 | NIFTY | 22400 | 66.65 | 2 | -36.00 | ₹-11,700 | finished |
@@ -21,16 +21,19 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 ## 2026-10-06 (Tue)
 
-### NIFTY — no plan (last update 2026-10-06 08:32)
+### NIFTY — no plan (last update 2026-10-06 11:29)
 
 - NIFTY close 22555.75 on 2026-10-05, expiry 2026-10-06, qty 325.
 - No plan: still failing after 3 shifts — no trading that day.
 
-### SENSEX — watching (last update 2026-10-06 08:32)
+### SENSEX — finished (last update 2026-10-06 15:17)
 
 - SENSEX close 72382.47 on 2026-10-05, expiry 2026-10-08, qty 300.
 - Plan: ATM 72400 after 1 shift(s), Sniper 360.23.
-- No trade yet.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 300 × SENSEX26O0872600CE | 10:40 (catch-up) ★ HIGH | 484.0 | 484 | 441 → 484 | 576 | 484 (12:10) | TRAIL_STOP | +0.00 | ₹+0 |
 
 ## 2026-10-05 (Mon)
 
