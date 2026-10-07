@@ -16,3 +16,7 @@ date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_t
 2026-10-06,NIFTY,FIB,CE,22550,first candle 0.75 at 22611.47,325,09:30,99.9,0.0,index below first low 22561.6,10:05,107,closed back across R1 22632.6,7.1,2308
 2026-10-06,NIFTY,REVERSAL,PE,22550,"index Spinning Top at R2, PE Bullish Harami",325,13:20,6.15,5.35,2-candle low,13:35,5.35,SL (2-candle low),-0.8,-260
 2026-10-06,SENSEX,FIB,CE,72300,first candle 0.75 at 72541.87,300,09:30,569.1,0.0,index below first low 72384.8,12:10,697.05,closed back across R1 72779.9,127.95,38385
+2026-10-07,NIFTY,REVERSAL,CE,22750,"index Spinning Top at S1, CE Bullish Engulfing",325,09:25,97.95,72.95,25 points,13:10,72.95,SL (25 points),-25.0,-8125
+2026-10-07,NIFTY,REVERSAL,CE,22750,"index Bullish Harami at S1, CE Bullish Harami",325,14:40,85.65,60.65,25 points,14:55,74.7,15:00 exit,-10.95,-3559
+2026-10-07,SENSEX,REVERSAL,CE,73000,"index Bullish Engulfing at S1, CE Bullish Engulfing",300,10:15,201.6,151.6,50 points,12:55,151.6,SL (50 points),-50.0,-15000
+2026-10-07,SENSEX,REVERSAL,CE,73000,"index Doji at S1, CE Doji",300,13:35,111.05,61.05,50 points,14:55,83.9,15:00 exit,-27.15,-8145

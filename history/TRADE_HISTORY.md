@@ -3,10 +3,12 @@
 **Paper trades — no real orders.** Written automatically by the bot (`src/history.py`) after every entry/exit;
 don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. ₹ = points × qty, before brokerage and charges.
 
-**All days: 17 trade(s), +186.75 points, ₹+58,569**
+**All days: 21 trade(s), +166.00 points, ₹+51,825**
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
+| 2026-10-07 | SENSEX | 73100 | 206.03 | 1 | +0.00 | ₹+0 | finished |
+| 2026-10-07 | NIFTY | 22700 | 110.33 | 3 | -20.75 | ₹-6,744 | finished |
 | 2026-10-06 | SENSEX | 72400 | 360.23 | 1 | +0.00 | ₹+0 | finished |
 | 2026-10-06 | NIFTY | no plan | – | 0 | +0.00 | ₹+0 | no plan |
 | 2026-10-05 | SENSEX | 71900 | 435.1 | 1 | +0.00 | ₹+0 | finished |
@@ -18,6 +20,28 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 | 2026-09-29 | SENSEX | 72800 | 295.7 | 2 | +29.00 | ₹+8,700 | finished |
 | 2026-09-29 | NIFTY | 22800 | 39.58 | 2 | +29.00 | ₹+9,425 | finished |
 | 2026-09-28 | NIFTY | 23200 | 54.0 | 1 | +58.75 | ₹+19,094 | stopped early |
+
+## 2026-10-07 (Wed)
+
+### NIFTY — finished (last update 2026-10-07 15:00)
+
+- NIFTY close 22776.1 on 2026-10-06, expiry 2026-10-13, qty 325.
+- Plan: ATM 22700 after 5 shift(s), Sniper 110.33.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O1322600PE | 09:40 ★ HIGH | 169.0 | 169 | 144 | 225 | 125.5 (10:15) | STOPLOSS | -43.50 | ₹-14,138 |
+| second | 325 × NIFTY26O1322600PE | 12:25 | 121.0 | 121 | 100 | 169 | 169 (13:05) | TARGET | +48.00 | ₹+15,600 |
+| second | 325 × NIFTY26O1322600PE | 13:10 | 169.0 | 169 | 144 | 225 | 143.75 (13:40) | STOPLOSS | -25.25 | ₹-8,206 |
+
+### SENSEX — finished (last update 2026-10-07 15:00)
+
+- SENSEX close 73067.81 on 2026-10-06, expiry 2026-10-08, qty 300.
+- Plan: ATM 73100 after 2 shift(s), Sniper 206.03.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 300 × SENSEX26O0872800PE | 09:30 ★ HIGH | 441.0 | 441 | 400 → 441 | 529 | 441 (09:40) | TRAIL_STOP | +0.00 | ₹+0 |
 
 ## 2026-10-06 (Tue)
 

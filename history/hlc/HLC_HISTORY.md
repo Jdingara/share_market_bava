@@ -2,10 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 17 trade(s), +946.65 points, ₹+287,396**
+**All days: 21 trade(s), +833.55 points, ₹+252,567**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
+| 2026-10-07 | SENSEX | 73000 | PANIC / PROFIT BOOKING | yes | 2 | -77.15 | ₹-23,145 | finished |
+| 2026-10-07 | NIFTY | 22750 | PANIC / PROFIT BOOKING | yes | 2 | -35.95 | ₹-11,684 | finished |
 | 2026-10-06 | SENSEX | 72300 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +127.95 | ₹+38,385 | finished |
 | 2026-10-06 | NIFTY | 22550 | PROFIT BOOKING / PROFIT BOOKING | no | 2 | +6.30 | ₹+2,048 | finished |
 | 2026-10-05 | SENSEX | 72100 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +212.35 | ₹+63,705 | finished |
@@ -16,6 +18,28 @@
 | 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | -42.10 | ₹-13,682 | finished |
 | 2026-09-29 | SENSEX | 72900 | PROFIT BOOKING / PANIC | yes | 1 | -50.00 | ₹-15,000 | replayed |
 | 2026-09-29 | NIFTY | 22800 | PROFIT BOOKING / PANIC | yes | 1 | +45.60 | ₹+14,820 | replayed |
+
+## 2026-10-07 (Wed)
+
+### NIFTY — finished (last update 2026-10-07 15:00)
+
+- Close 22776.1, ATM 22750. R3 23206.35 · R2 23055.2 · R1 22901.15 · S1 22595.95 · S2 22444.8 · S3 22290.75.
+- CE PANIC, PE PROFIT BOOKING — buyer’s day.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| REVERSAL | 325 × 22750 CE | index Spinning Top at S1, CE Bullish Engulfing | 09:25 | 97.95 | 72.95 (25 points) | 72.95 (13:10) | SL (25 points) | -25.00 | ₹-8,125 |
+| REVERSAL | 325 × 22750 CE | index Bullish Harami at S1, CE Bullish Harami | 14:40 | 85.65 | 60.65 (25 points) | 74.7 (14:55) | 15:00 exit | -10.95 | ₹-3,559 |
+
+### SENSEX — finished (last update 2026-10-07 15:00)
+
+- Close 73067.81, ATM 73000. R3 73988.45 · R2 73663.25 · R1 73325.2 · S1 72661.95 · S2 72336.75 · S3 71998.7.
+- CE PANIC, PE PROFIT BOOKING — buyer’s day.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| REVERSAL | 300 × 73000 CE | index Bullish Engulfing at S1, CE Bullish Engulfing | 10:15 | 201.6 | 151.6 (50 points) | 151.6 (12:55) | SL (50 points) | -50.00 | ₹-15,000 |
+| REVERSAL | 300 × 73000 CE | index Doji at S1, CE Doji | 13:35 | 111.05 | 61.05 (50 points) | 83.9 (14:55) | 15:00 exit | -27.15 | ₹-8,145 |
 
 ## 2026-10-06 (Tue)
 
