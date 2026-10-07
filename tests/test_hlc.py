@@ -1,5 +1,6 @@
 """HLC strategy: the owner's 29-09 sheet, ATM choice, labels, patterns, and the engine's trade flow."""
 
+import dataclasses
 import sys
 from datetime import date, datetime, time
 from pathlib import Path
@@ -15,11 +16,11 @@ from hlc_signal import (HLC_MARKETS, Candle, bearish_pattern, bullish_pattern, c
 
 def test_levels_match_owners_sheet():
     n = hlc_levels(22780.25, 22800, 84.20, 71.45)
-    assert (n.r1, n.r2, n.r3) == (22884.20, 22955.65, 23039.85)
-    assert (n.s1, n.s2, n.s3) == (22728.55, 22644.35, 22572.90)
+    assert (n.r1, n.r2, n.r3) == (22884.20, 22955.65, 23111.30)  # owner 07-10: R3 = R2 + (CE+PE); sheet had 23039.85
+    assert (n.s1, n.s2, n.s3) == (22728.55, 22644.35, 22488.70)  # owner 07-10: S3 = S2 - (CE+PE); sheet had 22572.90
     s = hlc_levels(72771.72, 72900, 444.20, 402.10)
-    assert (s.r1, s.r2, s.r3) == (73344.20, 73746.30, 74190.50)
-    assert (s.s1, s.s2, s.s3) == (72497.90, 72053.70, 71651.60)
+    assert (s.r1, s.r2, s.r3) == (73344.20, 73746.30, 74592.60)  # sheet (R2 + CE) had 74190.50
+    assert (s.s1, s.s2, s.s3) == (72497.90, 72053.70, 71207.40)  # sheet (S2 - PE) had 71651.60
 
 
 def test_atm_is_the_strike_with_ce_and_pe_nearest():
@@ -152,7 +153,8 @@ def test_small_gap_keeps_the_morning_atm():
 
 
 def _low_premium_day():
-    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    # The 29-09 S3 reversal happened at the sheet's S3 22572.90 (S2 - PE, before the owner's 07-10 change).
+    day = HlcDay(date(2026, 9, 29), dataclasses.replace(LEVELS, s3=22572.90), HLC_MARKETS["NIFTY"])
     day.gap_done = True  # only the reversal is under test
     day.day_open = 22780.25
     return day
@@ -188,6 +190,19 @@ def test_low_premium_from_1330_uses_the_day_low_minus_one():
     events = day.on_candle(_at("13:25"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
     assert "BUY CE 22800 at 10.00 (REVERSAL" in events[0]  # candle closes 13:30
     assert (day.open_trade.sl_premium, day.open_trade.sl_rule) == (8.65, "day low - 1")
+
+
+def test_every_trade_trails_50_below_the_premium_high_once_50_up():
+    """Owner, 07-10: NIFTY 50 / SENSEX 100 points up -> trailing SL that far below the premium's high (not only on
+    big-gap days). CE bought 10.00 at 13:30 (SL 8.65); premium runs to 70 -> SL 20; comes back to 19.5 -> out at 20."""
+    day = _low_premium_day()
+    day.on_candle(_at("13:20"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
+    day.on_candle(_at("13:25"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
+    flat = Candle(22585, 22590, 22580, 22586)  # index stays below S2 22644.35 - no level target
+    assert day.on_candle(_at("13:30"), flat, _ce_chain((10, 70, 10, 60))) == []
+    events = day.on_candle(_at("13:35"), flat, _ce_chain((60, 62, 19.5, 25)))
+    assert "trailing SL 20.00 (50 below the high 70)" in events[0]
+    assert (day.trades[0].exit_premium, day.trades[0].pnl_points) == (20, 10)
 
 
 def test_panic_pe_above_yesterdays_high_blocks_ce_trades():

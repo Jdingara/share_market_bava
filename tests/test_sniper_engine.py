@@ -171,6 +171,33 @@ def test_sniper_body_entry_05_10_nifty():
     assert events[0].trade.exit_reason == "TARGET" and events[0].trade.pnl_points == 32
 
 
+# --- First TSL step on a touch (owner, 2026-10-07) - bought 100 (SL 81, target 144), first square 121 ---------
+FILLED_AT_100 = [("09:20", (78.60, 64.05, 72.10, 67.30)), ("09:25", (103.90, 71.40, 101.90, 71.75)),
+                 ("09:30", (112.00, 90.45, 107.95, 101.85))]
+
+
+def test_touching_the_next_square_moves_the_first_tsl_to_cost():
+    engine, _ = _run(FILLED_AT_100 + [("09:35", (125, 105, 110, 108))])  # high 125 >= 121, close 110 < 121
+    assert engine.open_trades[0][1].trail_stop == 100
+
+
+def test_same_candle_back_to_cost_exits_at_cost():
+    # 07-10 NIFTY 22600 PE @ 144: 09:40 high 170 >= 169, low 143.75 -> out at 144.
+    engine, events = _run(FILLED_AT_100 + [("09:35", (125, 99, 110, 108))])
+    [t] = engine.trades
+    assert (t.exit_reason, t.exit_premium, t.pnl_points) == ("TRAIL_STOP", 100, 0)
+
+
+def test_later_steps_still_need_a_close():
+    engine, _ = _run(FILLED_AT_100 + [("09:35", (125, 105, 120, 108)), ("09:40", (140, 115, 130, 120))])
+    assert engine.open_trades[0][1].trail_stop == 100  # 09:40 touched 144? no; closed 130 < 144 -> still 100
+
+
+def test_first_touch_and_target_in_one_candle_books_the_target():
+    engine, _ = _run(FILLED_AT_100 + [("09:35", (150, 99, 110, 108))])
+    assert (engine.trades[0].exit_reason, engine.trades[0].exit_premium) == ("TARGET", 144)
+
+
 # --- First-half ATM-close trigger (owner, 2026-10-06) ---------------------------------------------------------
 # 06-10 SENSEX, owner's +-100 plan: ATM 72400 CE 428.80 / PE 477.15, OTM 72500 CE 377.40 / 72300 PE 432.00,
 # Sniper 404.70, index close 72382.47. Normal first-half "up" trigger = ATM PE close 477.15 -> 484.
@@ -225,9 +252,11 @@ def test_close_above_the_atm_close_signals_without_the_index():
     assert (events[0].atm_close_trigger, events[0].near, events[0].next_square) == (428.80, False, 441)
 
 
-def test_atm_close_trigger_needs_the_falling_atm_below_the_sniper():
-    engine, events = _run_sensex([("09:25", (435, 420, 432.0, 425))], atm_pe_close=420)  # 420 > Sniper 404.70
-    assert events == []
+def test_atm_close_trigger_does_not_need_the_atm_below_the_sniper():
+    # Owner, 07-10: below the Sniper is good (HIGH tag), not required. ATM PE 420 > Sniper 404.70, still falling.
+    engine, events = _run_sensex([("09:25", (435, 420, 432.0, 425))], atm_pe_close=420)
+    assert [e.kind for e in events] == ["ORDER"]
+    assert (events[0].atm_close_trigger, events[0].atm_below_sniper) == (428.80, False)
 
 
 def test_atm_close_trigger_is_first_half_only():

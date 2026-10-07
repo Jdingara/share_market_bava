@@ -279,7 +279,7 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
         if event.kind == "ORDER" and event.atm_close_trigger:
             how = (f"within {event.atm_close_trigger - event.signal_close:.2f} of" if event.near else "above")
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} ({how} the ATM "
-                    f"{event.setup.buy_type} close {trigger:.2f}; ATM {event.setup.falling_type} below Sniper"
+                    f"{event.setup.buy_type} close {trigger:.2f}"
                     f"{', index below yesterday' if event.near else ''}) - WOULD BUY {qty} at "
                     + (f"{event.square} if it comes back, or at {event.next_square} if it runs up" if event.square
                        else f"{event.next_square} when it rises there") + note)

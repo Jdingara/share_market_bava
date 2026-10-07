@@ -53,12 +53,21 @@ PROJECT_STATUS.md's Open Decisions until the owner confirms them):
     one square behind - and never moves down. Entry 100 (10^2): close above
     121 -> SL 100, above 144 -> SL 121, above 169 -> SL 144. Applied from the
     entry candle's own close; a raised stop that is hit exits as TRAIL_STOP.
+    FIRST step on a TOUCH (owner decision 2026-10-07): from the candle after
+    entry, the high reaching the next square (k+1)^2 already moves the stop to
+    the entry square k^2 (cost); later steps still need a close. If that
+    candle also comes back to k^2 it exits there (0) - unless it reached the
+    target, which it passed on the way up. 07-10 NIFTY 22600 PE @ 144: 09:40
+    high 170 >= 169 -> SL 144, low 143.75 -> out at 144.
     Whether the fixed (n+2)^2 target stays alongside it is still open
     (keep_target).
-  - First-half ATM-close trigger (owner decision 2026-10-06), alongside the
-    normal first-half trigger - whichever signals first: once the falling ATM
-    is below the Sniper, the OTM being bought only has to close above the
-    SAME-side ATM's yesterday close (buying the OTM CE -> ATM CE close); entry
+  - First-half ATM-close trigger (owner decision 2026-10-06, widened 07-10),
+    alongside the normal first-half trigger - whichever signals first: the OTM
+    being bought only has to close above the SAME-side ATM's yesterday close
+    (buying the OTM CE -> ATM CE close). The falling ATM being below the
+    Sniper is NOT required (07-10) - it only adds the HIGH tag. 07-10 NIFTY:
+    22600 PE closed 147.05 at 09:30 > ATM PE close 132.30 (ATM CE 118.95, still
+    above Sniper 110.33) -> limit 144 -> 09:30 low 139.15 -> bought 144. Entry
     at the square above it, SL/target as usual. While the index is below its
     yesterday close, the OTM only has to be NEAR that close (within
     near_points: NIFTY 20, SENSEX 30) -> buy stop at the square above it.
@@ -97,6 +106,7 @@ TRAILING_SL = True
 KEEP_FIXED_TARGET = True
 FILL_AT_SQUARE = True
 SL_ON_CLOSE = True
+FIRST_TSL_ON_TOUCH = True
 
 
 @dataclass(frozen=True)
@@ -187,6 +197,7 @@ class SniperDay:
         keep_target: bool = KEEP_FIXED_TARGET,
         fill_at_square: bool = FILL_AT_SQUARE,
         sl_on_close: bool = SL_ON_CLOSE,
+        first_tsl_on_touch: bool = FIRST_TSL_ON_TOUCH,
         index_close: Optional[float] = None,
         near_points: float = 0,
     ):
@@ -197,6 +208,7 @@ class SniperDay:
         self.keep_target = keep_target
         self.fill_at_square = fill_at_square
         self.sl_on_close = sl_on_close
+        self.first_tsl_on_touch = first_tsl_on_touch
         self.index_close = index_close  # yesterday's index close, for the ATM-close trigger's "near" form
         self.near_points = near_points
         self.pending: list[_Pending] = []
@@ -245,10 +257,16 @@ class SniperDay:
 
         for setup, trade in list(self.open_trades):
             bar = bars[_otm_key(setup.buy_type)]
+            trails = self.trailing and id(trade) not in self.fixed_sl
+            moved_now = False
+            if (trails and self.first_tsl_on_touch and trade.trail_stop <= trade.stop_loss
+                    and bar.high >= (math.isqrt(trade.entry_square) + 1) ** 2):
+                trade.trail_stop = float(trade.entry_square)  # owner, 07-10: first step on a touch -> cost
+                moved_now = True
             trailed = trade.trail_stop > trade.stop_loss
             stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
             target_hit = self.keep_target and bar.high >= trade.target
-            if target_hit and self.sl_on_close and not trailed:  # the target is touched before the candle's close
+            if target_hit and (moved_now or (self.sl_on_close and not trailed)):  # target reached before the close / the drop
                 events.append(self._close(trade, when, trade.target, "TARGET"))
             elif stop_exit is not None:
                 reason = "TRAIL_STOP" if trade.trail_stop > trade.stop_loss else "STOPLOSS"
@@ -258,7 +276,7 @@ class SniperDay:
             elif closes_at_exit:
                 events.append(self._close(trade, when, bar.close, "TIME_EXIT_1500"))
             else:
-                if self.trailing and id(trade) not in self.fixed_sl:
+                if trails:
                     trade.trail_stop = trailed_stop(trade.trail_stop, bar.close)
                 continue
             self.open_trades.remove((setup, trade))
@@ -347,21 +365,21 @@ class SniperDay:
 
     def _atm_close_signal(self, setup: TradeSetup, buy_close: float, atm_below_sniper: bool,
                           bars: dict[str, Bar]) -> Optional[_Pending]:
-        """Owner, 2026-10-06: first half, falling ATM below the Sniper -> the OTM closing above the same-side ATM's
-        yesterday close (or, with the index below its yesterday close, within near_points of it) is a signal."""
-        if not atm_below_sniper:
-            return None
+        """Owner, 2026-10-06/07: first half - the OTM closing above the same-side ATM's yesterday close (or, with the
+        index below its yesterday close, within near_points of it) is a signal. ATM below the Sniper only adds the
+        HIGH tag (07-10: "below the Sniper is good; if not, fine")."""
         atm_close = self.prev["atm_ce" if setup.buy_type == "CE" else "atm_pe"]
         n = square_levels(atm_close).n
         if buy_close > atm_close:
             k = highest_square_below(buy_close)
             if k < n:
-                return _Pending(setup, n - 1, buy_close, has_limit=False, atm_below_sniper=True, atm_close_trigger=atm_close)
-            return _Pending(setup, k, buy_close, atm_below_sniper=True, atm_close_trigger=atm_close)
+                return _Pending(setup, n - 1, buy_close, has_limit=False, atm_below_sniper=atm_below_sniper,
+                                atm_close_trigger=atm_close)
+            return _Pending(setup, k, buy_close, atm_below_sniper=atm_below_sniper, atm_close_trigger=atm_close)
         index = bars.get("index")
         if (index is not None and self.index_close is not None and index.close < self.index_close
                 and atm_close - buy_close <= self.near_points):
-            return _Pending(setup, n - 1, buy_close, has_limit=False, atm_below_sniper=True,
+            return _Pending(setup, n - 1, buy_close, has_limit=False, atm_below_sniper=atm_below_sniper,
                             atm_close_trigger=atm_close, near=True)
         return None
 

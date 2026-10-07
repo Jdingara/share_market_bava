@@ -6,7 +6,7 @@ Morning:
   - ATM = the strike near yesterday's index close whose CE and PE closes are
     nearest each other (choose_atm).
   - Levels from that ATM's CE/PE closes: R1 = ATM + CE, R2 = ATM + (CE+PE),
-    R3 = R2 + CE; S1 = ATM - PE, S2 = ATM - (CE+PE), S3 = S2 - PE; plus
+    R3 = R2 + (CE+PE) (owner, 07-10; was R2 + CE); S1 = ATM - PE, S2 = ATM - (CE+PE), S3 = S2 - (CE+PE) (owner, 07-10; was S2 - PE); plus
     Close = yesterday's index close.
   - Each leg's label: close nearer its high = PANIC, nearer its low =
     PROFIT BOOKING (information only).
@@ -83,8 +83,8 @@ def hlc_levels(index_close: float, atm: float, ce_close: float, pe_close: float)
     both = ce_close + pe_close
     r2, s2 = atm + both, atm - both
     return HlcLevels(close=index_close, atm=atm, ce_close=ce_close, pe_close=pe_close,
-                     r1=round(atm + ce_close, 2), r2=round(r2, 2), r3=round(r2 + ce_close, 2),
-                     s1=round(atm - pe_close, 2), s2=round(s2, 2), s3=round(s2 - pe_close, 2))
+                     r1=round(atm + ce_close, 2), r2=round(r2, 2), r3=round(r2 + both, 2),
+                     s1=round(atm - pe_close, 2), s2=round(s2, 2), s3=round(s2 - both, 2))  # owner, 07-10: R3/S3 = R2/S2 +- (CE+PE)
 
 
 def leg_label(high: float, low: float, close: float) -> str:

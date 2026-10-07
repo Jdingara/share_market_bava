@@ -57,7 +57,8 @@ MARKETS = {
                           index_token=256265, options_exchange="NFO", widen_otm_fallback=False,  # owner 05-10: dropped
                           relaxed_min_gap=20, near_atm_close=20),  # NSE, Tuesday expiry, 325 qty
     "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=40, expiry_weekday=3, lot_size=20, max_lots=15,
-                           index_token=265, options_exchange="BFO", widen_otm=True,
+                           index_token=265, options_exchange="BFO",
+                           widen_otm=False,  # owner 07-10: OTM always +-100, shift the ATM like NIFTY (was True 29-09)
                            relaxed_min_gap=32, near_atm_close=30),  # BSE, Thursday expiry, 300 qty
 }
 
@@ -140,9 +141,9 @@ def build_daily_plan(index_close: float, market: MarketConfig, premium: PremiumL
     if only the CE gap fails shift ATM down, recalculating each time. Both gaps
     failing on any attempt, or still failing after MAX_SHIFTS shifts, is no plan.
 
-    SENSEX (widen_otm, owner 2026-09-29): the ATM stays the nearest round
-    strike; the OTMs move out one strike at a time (+-100, +-200, ...) until
-    both gaps reach the minimum (40).
+    SENSEX (owner, 2026-10-07): the same ATM shifts with OTM +-100 as NIFTY
+    (min gap 40, relaxed 32); still failing -> no plan. (29-09 to 06-10 it
+    kept the nearest ATM and widened the OTMs instead - widen_otm, now off.)
 
     NIFTY (widen_otm_fallback, owner 2026-10-01): the shifts above come first
     (so §5 is unchanged); only if they still fail, keep the nearest ATM and move

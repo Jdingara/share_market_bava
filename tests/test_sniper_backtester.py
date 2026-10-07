@@ -126,7 +126,7 @@ def test_target_wins_when_both_cross_in_one_candle():
 
 def test_stop_wins_when_both_cross_in_one_candle_with_the_wick_rule():
     trades, _ = simulate_day(DAY, ROW, _day({"09:40": (23100, 23090, 23095), "09:45": (23125, 23050, 23100)}), _price,
-                             sl_on_close=False)
+                             sl_on_close=False, first_tsl_on_touch=False)  # the rules before 06-10
     assert trades[0].exit_reason == "STOPLOSS"
 
 

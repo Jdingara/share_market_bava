@@ -1,6 +1,7 @@
 """Unit tests for sniper_signal.py, anchored on PROJECT_STATUS.md §5's worked example."""
 
 import sys
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -113,14 +114,26 @@ def test_gap_exactly_min_passes():
     assert plan.final is not None
 
 
-def test_sensex_keeps_the_nearest_atm_and_widens_the_otms_until_both_gaps_reach_40():
-    """Owner, 29-09: SENSEX ATM = nearest round strike; move the OTMs out until both gaps >= 40.
+def test_sensex_shifts_the_atm_with_otm_100_like_nifty():
+    """Owner, 07-10: SENSEX keeps OTM +-100 and shifts the ATM like NIFTY; no gap -> no plan. 29-09 closes:
+    ATM 72800 PE gap -22.62 -> shift up to 72900 (CE 444.20, PE 402.10; OTM 73000 CE 394.35 / 72800 PE 357.85
+    -> Sniper 376.10, gaps 68.10 / 26.00 - 26 < 40 and < 32) -> PE fails again -> 73000 ... until no plan."""
+    closes = {(72800, "CE"): 500.40, (72800, "PE"): 357.85, (72900, "CE"): 444.20, (72700, "PE"): 316.75,
+              (72900, "PE"): 402.10, (73000, "CE"): 394.35, (73000, "PE"): 449.95, (73100, "CE"): 345.95,
+              (73100, "PE"): 500.00, (73200, "CE"): 300.00, (73200, "PE"): 550.00, (73300, "CE"): 260.00}
+    plan = build_daily_plan(72771.72, MARKETS["SENSEX"], lambda k, t: closes.get((k, t), 1.0))
+    assert all(a.otm_ce_strike - a.atm_strike == 100 and a.atm_strike - a.otm_pe_strike == 100 for a in plan.attempts)
+    assert [a.atm_strike for a in plan.attempts][:2] == [72800, 72900]
+
+
+def test_sensex_widening_kept_for_comparison():
+    """Owner, 29-09 (switched off 07-10): SENSEX ATM = nearest round strike; move the OTMs out until both gaps >= 40.
     29-09 closes (72771.72 -> ATM 72800): at +-100 the PE gap is -22.62; further strikes are cheaper."""
     closes = {(72800, "CE"): 500.40, (72800, "PE"): 357.85,
               (72900, "CE"): 444.20, (72700, "PE"): 316.75,  # +-100: Sniper 380.48 -> PE gap -22.62
               (73000, "CE"): 394.35, (72600, "PE"): 280.00,  # +-200: Sniper 337.18 -> PE gap 20.67
               (73100, "CE"): 345.95, (72500, "PE"): 247.00}  # +-300: Sniper 296.48 -> gaps 203.92 / 61.37
-    plan = build_daily_plan(72771.72, MARKETS["SENSEX"], _lookup(closes))
+    plan = build_daily_plan(72771.72, replace(MARKETS["SENSEX"], widen_otm=True), _lookup(closes))
     assert [a.otm_ce_strike - a.atm_strike for a in plan.attempts] == [100, 200, 300]
     assert all(a.atm_strike == 72800 for a in plan.attempts)
     assert (plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (73100, 72500)
