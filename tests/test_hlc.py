@@ -218,7 +218,7 @@ def test_panic_pe_above_yesterdays_high_blocks_ce_trades():
     assert day.trades == []  # the S3 Bullish Engulfing CE reversal is blocked
 
 
-def test_hlc_second_trade_allowed_after_a_target_but_not_a_third():
+def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit():
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
     day.on_candle(_at("09:15"), Candle(22760, 22770, 22740, 22745), _chain((60, 62, 55, 58)))
     day.on_candle(_at("09:20"), Candle(22745, 22750, 22738, 22742), _chain((58, 60, 57, 59)))
@@ -232,8 +232,9 @@ def test_hlc_second_trade_allowed_after_a_target_but_not_a_third():
     day._confirm_entry = lambda *a: calls.append(1)  # reaching the entry checks = the gate let it through
     day.on_candle(_at("09:45"), Candle(22650, 22655, 22640, 22642), _chain((90, 91, 85, 86)))
     assert calls
-    # ... but not a third
-    day.trades.append(day.trades[0])
+    # ... up to MAX_TRADES a day (owner 08-10: 4), then no more
+    from hlc_engine import MAX_TRADES
+    day.trades.extend([day.trades[0]] * (MAX_TRADES - len(day.trades)))
     calls.clear()
     day.on_candle(_at("09:50"), Candle(22641, 22660, 22640, 22658), _chain((86, 92, 85, 91)))
     assert not calls
@@ -327,6 +328,25 @@ def test_no_ce_reversal_when_index_and_ce_are_both_below_their_closes():
     assert day._against_the_day("CE", Candle(72280, 72290, 72270, 72279.9), Candle(80, 90, 79, 87.45))
     assert not day._against_the_day("CE", Candle(72700, 72710, 72690, 72700), Candle(80, 90, 79, 87.45))
     assert not day._against_the_day("CE", Candle(72280, 72290, 72270, 72279.9), Candle(270, 280, 265, 275))
+
+
+def test_trend_trade_retest_of_the_first_15_minute_close():
+    """Owner, 08-10: PE day - the PE's first 15-minute close (09:30) is 307.20; it closes above (349.55), then comes
+    back to 307.20 -> buy there."""
+    levels = hlc_levels(72638.7, 72500, 262.9, 214.8)
+    day = HlcDay(date(2026, 10, 8), levels, HLC_MARKETS["SENSEX"], {"CE": (622.6, 232.6, 262.9), "PE": (335, 113.3, 214.8)})
+    day.gap_done = True  # keep the FIB morning trade out of this test
+    idx = Candle(72250, 72260, 72240, 72245)  # below the close
+    ce = Candle(90, 95, 85, 88)  # below its close 262.9 -> PE day
+    seq = [("09:15", Candle(216.95, 310.95, 216.9, 267.1)), ("09:20", Candle(267.1, 277.05, 225.5, 275.5)),
+           ("09:25", Candle(275.5, 347.9, 271.35, 307.2)), ("09:30", Candle(307.2, 322.7, 310, 315)),
+           ("09:35", Candle(315, 318.2, 310, 312.75)), ("09:40", Candle(312.75, 375.6, 310, 349.55)),
+           ("09:45", Candle(349.55, 398, 341.25, 344.1))]
+    for t, pe in seq:
+        assert not any(e.startswith("BUY") for e in day.on_candle(_at(t), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): pe})), t
+    assert day.first15_close["PE"] == 307.2 and "PE" in day.went_above
+    events = day.on_candle(_at("09:50"), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(344.25, 355, 277.8, 302.25)})
+    assert events[-1].startswith("BUY PE 72500 at 307.20 (TREND")
 
 
 def test_trend_trade_pattern_retest_fib_limit_fills_next_candle():

@@ -91,12 +91,12 @@ from hlc_signal import (DIRECTIONLESS, Candle, HlcLevels, HlcMarket, OptionType,
 FIRST_ENTRY_CLOSE = time(9, 30)
 DAY_LOW_SL_FROM = time(13, 30)
 FIB_ENTRY = 0.75  # owner, 2026-10-01 (confirmed 0.75 after briefly choosing 0.618)
-TREND_FIB = 0.618  # day-side trade: entry at the confirmation candle's Fib 0.618 (owner, 2026-10-08)
+TREND_FIB = 0.618  # pattern TREND trade: entry at the confirmation candle's Fib 0.618 (owner, 2026-10-08)
 CONFIRM_ZONE = (0.75, 0.786)  # owner, 2026-10-01: double-confirmation trade's index zone
 FIB_FIRST_CANDLE = time(9, 30)  # owner, 2026-10-01: the level must be reached AFTER 09:30 - the 09:25 candle doesn't count
 LAST_ENTRY_CLOSE = time(14, 55)
 EXIT_CLOSE = time(15, 0)
-MAX_TRADES = 2
+MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
 CANDLE = timedelta(minutes=5)
 ATM_SEARCH_STEPS = 6
 
@@ -145,9 +145,12 @@ class HlcDay:
         self.gap_done = False  # the day's FIB trade has been taken
         self.daily_highs: dict[str, list[float]] = {}  # side -> morning ATM option's daily highs, yesterday first
         self.zone_touched_at: Optional[int] = None
-        # Owner, 2026-10-08: day-side trade - premium reversal pattern, retest, buy limit at the Fib 0.618
+        # Owner, 2026-10-08: day-side TREND trade on 15-minute closes vs the first 15-minute close
+        self.first15_close: dict[str, float] = {}
+        self.went_above: dict[str, int] = {}  # side -> candle no. when its premium closed above the first 15-min close
+        # Owner, 2026-10-08: day-side pattern TREND trade - premium reversal pattern, retest, buy limit at the Fib 0.618
         self.trend_pattern: dict[str, tuple[int, float, float, str]] = {}  # side -> (candle no, low, high, name)
-        self.trend_order: Optional[dict] = None  # side, strike, limit, pattern_low, why  # index_history position of the last CONFIRM zone touch
+        self.trend_order: Optional[dict] = None  # side, strike, limit, pattern_low, at, why  # index_history position of the last CONFIRM zone touch
         self.first_swing: Optional[OptionType] = None  # set from 1-minute data: "CE" = low came first, "PE" = high first
         self.big_gap = False
         self.index_history: list[Candle] = []
@@ -248,6 +251,7 @@ class HlcDay:
                 self.blocked[other] = f"{side} PANIC yesterday and above its high {hlc[0]:g} today"
                 events.append(f"No {other} trades today - {self.blocked[other]}")
 
+        self._track_trend(when)
         self._track_trend_patterns(chain)
 
         if len(self.index_history) >= 3 and self._zone_touch(index):
@@ -288,7 +292,7 @@ class HlcDay:
         if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
 
-        event = self._trend_entry(when, index, chain)
+        event = self._pattern_trend_entry(when, index, chain) or self._trend_entry(when, index, chain)
         if event:
             return events + [self._with_premium_targets(event)]
 
@@ -345,6 +349,39 @@ class HlcDay:
             return "CE"
         return None
 
+    def _track_trend(self, when: datetime) -> None:
+        """Owner, 2026-10-08: the morning ATM premium's first 15-minute candle (09:15-09:30) close per side, and
+        whether the premium has since CLOSED above it (the move away that a retest comes back from)."""
+        atm = self.levels.atm
+        for side in ("CE", "PE"):
+            history = self.premium_history.get((atm, side), [])
+            if not history:
+                continue
+            if _closes_at(when) == time(9, 30):
+                self.first15_close[side] = history[-1].close
+            elif (side in self.first15_close and side not in self.went_above
+                  and history[-1].close > self.first15_close[side]):
+                self.went_above[side] = len(history) - 1
+
+    def _trend_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+        """Owner, 2026-10-08 - TREND trade for a direct bullish/bearish move (no pattern needed): on a PE day (CE day)
+        the PE (CE) premium closes above its first 15-minute candle's close, then comes back to retest that close ->
+        buy there (limit at the first 15-minute close). SL -50/-25, targets the next index levels to S3/R3 (HLC
+        trailing SL and PANIC premium targets apply). After a trade it must close above again before the next one."""
+        side = self.day_side(index, chain)
+        if side is None or side not in self.went_above:
+            return None
+        atm = self.levels.atm
+        prem = chain.get((atm, side))
+        level = self.first15_close[side]
+        now = len(self.premium_history.get((atm, side), [])) - 1
+        if prem is None or self.went_above[side] >= now or prem.low > level:
+            return None  # the close above must be on an EARLIER candle than the retest
+        del self.went_above[side]
+        fill = min(level, prem.open)
+        return self._enter("TREND", side, atm, when, Candle(prem.open, prem.high, prem.low, fill), index,
+                           f"{side} retest of its first 15-min close {level:g}", "S3" if side == "PE" else "R3")
+
     def _track_trend_patterns(self, chain: dict[tuple[float, str], Candle]) -> None:
         """Each candle: the morning ATM premium's latest bullish reversal pattern per side; a green candle retesting
         its low (within a quarter of the pattern's range, not closing below) = confirmation -> limit order at that
@@ -374,7 +411,7 @@ class HlcDay:
                 self.trend_pattern[side] = (len(history) - 1, min(x.low for x in span), max(x.high for x in span),
                                             found[0])
 
-    def _trend_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+    def _pattern_trend_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
         """Owner, 2026-10-08: on a PE day (CE day) the pending PE (CE) limit fills when the premium comes back to it.
         SL -50/-25, targets the next index levels to S3/R3. 08-10 SENSEX: 10:30 PE Bullish Engulfing, 10:50 retest,
         Fib 350.94, filled 11:00, S2 at 11:25."""

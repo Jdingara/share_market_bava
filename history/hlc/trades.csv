@@ -22,5 +22,3 @@ date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_t
 2026-10-07,SENSEX,REVERSAL,CE,73000,"index Doji at S1, CE Doji",300,13:35,111.05,61.05,50 points,14:55,83.9,15:00 exit,-27.15,-8145
 2026-10-08,NIFTY,TREND,PE,22600,"PE Inverted Hammer, retest 200.2, Fib 0.618 205.41",325,09:55,205.41,180.41,25 points,10:25,209.6,closed back across S1 22458.3,4.19,1362
 2026-10-08,NIFTY,TREND,PE,22600,"PE Inverted Hammer, retest 208.5, Fib 0.618 217.97",325,10:35,217.97,192.97,25 points,,,OPEN,,
-2026-10-08,SENSEX,TREND,PE,72500,"PE Inverted Hammer, retest 317.6, Fib 0.618 334.16",300,09:55,334.16,284.16,50 points,10:10,284.16,SL (50 points),-50.0,-15000
-2026-10-08,SENSEX,TREND,PE,72500,"PE Bullish Engulfing, retest 335.85, Fib 0.618 350.94",300,11:00,350.94,300.94,50 points,11:30,569.15,trailing SL 569.15 (100 below the high 669.15),218.21,65463
