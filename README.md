@@ -17,7 +17,7 @@ The bot is in **paper mode**: it uses real Zerodha market data but only reports 
 ## Automatic daily start (set up 2026-10-08)
 
 Two Windows scheduled tasks (Mon–Fri) do the daily routine:
-- **SniperBot Daily Start, 08:40** → `daily_start.ps1`: `git pull`, opens the Zerodha login page — **you log in (password + TOTP); no copy-paste** — `srcuto_login.py` catches the redirect and saves the session, then the 4 bots start hidden in the background and the dashboard opens. Log: `data\paper_trades\daily_start_<date>.txt`.
+- **SniperBot Daily Start, 08:40** → `daily_start.ps1`: `git pull`, opens the Zerodha login page — **you log in (password + TOTP); no copy-paste** — `src\auto_login.py` catches the redirect and saves the session, then the 4 bots start hidden in the background and the dashboard opens. Log: `data\paper_trades\daily_start_<date>.txt`.
 - **SniperBot Daily Push, 15:10** → `daily_push.ps1`: commits `history\` and pushes it to GitHub. Log: `data\paper_trades\daily_push_<date>.txt`.
 
 One-time: on developers.kite.trade set the app's **Redirect URL to `http://127.0.0.1:5000/callback`**. The PC must be on (lid open, plugged in) at 08:40; if you don't log in within 30 minutes, the bots don't start that day. Zerodha requires the daily login to be manual, so it can't be automated further. Manage the tasks in Task Scheduler (or `schtasks /Query /TN "SniperBot Daily Start"`).
