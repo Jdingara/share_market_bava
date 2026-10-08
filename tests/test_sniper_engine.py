@@ -297,3 +297,22 @@ def test_first_half_no_trade_while_the_otm_is_below_its_own_close():
     events = day.on_candle(at("09:30"), {"atm_ce": Bar(95, 85, 88, 94), "atm_pe": Bar(150, 140, 148, 141),
                                          "otm_ce": Bar(90, 80, 88, 85), "otm_pe": Bar(98, 90, 95, 92)})  # 95 < 98.60
     assert events == []
+
+
+def test_sideways_day_uv_trade_on_the_atm_after_reversal_and_retest():
+    """Owner, 08-10: all 4 below their closes -> ATM PE Bullish Engulfing, then a green candle retesting its low
+    -> buy the ATM PE at the square (limit 144 / stop 169)."""
+    from datetime import date, datetime
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
+    row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
+    day = SniperDay(date(2026, 10, 8), row)
+    at = lambda hm: datetime(2026, 10, 8, int(hm[:2]), int(hm[3:]))
+    ce, oce, ope = Bar(120, 110, 112, 118), Bar(80, 70, 72, 78), Bar(90, 80, 85, 88)  # all below their closes
+    day.on_candle(at("09:30"), {"atm_ce": ce, "atm_pe": Bar(140, 125, 126, 139), "otm_ce": oce, "otm_pe": ope})  # red
+    day.on_candle(at("09:35"), {"atm_ce": ce, "atm_pe": Bar(141, 124, 140.5, 125), "otm_ce": oce, "otm_pe": ope})  # engulfing
+    assert day.uv_pattern["atm_pe"][3] == "Bullish Engulfing"
+    events = day.on_candle(at("09:40"), {"atm_ce": ce, "atm_pe": Bar(141, 125, 140, 127), "otm_ce": oce, "otm_pe": ope})
+    order = events[0]
+    assert order.kind == "ORDER" and order.setup.contract == "atm_pe" and (order.square, order.next_square) == (121, 144)

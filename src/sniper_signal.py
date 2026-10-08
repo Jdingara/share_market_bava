@@ -262,6 +262,7 @@ class TradeSetup:
     buy_strike: float
     buy_type: OptionType
     levels: SquareLevels
+    contract: str = ""  # bars key bought: "" = the OTM of buy_type; "atm_ce"/"atm_pe" for the U/V trade (08-10)
 
 
 def trade_setups(row: StrikeRow) -> list[TradeSetup]:

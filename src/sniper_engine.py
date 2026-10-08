@@ -88,6 +88,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Literal, Optional
 
+from hlc_signal import DIRECTIONLESS, bullish_pattern
+from hlc_signal import Candle as PatternCandle
 from sniper_signal import (
     EXIT_BY,
     OptionType,
@@ -170,6 +172,11 @@ class _Pending:
     near: bool = False
 
 
+def _key(setup: TradeSetup) -> str:
+    """The bars key of the contract a setup buys (the OTM, or the ATM for the U/V trade)."""
+    return setup.contract or _otm_key(setup.buy_type)
+
+
 def _otm_key(option_type: OptionType) -> str:
     return "otm_ce" if option_type == "CE" else "otm_pe"
 
@@ -214,6 +221,9 @@ class SniperDay:
         # the opposite OTM closing above ITS yesterday high is a signal (buy at the upcoming square).
         self.otm_yesterday_high: dict[str, float] = {}  # "otm_ce"/"otm_pe" -> yesterday's high (set by the live bot)
         self.early_below_sniper: set[str] = set()  # "atm_ce"/"atm_pe" legs that went below the Sniper early
+        # Owner, 2026-10-08: U/V trade on sideways days - each ATM leg's candles and its last bullish reversal
+        self.atm_history: dict[str, list] = {"atm_ce": [], "atm_pe": []}
+        self.uv_pattern: dict[str, tuple[int, float, float, str]] = {}  # leg -> (candle index, low, high, name)
         self.near_points = near_points
         self.pending: list[_Pending] = []
         self.setups = trade_setups(row)
@@ -263,10 +273,18 @@ class SniperDay:
             closed_below_early = candle_close_time(when) <= time(9, 30) and bar.close < self.row.sniper
             if opened_below or closed_below_early:
                 self.early_below_sniper.add(leg)
+            if bar.open is not None:
+                history = self.atm_history[leg]
+                history.append(PatternCandle(bar.open, bar.high, bar.low, bar.close))
+                found = bullish_pattern(history[-3:])
+                if found and found[0] not in DIRECTIONLESS:
+                    span = history[-found[1]:]
+                    self.uv_pattern[leg] = (len(history) - 1, min(c.low for c in span), max(c.high for c in span),
+                                            found[0])
         self._last_otm_close = {"otm_ce": bars["otm_ce"].close, "otm_pe": bars["otm_pe"].close}
 
         for setup, trade in list(self.open_trades):
-            bar = bars[_otm_key(setup.buy_type)]
+            bar = bars[_key(setup)]
             trails = self.trailing and id(trade) not in self.fixed_sl
             moved_now = False
             if (trails and self.first_tsl_on_touch and trade.trail_stop <= trade.stop_loss
@@ -300,12 +318,12 @@ class SniperDay:
             if closes_at_exit or half != pending.setup.half:
                 events.append(self._order_event("CANCEL", pending, when))
                 continue
-            fill = self._pending_fill(pending, bars[_otm_key(pending.setup.buy_type)])
+            fill = self._pending_fill(pending, bars[_key(pending.setup)])
             if fill is None:
                 self.pending.append(pending)
             else:
                 k, price = fill
-                events += self._open(pending.setup, k, when, price, bars[_otm_key(pending.setup.buy_type)], True,
+                events += self._open(pending.setup, k, when, price, bars[_key(pending.setup)], True,
                                      pending.atm_below_sniper, fixed_sl=pending.limit_only,
                                      trigger=pending.atm_close_trigger or None)
 
@@ -316,7 +334,7 @@ class SniperDay:
         if self.continuation and not self.open_trades and not self.pending and half is not None:
             # Owner, 2026-10-01 (buyer's day): after a target, a candle closing above it -> buy the next square again.
             setup, booked = self.continuation
-            close = bars[_otm_key(setup.buy_type)].close
+            close = bars[_key(setup)].close
             if close > booked:
                 self.continuation = None
                 pending = _Pending(setup, highest_square_below(close), close)
@@ -330,7 +348,8 @@ class SniperDay:
         current = {key: bars[key].close for key in CONTRACT_KEYS}
         if is_sideways(current, self.prev):
             self.sideways_candles += 1
-            return events
+            event = self._uv_entry(half, when)
+            return events + ([event] if event else [])
 
         event = self._sniper_body_entry(half, bars, when)
         if event:
@@ -397,6 +416,33 @@ class SniperDay:
                 and atm_close - buy_close <= self.near_points):
             return _Pending(setup, n - 1, buy_close, has_limit=False, atm_below_sniper=atm_below_sniper,
                             atm_close_trigger=atm_close, near=True)
+        return None
+
+    def _uv_entry(self, half: str, when: datetime) -> Optional[Event]:
+        """Owner, 2026-10-08: on a sideways day (all 4 below their closes) trade the ATM only, U/V style - an ATM
+        leg shows a bullish reversal pattern, then a later green candle retests the pattern's low (comes within a
+        quarter of the pattern's range of it, doesn't close below it) -> buy that ATM at the square (limit k^2 or
+        stop (k+1)^2), SL one square down, target two up. A close below the pattern low cancels it."""
+        for leg, buy_type in (("atm_ce", "CE"), ("atm_pe", "PE")):
+            pattern = self.uv_pattern.get(leg)
+            history = self.atm_history[leg]
+            if pattern is None or not history:
+                continue
+            at, low, high, name = pattern
+            c = history[-1]
+            if len(history) - 1 <= at:
+                continue
+            if c.close < low:
+                del self.uv_pattern[leg]
+                continue
+            if c.low <= low + 0.25 * (high - low) and c.green:
+                del self.uv_pattern[leg]
+                setup = TradeSetup(half, "up" if buy_type == "CE" else "down", "PE" if buy_type == "CE" else "CE",
+                                   self.row.atm_strike, buy_type, square_levels(c.close), contract=leg)
+                pending = _Pending(setup, highest_square_below(c.close), c.close)
+                self.halves_used.add(half)
+                self.pending.append(pending)
+                return self._order_event("ORDER", pending, when)
         return None
 
     def _otm_below_its_close(self, half: str, buy_type: str, bars: dict[str, Bar]) -> bool:
@@ -514,7 +560,7 @@ class SniperDay:
         events = [self._order_event("CANCEL", p, when) for p in self.pending]
         self.pending.clear()
         events += [
-            self._close(trade, when, bars[_otm_key(setup.buy_type)].close, "DATA_END") for setup, trade in self.open_trades
+            self._close(trade, when, bars[_key(setup)].close, "DATA_END") for setup, trade in self.open_trades
         ]
         self.open_trades.clear()
         self.done = True

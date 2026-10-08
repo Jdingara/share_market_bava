@@ -271,10 +271,20 @@ def describe_plan(plan: DailyPlan, expiry: date, previous_day: date) -> str:
     return "\n".join(lines)
 
 
+def _symbol(contracts: dict[str, dict], buy_type: str, strike: float) -> str:
+    """The bought contract's symbol - normally the OTM, the ATM for the U/V trade (08-10)."""
+    side = buy_type.lower()
+    for key in (f"otm_{side}", f"atm_{side}"):
+        contract = contracts.get(key)
+        if contract and float(contract.get("strike", strike)) == float(strike):
+            return contract["tradingsymbol"]
+    return contracts[f"otm_{side}"]["tradingsymbol"]
+
+
 def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: int = MARKETS["NIFTY"].quantity) -> str:
     note = "  (catch-up: this candle closed before the bot started)" if late else ""
     if event.kind in ("ORDER", "CANCEL"):
-        symbol = contracts["otm_ce" if event.setup.buy_type == "CE" else "otm_pe"]["tradingsymbol"]
+        symbol = _symbol(contracts, event.setup.buy_type, event.setup.buy_strike)
         trigger = event.atm_close_trigger or event.setup.levels.trigger
         if event.kind == "ORDER" and event.atm_close_trigger:
             how = (f"within {event.atm_close_trigger - event.signal_close:.2f} of" if event.near else "above")
@@ -284,6 +294,10 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
                     + (f"{event.square} if it comes back, or at {event.next_square} if it runs up" if event.square
                        else f"{event.next_square} when it rises there") + note)
         note = (" - HIGH confidence: ATM already below Sniper" if event.atm_below_sniper else "") + note
+        if event.kind == "ORDER" and event.setup.contract:
+            return (f"SIGNAL {symbol}: sideways day, ATM {event.setup.buy_type} U/V - reversal then retest, "
+                    f"candle {event.when:%H:%M} closed {event.signal_close:.2f} - WOULD BUY {qty} at {event.square} "
+                    f"if it comes back, or at {event.next_square} if it runs up{note}")
         if event.kind == "ORDER" and event.body_entry:
             return (f"SIGNAL {symbol}: ATM {event.setup.buy_type} candle {event.when:%H:%M} body closed above the Sniper - "
                     f"WOULD BUY {qty} at {event.square} (limit), fixed SL {(int(event.square ** 0.5) - 1) ** 2}, "
@@ -297,7 +311,7 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
         levels = f"{event.square}/{event.next_square}" if event.square else f"{event.next_square}"
         return f"Order for {symbol} at {levels} cancelled - window ended without a fill{note}"
     t = event.trade
-    symbol = contracts["otm_ce" if t.buy_type == "CE" else "otm_pe"]["tradingsymbol"]
+    symbol = _symbol(contracts, t.buy_type, t.buy_strike)
     if event.kind == "ENTRY":
         conf = " - HIGH confidence: ATM below Sniper" if t.atm_below_sniper else ""
         return (f"WOULD BUY {qty} x {symbol} at {t.entry_fill:.2f} ({t.half} half, candle {t.entry_time[11:16]}) - "
