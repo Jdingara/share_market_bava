@@ -27,6 +27,7 @@ from dashboard import start_dashboard
 from hlc_engine import HlcDay, HlcTrade
 from hlc_history import HLC_HISTORY_DIR, record_hlc_day
 from hlc_signal import HLC_MARKETS, Candle, HlcLevels, choose_atm, hlc_levels, leg_label
+from keep_awake import keep_awake
 from kite_auth import PROJECT_ROOT, connected_client
 from sniper_live import (CANDLE_MINUTES, MARKET_OPEN, Notifier, OptionChain, _historical, _keep_dashboard_open,
                          _naive, _next_poll, _sleep_until, wait_for_closing_prices)
@@ -370,6 +371,7 @@ def main() -> None:
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     load_dotenv(PROJECT_ROOT / ".env")
+    keep_awake()  # don't let Windows sleep while the bot runs (07-10 laptop slept mid-day)
     if args.replay:
         replay(date.fromisoformat(args.replay), args.market, args.record, args.dashboard)
     else:

@@ -41,6 +41,7 @@ from dotenv import load_dotenv
 from dashboard import DashboardState, start_dashboard
 from history import record_day
 
+from keep_awake import keep_awake
 from kite_auth import PROJECT_ROOT, connected_client
 from sniper_engine import CONTRACT_KEYS, Bar, Event, SniperDay, TradeResult
 from sniper_signal import (
@@ -461,6 +462,7 @@ def main() -> None:
     qty = market.quantity
 
     load_dotenv(PROJECT_ROOT / ".env")
+    keep_awake()  # don't let Windows sleep while the bot runs (07-10 laptop slept mid-day)
     day = date.fromisoformat(args.replay) if args.replay else date.today()
     if not args.replay and day.weekday() >= 5:
         raise SystemExit("Today is a weekend - no market. To see the bot work, replay a recent day:\n"
