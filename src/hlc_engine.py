@@ -91,6 +91,7 @@ from hlc_signal import (DIRECTIONLESS, Candle, HlcLevels, HlcMarket, OptionType,
 FIRST_ENTRY_CLOSE = time(9, 30)
 DAY_LOW_SL_FROM = time(13, 30)
 FIB_ENTRY = 0.75  # owner, 2026-10-01 (confirmed 0.75 after briefly choosing 0.618)
+TREND_FIB = 0.618  # day-side trade: entry at the confirmation candle's Fib 0.618 (owner, 2026-10-08)
 CONFIRM_ZONE = (0.75, 0.786)  # owner, 2026-10-01: double-confirmation trade's index zone
 FIB_FIRST_CANDLE = time(9, 30)  # owner, 2026-10-01: the level must be reached AFTER 09:30 - the 09:25 candle doesn't count
 LAST_ENTRY_CLOSE = time(14, 55)
@@ -143,7 +144,10 @@ class HlcDay:
         self.day_open: Optional[float] = None
         self.gap_done = False  # the day's FIB trade has been taken
         self.daily_highs: dict[str, list[float]] = {}  # side -> morning ATM option's daily highs, yesterday first
-        self.zone_touched_at: Optional[int] = None  # index_history position of the last CONFIRM zone touch
+        self.zone_touched_at: Optional[int] = None
+        # Owner, 2026-10-08: day-side trade - premium reversal pattern, retest, buy limit at the Fib 0.618
+        self.trend_pattern: dict[str, tuple[int, float, float, str]] = {}  # side -> (candle no, low, high, name)
+        self.trend_order: Optional[dict] = None  # side, strike, limit, pattern_low, why  # index_history position of the last CONFIRM zone touch
         self.first_swing: Optional[OptionType] = None  # set from 1-minute data: "CE" = low came first, "PE" = high first
         self.big_gap = False
         self.index_history: list[Candle] = []
@@ -244,6 +248,8 @@ class HlcDay:
                 self.blocked[other] = f"{side} PANIC yesterday and above its high {hlc[0]:g} today"
                 events.append(f"No {other} trades today - {self.blocked[other]}")
 
+        self._track_trend_patterns(chain)
+
         if len(self.index_history) >= 3 and self._zone_touch(index):
             self.zone_touched_at = len(self.index_history) - 1
 
@@ -281,6 +287,10 @@ class HlcDay:
             atm = float(round(index.close / self.market.strike_step) * self.market.strike_step)
         if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
+
+        event = self._trend_entry(when, index, chain)
+        if event:
+            return events + [self._with_premium_targets(event)]
 
         if not self.gap_done and not self.trades and len(self.index_history) >= 2:
             # Owner, 2026-10-05: the FIB trade is only ever the day's FIRST entry (05-10 it fired as a second
@@ -323,6 +333,62 @@ class HlcDay:
                 if event:
                     return events + [event]
         return events
+
+    def day_side(self, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[OptionType]:
+        """PE day: index below yesterday's close and the ATM CE below its own close; CE day: the mirror."""
+        atm = self.levels.atm
+        ce, pe = chain.get((atm, "CE")), chain.get((atm, "PE"))
+        y_ce, y_pe = self.yesterday.get("CE"), self.yesterday.get("PE")
+        if ce and y_ce and index.close < self.levels.close and ce.close < y_ce[2]:
+            return "PE"
+        if pe and y_pe and index.close > self.levels.close and pe.close < y_pe[2]:
+            return "CE"
+        return None
+
+    def _track_trend_patterns(self, chain: dict[tuple[float, str], Candle]) -> None:
+        """Each candle: the morning ATM premium's latest bullish reversal pattern per side; a green candle retesting
+        its low (within a quarter of the pattern's range, not closing below) = confirmation -> limit order at that
+        candle's Fib 0.618."""
+        atm = self.levels.atm
+        for side in ("CE", "PE"):
+            history = self.premium_history.get((atm, side), [])
+            if not history or (atm, side) not in chain:
+                continue
+            c = history[-1]
+            pattern = self.trend_pattern.get(side)
+            if pattern and len(history) - 1 > pattern[0]:
+                _, low, high, name = pattern
+                if c.close < low:
+                    del self.trend_pattern[side]
+                    if self.trend_order and self.trend_order["side"] == side:
+                        self.trend_order = None
+                elif c.green and c.low <= low + 0.25 * (high - low) and self.trend_order is None:
+                    limit = round(c.high - TREND_FIB * (c.high - c.low), 2)
+                    self.trend_order = dict(side=side, strike=atm, limit=limit, pattern_low=low, at=len(history) - 1,
+                                            why=f"{side} {name}, retest {c.low:g}, Fib {TREND_FIB:g} {limit:g}")
+                    del self.trend_pattern[side]
+                    continue
+            found = bullish_pattern(history[-3:])
+            if found and found[0] not in DIRECTIONLESS:
+                span = history[-found[1]:]
+                self.trend_pattern[side] = (len(history) - 1, min(x.low for x in span), max(x.high for x in span),
+                                            found[0])
+
+    def _trend_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+        """Owner, 2026-10-08: on a PE day (CE day) the pending PE (CE) limit fills when the premium comes back to it.
+        SL -50/-25, targets the next index levels to S3/R3. 08-10 SENSEX: 10:30 PE Bullish Engulfing, 10:50 retest,
+        Fib 350.94, filled 11:00, S2 at 11:25."""
+        order = self.trend_order
+        if order is None:
+            return None
+        prem = chain.get((order["strike"], order["side"]))
+        placed_now = len(self.premium_history.get((order["strike"], order["side"]), [])) - 1 <= order["at"]
+        if prem is None or placed_now or self.day_side(index, chain) != order["side"] or prem.low > order["limit"]:
+            return None
+        self.trend_order = None
+        fill = min(order["limit"], prem.open)
+        return self._enter("TREND", order["side"], order["strike"], when, Candle(prem.open, prem.high, prem.low, fill),
+                           index, order["why"], "S3" if order["side"] == "PE" else "R3")
 
     def _against_the_day(self, side: OptionType, index: Candle, premium: Candle) -> bool:
         """Owner, 2026-10-08: no CE reversal while the index is below yesterday's close AND the CE premium is below

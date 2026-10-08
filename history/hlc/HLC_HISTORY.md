@@ -2,12 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 21 trade(s), +833.55 points, ₹+252,567**
+**All days: 25 trade(s), +1005.95 points, ₹+304,392**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
-| 2026-10-08 | SENSEX | 72500 | PROFIT BOOKING / PROFIT BOOKING | no | 0 | +0.00 | ₹+0 | watching |
-| 2026-10-08 | NIFTY | 22600 | PROFIT BOOKING / PANIC | yes | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-08 | SENSEX | 72500 | PROFIT BOOKING / PROFIT BOOKING | no | 2 | +168.21 | ₹+50,463 | watching |
+| 2026-10-08 | NIFTY | 22600 | PROFIT BOOKING / PANIC | yes | 2 | +4.19 | ₹+1,362 | watching |
 | 2026-10-07 | SENSEX | 73000 | PANIC / PROFIT BOOKING | yes | 2 | -77.15 | ₹-23,145 | finished |
 | 2026-10-07 | NIFTY | 22750 | PANIC / PROFIT BOOKING | yes | 2 | -35.95 | ₹-11,684 | finished |
 | 2026-10-06 | SENSEX | 72300 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +127.95 | ₹+38,385 | finished |
@@ -23,17 +23,25 @@
 
 ## 2026-10-08 (Thu)
 
-### NIFTY — watching (last update 2026-10-08 11:32)
+### NIFTY — watching (last update 2026-10-08 11:40)
 
 - Close 22603.05, ATM 22600. R3 23148.6 · R2 22874.3 · R1 22732.6 · S1 22458.3 · S2 22325.7 · S3 22051.4.
 - CE PROFIT BOOKING, PE PANIC — buyer’s day.
-- No trade.
 
-### SENSEX — watching (last update 2026-10-08 11:32)
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| TREND | 325 × 22600 PE | PE Inverted Hammer, retest 200.2, Fib 0.618 205.41 | 09:55 | 205.41 | 180.41 (25 points) | 209.6 (10:25) | closed back across S1 22458.3 | +4.19 | ₹+1,362 |
+| TREND | 325 × 22600 PE | PE Inverted Hammer, retest 208.5, Fib 0.618 217.97 | 10:35 | 217.97 | 192.97 (25 points) | open | OPEN | – | – |
+
+### SENSEX — watching (last update 2026-10-08 11:40)
 
 - Close 72638.7, ATM 72500. R3 73455.4 · R2 72977.7 · R1 72762.9 · S1 72285.2 · S2 72022.3 · S3 71544.6.
 - CE PROFIT BOOKING, PE PROFIT BOOKING.
-- No trade.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| TREND | 300 × 72500 PE | PE Inverted Hammer, retest 317.6, Fib 0.618 334.16 | 09:55 | 334.16 | 284.16 (50 points) | 284.16 (10:10) | SL (50 points) | -50.00 | ₹-15,000 |
+| TREND | 300 × 72500 PE | PE Bullish Engulfing, retest 335.85, Fib 0.618 350.94 | 11:00 | 350.94 | 300.94 (50 points) | 569.15 (11:30) | trailing SL 569.15 (100 below the high 669.15) | +218.21 | ₹+65,463 |
 
 ## 2026-10-07 (Wed)
 

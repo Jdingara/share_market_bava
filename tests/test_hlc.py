@@ -327,3 +327,23 @@ def test_no_ce_reversal_when_index_and_ce_are_both_below_their_closes():
     assert day._against_the_day("CE", Candle(72280, 72290, 72270, 72279.9), Candle(80, 90, 79, 87.45))
     assert not day._against_the_day("CE", Candle(72700, 72710, 72690, 72700), Candle(80, 90, 79, 87.45))
     assert not day._against_the_day("CE", Candle(72280, 72290, 72270, 72279.9), Candle(270, 280, 265, 275))
+
+
+def test_trend_trade_pattern_retest_fib_limit_fills_next_candle():
+    """Owner, 08-10: PE day - PE Bullish Engulfing, green retest of its low -> limit at the retest candle's Fib 0.618,
+    filled from the next candle only."""
+    levels = hlc_levels(72638.7, 72500, 262.9, 214.8)
+    day = HlcDay(date(2026, 10, 8), levels, HLC_MARKETS["SENSEX"], {"CE": (622.6, 232.6, 262.9), "PE": (335, 113.3, 214.8)})
+    day.gap_done = True  # keep the FIB morning trade out of this test
+    idx = Candle(72250, 72260, 72240, 72245)  # below the close
+    ce = Candle(90, 95, 85, 88)  # below its close 262.9 -> PE day
+    seq = [("10:25", Candle(347.55, 351.4, 316.2, 331.85)), ("10:30", Candle(331.85, 414, 331.85, 368.95)),
+           ("10:35", Candle(368.95, 424.8, 350.3, 424.8)), ("10:40", Candle(428.35, 444, 371.2, 395.9)),
+           ("10:45", Candle(398, 402.2, 342.8, 346.65)), ("10:50", Candle(346.65, 375.35, 335.85, 359.75))]
+    for t, pe in seq:
+        assert not any(e.startswith("BUY") for e in day.on_candle(_at(t), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): pe}))
+    assert day.trend_order["limit"] == 350.94
+    events = day.on_candle(_at("10:55"), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(359.75, 397.5, 355, 387.7)})
+    assert not any(e.startswith("BUY") for e in events)  # low 355 > 350.94
+    events = day.on_candle(_at("11:00"), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(387.7, 422.4, 347.55, 366.4)})
+    assert events[-1].startswith("BUY PE 72500 at 350.94 (TREND")
