@@ -121,8 +121,12 @@ def test_sensex_shifts_the_atm_with_otm_100_like_nifty():
     closes = {(72800, "CE"): 500.40, (72800, "PE"): 357.85, (72900, "CE"): 444.20, (72700, "PE"): 316.75,
               (72900, "PE"): 402.10, (73000, "CE"): 394.35, (73000, "PE"): 449.95, (73100, "CE"): 345.95,
               (73100, "PE"): 500.00, (73200, "CE"): 300.00, (73200, "PE"): 550.00, (73300, "CE"): 260.00}
-    plan = build_daily_plan(72771.72, MARKETS["SENSEX"], lambda k, t: closes.get((k, t), 1.0))
+    plan = build_daily_plan(72771.72, replace(MARKETS["SENSEX"], widen_both_fallback=False),
+                            lambda k, t: closes.get((k, t), 1.0))
     assert all(a.otm_ce_strike - a.atm_strike == 100 and a.atm_strike - a.otm_pe_strike == 100 for a in plan.attempts)
+    assert [a.atm_strike for a in plan.attempts][:2] == [72800, 72900]
+    # owner 08-10: with the widening fallback on, the +-100 shifts still come first
+    plan = build_daily_plan(72771.72, MARKETS["SENSEX"], lambda k, t: closes.get((k, t), 1.0))
     assert [a.atm_strike for a in plan.attempts][:2] == [72800, 72900]
 
 
@@ -233,3 +237,12 @@ def test_relaxed_gap_20_before_the_otm_fallback_05_10_nifty():
     plan = build_daily_plan(22422, NIFTY, _lookup(closes))
     assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (22500, 22600, 22400)
     assert plan.final.sniper == pytest.approx(83.30)  # owner 08-10: NIFTY minimum is simply 20
+
+
+def test_sensex_shifts_first_then_widens_the_otms_08_10():
+    """Owner, 08-10: SENSEX +-100 shifts flip 72600 <-> 72500 (CE gap 20.62 / PE gap 22.28) -> widen: +-200 at 72600."""
+    closes = {(72600, "CE"): 211.30, (72600, "PE"): 262.05, (72700, "CE"): 166.55, (72500, "PE"): 214.80,
+              (72500, "CE"): 262.90, (72400, "PE"): 173.75, (72800, "CE"): 129.90}
+    plan = build_daily_plan(72638.7, MARKETS["SENSEX"], _lookup(closes))
+    assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (72600, 72800, 72400)
+    assert plan.final.sniper == pytest.approx(151.825)

@@ -20,5 +20,10 @@ date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_t
 2026-10-07,NIFTY,REVERSAL,CE,22750,"index Bullish Harami at S1, CE Bullish Harami",325,14:40,85.65,60.65,25 points,14:55,74.7,15:00 exit,-10.95,-3559
 2026-10-07,SENSEX,REVERSAL,CE,73000,"index Bullish Engulfing at S1, CE Bullish Engulfing",300,10:15,201.6,151.6,50 points,12:55,151.6,SL (50 points),-50.0,-15000
 2026-10-07,SENSEX,REVERSAL,CE,73000,"index Doji at S1, CE Doji",300,13:35,111.05,61.05,50 points,14:55,83.9,15:00 exit,-27.15,-8145
+2026-10-08,NIFTY,TREND,PE,22600,PE retest of its first 15-min close 193.05,325,09:40,193.05,168.05,25 points,09:45,208.95,TARGET S1 22458.3,15.9,5168
 2026-10-08,NIFTY,TREND,PE,22600,"PE Inverted Hammer, retest 200.2, Fib 0.618 205.41",325,09:55,205.41,180.41,25 points,10:25,209.6,closed back across S1 22458.3,4.19,1362
-2026-10-08,NIFTY,TREND,PE,22600,"PE Inverted Hammer, retest 208.5, Fib 0.618 217.97",325,10:35,217.97,192.97,25 points,,,OPEN,,
+2026-10-08,NIFTY,TREND,PE,22600,"PE Inverted Hammer, retest 208.5, Fib 0.618 217.97",325,10:35,217.97,192.97,25 points,13:35,334.8,trailing SL 334.80 (50 below the high 384.8),116.83,37970
+2026-10-08,SENSEX,TREND,PE,72500,PE retest of its first 15-min close 307.2,300,09:35,307.2,257.2,50 points,10:00,317.2,closed back across S1 72285.2,10.0,3000
+2026-10-08,SENSEX,TREND,PE,72500,"PE Inverted Hammer, retest 317.6, Fib 0.618 334.16",300,10:00,332.45,282.45,50 points,10:10,282.45,SL (50 points),-50.0,-15000
+2026-10-08,SENSEX,TREND,PE,72500,PE retest of its first 15-min close 307.2,300,10:10,307.2,257.2,50 points,10:45,344,trailing SL 344.00 (100 below the high 444),36.8,11040
+2026-10-08,SENSEX,TREND,PE,72500,"PE Bullish Engulfing, retest 335.85, Fib 0.618 350.94",300,11:00,350.94,300.94,50 points,11:30,569.15,trailing SL 569.15 (100 below the high 669.15),218.21,65463

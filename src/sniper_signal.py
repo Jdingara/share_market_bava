@@ -45,6 +45,7 @@ class MarketConfig:
     max_otm_steps: int = 5  # widen_otm: try OTM = ATM +- 1..5 strike steps
     relaxed_min_gap: Optional[float] = None  # owner, 2026-10-05: if the plan fails at min_gap, try again at this
     widen_otm_fallback: bool = False  # NIFTY (owner, 2026-10-01): if the ATM shifts still fail, move one OTM out
+    widen_both_fallback: bool = False  # SENSEX (owner, 2026-10-08): if the shifts fail, widen both OTMs until gap 40
     near_atm_close: float = 0  # owner, 2026-10-06: first-half ATM-close trigger - "near" = within this many points
 
     @property
@@ -58,7 +59,8 @@ MARKETS = {
                           relaxed_min_gap=None, near_atm_close=20),  # NSE, Tuesday expiry, 325 qty
     "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=40, expiry_weekday=3, lot_size=20, max_lots=15,
                            index_token=265, options_exchange="BFO",
-                           widen_otm=False,  # owner 07-10: OTM always +-100, shift the ATM like NIFTY (was True 29-09)
+                           widen_otm=False,  # owner 07-10: OTM +-100, shift the ATM like NIFTY (was True 29-09)
+                           widen_both_fallback=True,  # owner 08-10: ... then widen the OTMs until gap 40
                            relaxed_min_gap=None,  # owner 08-10: SENSEX minimum 40 only (32 dropped)
                            near_atm_close=30),  # BSE, Thursday expiry, 300 qty
 }
@@ -167,6 +169,12 @@ def build_daily_plan(index_close: float, market: MarketConfig, premium: PremiumL
         if retry.final is not None:
             return DailyPlan(retry.market, index_close, retry.attempts, retry.final,
                              retry.reason + f" (gap >= {market.relaxed_min_gap:g})")
+    if plan.final is None and market.widen_both_fallback and not plan.reason.startswith("both gaps fail"):
+        # Owner, 2026-10-08: SENSEX - the +-100 shifts first; if they fail, keep the nearest ATM and widen both OTMs
+        # (+-200, +-300, ...) until both gaps reach 40. 08-10: ATM 72600, +-200, Sniper 151.82 (72400 PE 225 -> 289).
+        widened = _widen_otms(index_close, market, premium, attempts)
+        if widened.final is not None:
+            return widened
     if plan.final is None and market.widen_otm_fallback and not plan.reason.startswith("both gaps fail"):
         return _move_one_otm_out(index_close, market, premium, attempts)
     return plan
