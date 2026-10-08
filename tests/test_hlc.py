@@ -318,3 +318,12 @@ def test_big_gap_trade_trails_100_below_the_high_once_100_up():
     assert day._manage(trade, _at("09:35"), Candle(73299, 73320, 73298, 73318), Candle(370, 450, 365, 440), time(9, 40)) == []
     events = day._manage(trade, _at("09:40"), Candle(73318, 73330, 73317, 73329), Candle(440, 445, 340, 345), time(9, 45))
     assert "trailing SL 350.00" in events[0] and trade.pnl_points == 50
+
+
+def test_no_ce_reversal_when_index_and_ce_are_both_below_their_closes():
+    """Owner, 08-10: SENSEX CE 72500 at 87.45 (close 262.90) with the index below 72638.7 -> PE day, no CE."""
+    levels = hlc_levels(72638.7, 72500, 262.9, 214.8)
+    day = HlcDay(date(2026, 10, 8), levels, HLC_MARKETS["SENSEX"], {"CE": (622.6, 232.6, 262.9), "PE": (335, 113.3, 214.8)})
+    assert day._against_the_day("CE", Candle(72280, 72290, 72270, 72279.9), Candle(80, 90, 79, 87.45))
+    assert not day._against_the_day("CE", Candle(72700, 72710, 72690, 72700), Candle(80, 90, 79, 87.45))
+    assert not day._against_the_day("CE", Candle(72280, 72290, 72270, 72279.9), Candle(270, 280, 265, 275))

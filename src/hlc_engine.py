@@ -303,7 +303,7 @@ class HlcDay:
             level = self._level_near(span_low, ("S1", "S2", "S3"))
             ce_history = self.premium_history.get((atm, "CE"), [])
             prem_pattern = bullish_pattern(ce_history[-3:])
-            if level and prem_pattern:
+            if level and prem_pattern and not self._against_the_day("CE", index, chain[(atm, "CE")]):
                 event = self._enter("REVERSAL", "CE", atm, when, chain[(atm, "CE")], index,
                                     f"index {up[0]} at {level}, CE {prem_pattern[0]}", "Close",
                                     dict(self.levels.ladder())[level])
@@ -316,13 +316,23 @@ class HlcDay:
             level = self._level_near(span_high, ("R1", "R2", "R3"))
             pe_history = self.premium_history.get((atm, "PE"), [])
             prem_pattern = bullish_pattern(pe_history[-3:])
-            if level and prem_pattern:
+            if level and prem_pattern and not self._against_the_day("PE", index, chain[(atm, "PE")]):
                 event = self._enter("REVERSAL", "PE", atm, when, chain[(atm, "PE")], index,
                                     f"index {down[0]} at {level}, PE {prem_pattern[0]}", "Close",
                                     dict(self.levels.ladder())[level])
                 if event:
                     return events + [event]
         return events
+
+    def _against_the_day(self, side: OptionType, index: Candle, premium: Candle) -> bool:
+        """Owner, 2026-10-08: no CE reversal while the index is below yesterday's close AND the CE premium is below
+        its own yesterday close - that's a PE day (08-10 SENSEX: CE 72500 87.45 vs close 262.90, index below 72638.7
+        -> the 09:55 CE was wrong). Mirror for PE on an up day."""
+        yesterday = self.yesterday.get(side)
+        if yesterday is None:
+            return False
+        index_against = index.close < self.levels.close if side == "CE" else index.close > self.levels.close
+        return index_against and premium.close < yesterday[2]
 
     def buyers_day(self) -> bool:
         """One leg PROFIT BOOKING yesterday, the other PANIC."""
