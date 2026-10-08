@@ -316,3 +316,7 @@ def test_sideways_day_uv_trade_on_the_atm_after_reversal_and_retest():
     events = day.on_candle(at("09:40"), {"atm_ce": ce, "atm_pe": Bar(141, 125, 140, 127), "otm_ce": oce, "otm_pe": ope})
     order = events[0]
     assert order.kind == "ORDER" and order.setup.contract == "atm_pe" and (order.square, order.next_square) == (121, 144)
+    # Fib 0.618 of the confirmation candle (125 -> 141): 141 - 0.618 x 16 = 131.11 -> filled when it comes back
+    events = day.on_candle(at("09:45"), {"atm_ce": ce, "atm_pe": Bar(138, 130, 135, 137), "otm_ce": oce, "otm_pe": ope})
+    trade = events[0].trade
+    assert (trade.entry_fill, trade.stop_loss, trade.target) == (131.11, 100, 169)

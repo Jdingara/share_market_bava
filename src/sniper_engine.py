@@ -104,6 +104,7 @@ from sniper_signal import (
 )
 
 CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
+UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
 KEEP_FIXED_TARGET = True
 FILL_AT_SQUARE = True
@@ -170,6 +171,7 @@ class _Pending:
     limit_only: bool = False  # Sniper body entry (owner, 05-10): buy at k^2 only, never chase the next square
     atm_close_trigger: float = 0.0  # first-half ATM-close trigger (owner, 06-10) - becomes the trade's trigger
     near: bool = False
+    limit_price: Optional[float] = None  # U/V trade (owner, 08-10): buy limit at the confirmation candle's Fib 0.618
 
 
 def _key(setup: TradeSetup) -> str:
@@ -421,8 +423,8 @@ class SniperDay:
     def _uv_entry(self, half: str, when: datetime) -> Optional[Event]:
         """Owner, 2026-10-08: on a sideways day (all 4 below their closes) trade the ATM only, U/V style - an ATM
         leg shows a bullish reversal pattern, then a later green candle retests the pattern's low (comes within a
-        quarter of the pattern's range of it, doesn't close below it) -> buy that ATM at the square (limit k^2 or
-        stop (k+1)^2), SL one square down, target two up. A close below the pattern low cancels it."""
+        quarter of the pattern's range of it, doesn't close below it) = the confirmation candle -> buy limit at its
+        Fib 0.618 (high - 0.618 x range); SL one square below that price's square, target two squares up. A close below the pattern low cancels it."""
         for leg, buy_type in (("atm_ce", "CE"), ("atm_pe", "PE")):
             pattern = self.uv_pattern.get(leg)
             history = self.atm_history[leg]
@@ -437,9 +439,11 @@ class SniperDay:
                 continue
             if c.low <= low + 0.25 * (high - low) and c.green:
                 del self.uv_pattern[leg]
+                # Owner, 08-10: "Fib on the confirmation candle, entry at 0.618" - a buy limit at high - 0.618 x range
+                entry = round(c.high - UV_FIB * (c.high - c.low), 2)
                 setup = TradeSetup(half, "up" if buy_type == "CE" else "down", "PE" if buy_type == "CE" else "CE",
-                                   self.row.atm_strike, buy_type, square_levels(c.close), contract=leg)
-                pending = _Pending(setup, highest_square_below(c.close), c.close)
+                                   self.row.atm_strike, buy_type, square_levels(entry), contract=leg)
+                pending = _Pending(setup, highest_square_below(entry), c.close, limit_price=entry)
                 self.halves_used.add(half)
                 self.pending.append(pending)
                 return self._order_event("ORDER", pending, when)
@@ -511,6 +515,10 @@ class SniperDay:
     def _pending_fill(pending: _Pending, bar: Bar) -> Optional[tuple[int, float]]:
         """(k, fill price) if this candle fills the pending buy, else None."""
         k = pending.k
+        if pending.limit_price is not None:  # U/V trade: a plain limit at the Fib 0.618 level; SL/target by k
+            if bar.low <= pending.limit_price:
+                return k, min(pending.limit_price, bar.open) if bar.open is not None else pending.limit_price
+            return None
         limit, stop = k * k, (k + 1) ** 2
         back, up = pending.has_limit and bar.low <= limit, bar.high >= stop and not pending.limit_only
         if back and up:

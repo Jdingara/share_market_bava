@@ -20,3 +20,4 @@ date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_t
 2026-10-07,NIFTY,REVERSAL,CE,22750,"index Bullish Harami at S1, CE Bullish Harami",325,14:40,85.65,60.65,25 points,14:55,74.7,15:00 exit,-10.95,-3559
 2026-10-07,SENSEX,REVERSAL,CE,73000,"index Bullish Engulfing at S1, CE Bullish Engulfing",300,10:15,201.6,151.6,50 points,12:55,151.6,SL (50 points),-50.0,-15000
 2026-10-07,SENSEX,REVERSAL,CE,73000,"index Doji at S1, CE Doji",300,13:35,111.05,61.05,50 points,14:55,83.9,15:00 exit,-27.15,-8145
+2026-10-08,SENSEX,REVERSAL,CE,72500,"index Bullish Engulfing at S1, CE Bullish Engulfing",300,09:55,87.45,37.45,50 points,11:20,37.45,SL (50 points),-50.0,-15000

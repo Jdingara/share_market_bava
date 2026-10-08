@@ -296,8 +296,9 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
         note = (" - HIGH confidence: ATM already below Sniper" if event.atm_below_sniper else "") + note
         if event.kind == "ORDER" and event.setup.contract:
             return (f"SIGNAL {symbol}: sideways day, ATM {event.setup.buy_type} U/V - reversal then retest, "
-                    f"candle {event.when:%H:%M} closed {event.signal_close:.2f} - WOULD BUY {qty} at {event.square} "
-                    f"if it comes back, or at {event.next_square} if it runs up{note}")
+                    f"candle {event.when:%H:%M} closed {event.signal_close:.2f} - WOULD BUY {qty} at the Fib 0.618 "
+                    f"of that candle (limit), SL {(int(event.square ** 0.5) - 1) ** 2}, "
+                    f"target {(int(event.square ** 0.5) + 2) ** 2}{note}")
         if event.kind == "ORDER" and event.body_entry:
             return (f"SIGNAL {symbol}: ATM {event.setup.buy_type} candle {event.when:%H:%M} body closed above the Sniper - "
                     f"WOULD BUY {qty} at {event.square} (limit), fixed SL {(int(event.square ** 0.5) - 1) ** 2}, "
