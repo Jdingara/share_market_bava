@@ -346,6 +346,8 @@ class SniperDay:
                 continue
             otm_key = _otm_key(setup.buy_type)
             buy_close = current[otm_key]
+            if self._otm_below_its_close(half, setup.buy_type, bars):
+                continue
             k = highest_square_below(buy_close)  # the highest square this close is above
             # Owner, 2026-09-29: ATM below Sniper = ATM sellers strong -> OTM profit-booking/panic = buying chance.
             # Recorded as extra confidence, not required.
@@ -397,6 +399,12 @@ class SniperDay:
                             atm_close_trigger=atm_close, near=True)
         return None
 
+    def _otm_below_its_close(self, half: str, buy_type: str, bars: dict[str, Bar]) -> bool:
+        """Owner, 2026-10-08 (point 4): in the first half, an OTM still below its own yesterday close is no trade,
+        even with the ATM below its close and the Sniper. (Second half: the Sniper trigger as usual.)"""
+        key = _otm_key(buy_type)
+        return half == "first" and bars[key].close < self.prev[key]
+
     def _yesterday_high_entry(self, half: str, bars: dict[str, Bar], when: datetime) -> Optional[Event]:
         """Owner, 2026-10-08: an ATM leg opened below the Sniper (or closed below it by 09:30) -> when the opposite
         OTM closes above its yesterday's high, buy it at the upcoming square; SL one square down, target two up."""
@@ -427,7 +435,7 @@ class SniperDay:
             if bar.open is None or not (bar.open < sniper < bar.close):
                 continue
             setup = next((s for s in self.setups if s.half == half and s.buy_type == buy_type), None)
-            if setup is None:
+            if setup is None:  # (point 4's OTM-below-close filter doesn't apply here - 05-10 owner's trade)
                 continue
             otm_close = bars[_otm_key(buy_type)].close
             k = highest_square_below(otm_close)

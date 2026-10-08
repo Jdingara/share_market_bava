@@ -25,7 +25,7 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 ## 2026-10-08 (Thu)
 
-### NIFTY — watching (last update 2026-10-08 09:25)
+### NIFTY — watching (last update 2026-10-08 09:28)
 
 - NIFTY close 22603.05 on 2026-10-07, expiry 2026-10-13, qty 325.
 - Plan: ATM 22600 after 0 shift(s), Sniper 92.88.

@@ -283,3 +283,17 @@ def test_atm_below_sniper_early_then_otm_above_yesterday_high_buys_the_upcoming_
                                          "otm_ce": flat_ce, "otm_pe": Bar(158, 140, 156, 141)})  # 156 > 150
     order = [e for e in events if e.kind == "ORDER"][0]
     assert order.setup.buy_type == "PE" and order.square == 0 and order.next_square == 169
+
+
+def test_first_half_no_trade_while_the_otm_is_below_its_own_close():
+    """Owner, 08-10 (point 4): ATM CE below its close and the Sniper, but OTM PE below ITS close -> no trade."""
+    from datetime import date, datetime
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
+    row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
+    day = SniperDay(date(2026, 10, 8), row)
+    at = lambda hm: datetime(2026, 10, 8, int(hm[:2]), int(hm[3:]))
+    events = day.on_candle(at("09:30"), {"atm_ce": Bar(95, 85, 88, 94), "atm_pe": Bar(150, 140, 148, 141),
+                                         "otm_ce": Bar(90, 80, 88, 85), "otm_pe": Bar(98, 90, 95, 92)})  # 95 < 98.60
+    assert events == []
