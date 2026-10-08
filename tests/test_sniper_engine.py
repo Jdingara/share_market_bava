@@ -262,3 +262,24 @@ def test_atm_close_trigger_does_not_need_the_atm_below_the_sniper():
 def test_atm_close_trigger_is_first_half_only():
     engine, events = _run_sensex([("12:10", (435, 420, 432.0, 425))])
     assert all(e.atm_close_trigger == 0 for e in events)
+
+
+def test_atm_below_sniper_early_then_otm_above_yesterday_high_buys_the_upcoming_square():
+    """Owner, 08-10: ATM CE opened below the Sniper -> OTM PE closing above its yesterday high (150) -> buy stop
+    at the upcoming square 169, SL 144, target 225."""
+    from datetime import date, datetime
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
+    row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final  # Sniper 92.88
+    day = SniperDay(date(2026, 10, 8), row)
+    day.otm_yesterday_high = {"otm_pe": 150.0, "otm_ce": 200.0}
+    at = lambda hm: datetime(2026, 10, 8, int(hm[:2]), int(hm[3:]))
+    flat_ce = Bar(90, 80, 85, 88)
+    day.on_candle(at("09:15"), {"atm_ce": Bar(95, 85, 88, 90), "atm_pe": Bar(190, 170, 185, 172),
+                                "otm_ce": flat_ce, "otm_pe": Bar(140, 120, 135, 125)})  # ATM CE opens 90 < 92.88
+    assert "atm_ce" in day.early_below_sniper
+    events = day.on_candle(at("09:30"), {"atm_ce": Bar(80, 70, 72, 78), "atm_pe": Bar(200, 185, 198, 186),
+                                         "otm_ce": flat_ce, "otm_pe": Bar(158, 140, 156, 141)})  # 156 > 150
+    order = [e for e in events if e.kind == "ORDER"][0]
+    assert order.setup.buy_type == "PE" and order.square == 0 and order.next_square == 169

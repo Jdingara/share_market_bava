@@ -85,7 +85,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Literal, Optional
 
 from sniper_signal import (
@@ -210,6 +210,10 @@ class SniperDay:
         self.sl_on_close = sl_on_close
         self.first_tsl_on_touch = first_tsl_on_touch
         self.index_close = index_close  # yesterday's index close, for the ATM-close trigger's "near" form
+        # Owner, 2026-10-08: ATM leg opened below the Sniper, or closed below it on a candle ending by 09:30 ->
+        # the opposite OTM closing above ITS yesterday high is a signal (buy at the upcoming square).
+        self.otm_yesterday_high: dict[str, float] = {}  # "otm_ce"/"otm_pe" -> yesterday's high (set by the live bot)
+        self.early_below_sniper: set[str] = set()  # "atm_ce"/"atm_pe" legs that went below the Sniper early
         self.near_points = near_points
         self.pending: list[_Pending] = []
         self.setups = trade_setups(row)
@@ -253,6 +257,12 @@ class SniperDay:
         events: list[Event] = []
         closes_at_exit = candle_close_time(when) >= EXIT_BY
         previous_otm_close = self._last_otm_close
+        for leg in ("atm_ce", "atm_pe"):
+            bar = bars[leg]
+            opened_below = when.time() == time(9, 15) and bar.open is not None and bar.open < self.row.sniper
+            closed_below_early = candle_close_time(when) <= time(9, 30) and bar.close < self.row.sniper
+            if opened_below or closed_below_early:
+                self.early_below_sniper.add(leg)
         self._last_otm_close = {"otm_ce": bars["otm_ce"].close, "otm_pe": bars["otm_pe"].close}
 
         for setup, trade in list(self.open_trades):
@@ -326,6 +336,10 @@ class SniperDay:
         if event:
             return events + [event]
 
+        event = self._yesterday_high_entry(half, bars, when)
+        if event:
+            return events + [event]
+
         for setup in (s for s in self.setups if s.half == half):
             falling_key = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
             if current[falling_key] >= self.prev[falling_key]:
@@ -381,6 +395,25 @@ class SniperDay:
                 and atm_close - buy_close <= self.near_points):
             return _Pending(setup, n - 1, buy_close, has_limit=False, atm_below_sniper=atm_below_sniper,
                             atm_close_trigger=atm_close, near=True)
+        return None
+
+    def _yesterday_high_entry(self, half: str, bars: dict[str, Bar], when: datetime) -> Optional[Event]:
+        """Owner, 2026-10-08: an ATM leg opened below the Sniper (or closed below it by 09:30) -> when the opposite
+        OTM closes above its yesterday's high, buy it at the upcoming square; SL one square down, target two up."""
+        for setup in (s for s in self.setups if s.half == half):
+            falling = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
+            otm_key = _otm_key(setup.buy_type)
+            high = self.otm_yesterday_high.get(otm_key)
+            if falling not in self.early_below_sniper or high is None:
+                continue
+            close = bars[otm_key].close
+            if close <= high:
+                continue
+            pending = _Pending(setup, highest_square_below(close), close, has_limit=False,
+                               atm_below_sniper=bars[falling].close < self.row.sniper)
+            self.halves_used.add(half)
+            self.pending.append(pending)
+            return self._order_event("ORDER", pending, when)
         return None
 
     def _sniper_body_entry(self, half: str, bars: dict[str, Bar], when: datetime) -> Optional[Event]:

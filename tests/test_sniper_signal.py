@@ -232,4 +232,4 @@ def test_relaxed_gap_20_before_the_otm_fallback_05_10_nifty():
               (22500, "PE"): 144.10, (22600, "CE"): 67.30}
     plan = build_daily_plan(22422, NIFTY, _lookup(closes))
     assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (22500, 22600, 22400)
-    assert plan.final.sniper == pytest.approx(83.30) and "(gap >= 20)" in plan.reason
+    assert plan.final.sniper == pytest.approx(83.30)  # owner 08-10: NIFTY minimum is simply 20
