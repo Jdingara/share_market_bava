@@ -5,7 +5,7 @@ $repo = $PSScriptRoot
 Set-Location $repo
 $today = Get-Date -Format "yyyy-MM-dd"
 $log = Join-Path $repo "data\paper_trades\daily_push_$today.txt"
-function Note($text) { "$(Get-Date -Format HH:mm:ss) $text" | Tee-Object -FilePath $log -Append }
+function Note($text) { $line = "$(Get-Date -Format HH:mm:ss) $text"; Write-Output $line; Add-Content -Path $log -Value $line -Encoding UTF8 }
 
 git add history 2>&1 | ForEach-Object { Note "git: $_" }
 git diff --cached --quiet

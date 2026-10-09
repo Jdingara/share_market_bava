@@ -8,7 +8,7 @@ $today = Get-Date -Format "yyyy-MM-dd"
 $out = Join-Path $repo "data\paper_trades"
 New-Item -ItemType Directory -Force $out | Out-Null
 $log = Join-Path $out "daily_start_$today.txt"
-function Note($text) { "$(Get-Date -Format HH:mm:ss) $text" | Tee-Object -FilePath $log -Append }
+function Note($text) { $line = "$(Get-Date -Format HH:mm:ss) $text"; Write-Output $line; Add-Content -Path $log -Value $line -Encoding UTF8 }
 
 Note "daily start"
 git pull --ff-only 2>&1 | ForEach-Object { Note "git: $_" }
