@@ -1,4 +1,4 @@
-# Daily paper-bot start (owner, 2026-10-08). Run by Windows Task Scheduler at 08:40, Mon-Fri.
+﻿# Daily paper-bot start (owner, 2026-10-08). Run by Windows Task Scheduler at 08:40, Mon-Fri.
 # Syncs the code from GitHub, opens the Zerodha login (you log in; no copy-paste), then starts the
 # 4 paper bots hidden in the background. Dashboards: :8050 :8051 :8052 :8053. PAPER MODE - no real orders.
 $ErrorActionPreference = "Continue"
@@ -32,4 +32,4 @@ foreach ($b in $bots) {
     -RedirectStandardError (Join-Path $out "console_$($b.n)_$today.err.txt")
   Note "started $($b.n)"
 }
-Start-Process "http://127.0.0.1:8050"
+Start-Process (Join-Path $repo "all_bots.html")
