@@ -34,7 +34,7 @@
 |---|---|---|---|---|---|---|---|---|---|
 | CONFIRM | 325 × 22250 CE | index in Fib 0.75-0.786 zone 22317.27-22320.30, CE Bullish Engulfing | 09:25 | 223 | 198 (25 points) | open | OPEN | – | – |
 
-### SENSEX — watching (last update 2026-10-09 08:40)
+### SENSEX — watching (last update 2026-10-09 10:49)
 
 - Close 71593.24, ATM 71600. R3 73995.8 · R2 72797.9 · R1 72197.95 · S1 71000.05 · S2 70402.1 · S3 69204.2.
 - CE PROFIT BOOKING, PE PANIC — buyer’s day.

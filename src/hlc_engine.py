@@ -147,6 +147,8 @@ class HlcDay:
         self.daily_highs: dict[str, list[float]] = {}  # side -> morning ATM option's daily highs, yesterday first
         self.zone_touched_at: Optional[int] = None
         # Owner, 2026-10-08: day-side TREND trade on 15-minute closes vs the first 15-minute close
+        self.first5_high: dict[str, float] = {}  # owner, 2026-10-09: day side's first 5-minute candle high (BREAK)
+        self.break_done = False
         self.first15_close: dict[str, float] = {}
         self.went_above: dict[str, int] = {}  # side -> candle no. when its premium closed above the first 15-min close
         # Owner, 2026-10-08: day-side pattern TREND trade - premium reversal pattern, retest, buy limit at the Fib 0.618
@@ -292,7 +294,8 @@ class HlcDay:
         if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
 
-        event = self._pattern_trend_entry(when, index, chain) or self._trend_entry(when, index, chain)
+        event = (self._break_entry(when, index, chain) or self._pattern_trend_entry(when, index, chain)
+                 or self._trend_entry(when, index, chain))
         if event:
             return events + [self._with_premium_targets(event)]
 
@@ -357,11 +360,32 @@ class HlcDay:
             history = self.premium_history.get((atm, side), [])
             if not history:
                 continue
+            if len(history) == 1:
+                self.first5_high[side] = history[0].high
             if _closes_at(when) == time(9, 30):
                 self.first15_close[side] = history[-1].close
             elif (side in self.first15_close and side not in self.went_above
                   and history[-1].close > self.first15_close[side]):
                 self.went_above[side] = len(history) - 1
+
+    def _break_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+        """Owner, 2026-10-09: on a CE day (PE day) the CE (PE) premium CLOSES strongly above its first 5-minute candle's
+        high -> buy at that close. The day's first entry, once. 09-10 SENSEX: 71600 CE first candle high 859, the
+        09:25 candle closed 882.45 -> 882 (owner's trade). SL -50/-25, targets the next index levels, trailing."""
+        if self.break_done or self.trades:
+            return None
+        side = self.day_side(index, chain)
+        atm = self.levels.atm
+        history = self.premium_history.get((atm, side), []) if side else []
+        if side is None or side not in self.first5_high or len(history) < 2:
+            return None
+        high, c = self.first5_high[side], history[-1]
+        if c.close <= high or any(x.close > high for x in history[1:-1]):
+            return None  # needs the FIRST close above the first candle's high
+        self.break_done = True
+        return self._enter("BREAK", side, atm, when, chain[(atm, side)], index,
+                           f"{side} closed {c.close:g} above its first 5-min high {high:g}",
+                           "S3" if side == "PE" else "R3")
 
     def _trend_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
         """Owner, 2026-10-08 - TREND trade for a direct bullish/bearish move (no pattern needed): on a PE day (CE day)
