@@ -2,12 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 28 trade(s), +1185.48 points, ₹+361,569**
+**All days: 31 trade(s), +1527.23 points, ₹+430,431**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
-| 2026-10-09 | SENSEX | 71600 | PROFIT BOOKING / PANIC | yes | 0 | +0.00 | ₹+0 | watching |
-| 2026-10-09 | NIFTY | 22250 | PROFIT BOOKING / PANIC | yes | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-09 | SENSEX | 71600 | PROFIT BOOKING / PANIC | yes | 1 | +255.80 | ₹+40,928 | watching |
+| 2026-10-09 | NIFTY | 22250 | PROFIT BOOKING / PANIC | yes | 2 | +85.95 | ₹+27,934 | watching |
 | 2026-10-08 | SENSEX | 72500 | PROFIT BOOKING / PROFIT BOOKING | no | 4 | +215.01 | ₹+64,503 | finished |
 | 2026-10-08 | NIFTY | 22600 | PROFIT BOOKING / PANIC | yes | 3 | +136.92 | ₹+44,499 | finished |
 | 2026-10-07 | SENSEX | 73000 | PANIC / PROFIT BOOKING | yes | 2 | -77.15 | ₹-23,145 | finished |
@@ -25,17 +25,24 @@
 
 ## 2026-10-09 (Fri)
 
-### NIFTY — watching (last update 2026-10-09 14:32)
+### NIFTY — watching (last update 2026-10-09 14:35)
 
 - Close 22231.8, ATM 22250. R3 22809.0 · R2 22529.5 · R1 22388.4 · S1 22108.9 · S2 21970.5 · S3 21691.0.
 - CE PROFIT BOOKING, PE PANIC — buyer’s day.
-- No trade.
 
-### SENSEX — watching (last update 2026-10-09 14:32)
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| BREAK | 325 × 22250 CE | CE closed 223 above its first 5-min high 221.4 | 09:25 | 223 | 198 (25 points) | 333.95 (11:15) | TARGET R2 22529.5 | +110.95 | ₹+36,059 |
+| TREND | 325 × 22250 CE | CE Bullish Engulfing, retest 299.05, Fib 0.618 303.52 | 11:40 | 303.52 | 278.52 (25 points) | 278.52 (11:50) | SL (25 points) | -25.00 | ₹-8,125 |
+
+### SENSEX — watching (last update 2026-10-09 14:35)
 
 - Close 71593.24, ATM 71600. R3 73995.8 · R2 72797.9 · R1 72197.95 · S1 71000.05 · S2 70402.1 · S3 69204.2.
 - CE PROFIT BOOKING, PE PANIC — buyer’s day.
-- No trade.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| BREAK | 160 × 71600 CE | CE closed 882.45 above its first 5-min high 859 | 09:25 | 882.45 | 832.45 (50 points) | 1138.25 (11:30) | trailing SL 1138.25 (100 below the high 1238.25) | +255.80 | ₹+40,928 |
 
 ## 2026-10-08 (Thu)
 

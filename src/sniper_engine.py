@@ -107,7 +107,7 @@ CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
 RIDE_NORMAL_DAYS = True  # owner, 2026-10-09: normal days - no target exit, trailing SL only; max 2 trades
 NORMAL_DAY_MAX_TRADES = 2
 BUYERS_DAY_MAX_TRADES = 4  # owner, 2026-10-09: buyer's-day re-entries stop at 4 trades a day
-UV_TRADE = False  # owner, 2026-10-09: no trades on sideways days (the 08-10 U/V trade kept for comparison)
+UV_TRADE = True  # owner, 2026-10-09: sideways days - no OTM trade, but the ATM U/V trade (own SL/TSL/target)
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
 KEEP_FIXED_TARGET = True
@@ -242,7 +242,9 @@ class SniperDay:
         self.done = False
         self.buyers_day = False  # owner, 2026-10-01: set by the live bot - keep riding the move after a target
         self.continuation: Optional[tuple[TradeSetup, float]] = None
-        self.fixed_sl: set[int] = set()  # id() of trades whose SL doesn't trail (Sniper body entry, owner 05-10)  # (setup, target booked) awaiting a close above
+        self.fixed_sl: set[int] = set()
+        self.uv_trades: dict[int, dict] = {}  # id(trade) -> {"first": (k+1)^2, "touched_at": candle no or None}
+        self.candle_no = 0  # id() of trades whose SL doesn't trail (Sniper body entry, owner 05-10)  # (setup, target booked) awaiting a close above
         # Each OTM's previous candle close, for the crossing check. Seeded with yesterday's close.
         self._last_otm_close = {"otm_ce": row.otm_ce_close, "otm_pe": row.otm_pe_close}
 
@@ -290,8 +292,29 @@ class SniperDay:
                                             found[0])
         self._last_otm_close = {"otm_ce": bars["otm_ce"].close, "otm_pe": bars["otm_pe"].close}
 
+        self.candle_no += 1
         for setup, trade in list(self.open_trades):
             bar = bars[_key(setup)]
+            uv = self.uv_trades.get(id(trade))
+            if uv is not None:
+                # Owner, 2026-10-09 - sideways-day ATM trade: SL the square below the buy price; the first square above
+                # touched and the NEXT candle closing above it -> TSL there; exit at the second square (the target).
+                stop_exit = trade.trail_stop if bar.low <= trade.trail_stop else None
+                if stop_exit is not None:
+                    events.append(self._close(trade, when, stop_exit,
+                                              "TRAIL_STOP" if trade.trail_stop > trade.stop_loss else "STOPLOSS"))
+                elif bar.high >= trade.target:
+                    events.append(self._close(trade, when, trade.target, "TARGET"))
+                elif closes_at_exit:
+                    events.append(self._close(trade, when, bar.close, "TIME_EXIT_1500"))
+                else:
+                    if uv["touched_at"] is not None and self.candle_no > uv["touched_at"] and bar.close > uv["first"]:
+                        trade.trail_stop = max(trade.trail_stop, float(uv["first"]))
+                    if uv["touched_at"] is None and bar.high >= uv["first"]:
+                        uv["touched_at"] = self.candle_no
+                    continue
+                self.open_trades.remove((setup, trade))
+                continue
             # Owner, 2026-10-09: on a normal (non-buyer's) day no target exit - ride with the trailing SL (fixed-SL
             # trades trail too then, or they'd never take profit). Buyer's day: targets as before.
             ride = self.ride_normal_days and not self.buyers_day
@@ -369,7 +392,7 @@ class SniperDay:
         current = {key: bars[key].close for key in CONTRACT_KEYS}
         if is_sideways(current, self.prev):
             self.sideways_candles += 1
-            # Owner, 2026-10-09: no trades on sideways days - the 08-10 U/V trade is switched off (UV_TRADE)
+            # Owner, 2026-10-09: sideways day - no OTM trade; only the ATM U/V trade (UV_TRADE)
             event = self._uv_entry(half, when) if UV_TRADE else None
             return events + ([event] if event else [])
 
@@ -573,6 +596,12 @@ class SniperDay:
             trail_stop=float((k - 1) ** 2),
             atm_below_sniper=atm_below_sniper,
         )
+        if setup.contract:  # the sideways-day ATM (U/V) trade: SL = the square below the buy price, target +2 squares
+            k_low = math.isqrt(int(price))
+            trade.stop_loss = k_low * k_low
+            trade.trail_stop = float(trade.stop_loss)
+            trade.target = (k_low + 2) ** 2
+            self.uv_trades[id(trade)] = {"first": (k_low + 1) ** 2, "touched_at": self.candle_no if bar.high >= (k_low + 1) ** 2 else None}
         self.trades.append(trade)
         events = [Event("ENTRY", trade, body_entry=fixed_sl)]
         stop_exit = self._stop_hit(bar, trade.stop_loss, False) if fill_candle else None

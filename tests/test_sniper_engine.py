@@ -303,9 +303,7 @@ def test_first_half_no_trade_while_the_otm_is_below_its_own_close():
 
 def test_sideways_day_uv_trade_on_the_atm_after_reversal_and_retest(monkeypatch):
     """Owner, 08-10: all 4 below their closes -> ATM PE Bullish Engulfing, then a green candle retesting its low
-    -> buy the ATM PE at the square (limit 144 / stop 169). Switched off 09-10 (no sideways trades); kept for comparison."""
-    import sniper_engine
-    monkeypatch.setattr(sniper_engine, "UV_TRADE", True)
+    -> buy the ATM PE at the confirmation candle's Fib 0.618."""
     from datetime import date, datetime
     from sniper_engine import Bar, SniperDay
     from sniper_signal import MARKETS, build_daily_plan
@@ -323,7 +321,14 @@ def test_sideways_day_uv_trade_on_the_atm_after_reversal_and_retest(monkeypatch)
     # Fib 0.618 of the confirmation candle (125 -> 141): 141 - 0.618 x 16 = 131.11 -> filled when it comes back
     events = day.on_candle(at("09:45"), {"atm_ce": ce, "atm_pe": Bar(138, 130, 135, 137), "otm_ce": oce, "otm_pe": ope})
     trade = events[0].trade
-    assert (trade.entry_fill, trade.stop_loss, trade.target) == (131.11, 100, 169)
+    assert (trade.entry_fill, trade.stop_loss, trade.target) == (131.11, 121, 169)  # owner 09-10: SL = square below
+    # 144 touched, the NEXT candle closes above 144 -> TSL 144; then 169 -> exit at the target
+    day.on_candle(at("09:50"), {"atm_ce": ce, "atm_pe": Bar(145, 133, 138, 135), "otm_ce": oce, "otm_pe": ope})
+    assert trade.trail_stop == 121
+    day.on_candle(at("09:55"), {"atm_ce": ce, "atm_pe": Bar(150, 137, 146, 138), "otm_ce": oce, "otm_pe": ope})
+    assert trade.trail_stop == 144
+    day.on_candle(at("10:00"), {"atm_ce": ce, "atm_pe": Bar(170, 146, 165, 146), "otm_ce": oce, "otm_pe": ope})
+    assert trade.exit_reason == "TARGET" and trade.exit_premium == 169
 
 
 
@@ -378,8 +383,8 @@ def test_normal_day_each_square_touched_past_the_target_moves_the_tsl():
 
 
 
-def test_no_trade_on_a_sideways_day_by_default():
-    """Owner, 09-10: no trades on sideways days - the same U/V setup gives no order."""
+def test_sideways_day_trades_only_the_atm(monkeypatch):
+    """Owner, 09-10: sideways day - no OTM trade; the U/V setup's order is for the ATM."""
     from sniper_engine import Bar, SniperDay
     from sniper_signal import MARKETS, build_daily_plan
     closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
@@ -390,4 +395,4 @@ def test_no_trade_on_a_sideways_day_by_default():
     events = []
     for t, pe in (("09:30", Bar(140, 125, 126, 139)), ("09:35", Bar(141, 124, 140.5, 125)), ("09:40", Bar(141, 125, 140, 127))):
         events += day.on_candle(at(t), {"atm_ce": ce, "atm_pe": pe, "otm_ce": oce, "otm_pe": ope})
-    assert events == []
+    assert [e.setup.contract for e in events if e.kind == "ORDER"] == ["atm_pe"]
