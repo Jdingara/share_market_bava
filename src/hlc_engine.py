@@ -279,9 +279,8 @@ class HlcDay:
             return events
         if self.open_trade is not None or self.pending is not None:
             return events
-        if not self.buyers_day() and len(self.trades) >= MAX_TRADES:
-            # Owner, 2026-10-05: a second trade is allowed after a target too (30-09 had "only after a stop-out").
-            # Owner, 2026-10-01: no limit on a buyer's day - keep trading the day's signals.
+        if len(self.trades) >= MAX_TRADES:
+            # Owner, 2026-10-09: 4 a day on a buyer's day too (01-10 had no limit on a buyer's day).
             return events
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events

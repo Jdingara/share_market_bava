@@ -104,6 +104,7 @@ from sniper_signal import (
 )
 
 CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
+BUYERS_DAY_MAX_TRADES = 4  # owner, 2026-10-09: buyer's-day re-entries stop at 4 trades a day
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
 KEEP_FIXED_TARGET = True
@@ -333,7 +334,8 @@ class SniperDay:
             self.done = True
             return events
 
-        if self.continuation and not self.open_trades and not self.pending and half is not None:
+        if (self.continuation and not self.open_trades and not self.pending and half is not None
+                and len(self.trades) < BUYERS_DAY_MAX_TRADES):  # owner, 2026-10-09: max 4 on a buyer's day
             # Owner, 2026-10-01 (buyer's day): after a target, a candle closing above it -> buy the next square again.
             setup, booked = self.continuation
             close = bars[_key(setup)].close
