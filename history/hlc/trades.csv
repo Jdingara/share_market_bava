@@ -27,4 +27,3 @@ date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_t
 2026-10-08,SENSEX,TREND,PE,72500,"PE Inverted Hammer, retest 317.6, Fib 0.618 334.16",300,10:00,332.45,282.45,50 points,10:10,282.45,SL (50 points),-50.0,-15000
 2026-10-08,SENSEX,TREND,PE,72500,PE retest of its first 15-min close 307.2,300,10:10,307.2,257.2,50 points,10:45,344,trailing SL 344.00 (100 below the high 444),36.8,11040
 2026-10-08,SENSEX,TREND,PE,72500,"PE Bullish Engulfing, retest 335.85, Fib 0.618 350.94",300,11:00,350.94,300.94,50 points,11:30,569.15,trailing SL 569.15 (100 below the high 669.15),218.21,65463
-2026-10-09,NIFTY,CONFIRM,CE,22250,"index in Fib 0.75-0.786 zone 22317.27-22320.30, CE Bullish Engulfing",325,09:25,223,198,25 points,,,OPEN,,

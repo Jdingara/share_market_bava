@@ -107,6 +107,7 @@ CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
 RIDE_NORMAL_DAYS = True  # owner, 2026-10-09: normal days - no target exit, trailing SL only; max 2 trades
 NORMAL_DAY_MAX_TRADES = 2
 BUYERS_DAY_MAX_TRADES = 4  # owner, 2026-10-09: buyer's-day re-entries stop at 4 trades a day
+UV_TRADE = False  # owner, 2026-10-09: no trades on sideways days (the 08-10 U/V trade kept for comparison)
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
 KEEP_FIXED_TARGET = True
@@ -368,7 +369,8 @@ class SniperDay:
         current = {key: bars[key].close for key in CONTRACT_KEYS}
         if is_sideways(current, self.prev):
             self.sideways_candles += 1
-            event = self._uv_entry(half, when)
+            # Owner, 2026-10-09: no trades on sideways days - the 08-10 U/V trade is switched off (UV_TRADE)
+            event = self._uv_entry(half, when) if UV_TRADE else None
             return events + ([event] if event else [])
 
         event = self._sniper_body_entry(half, bars, when)

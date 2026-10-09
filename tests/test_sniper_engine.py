@@ -301,9 +301,11 @@ def test_first_half_no_trade_while_the_otm_is_below_its_own_close():
     assert events == []
 
 
-def test_sideways_day_uv_trade_on_the_atm_after_reversal_and_retest():
+def test_sideways_day_uv_trade_on_the_atm_after_reversal_and_retest(monkeypatch):
     """Owner, 08-10: all 4 below their closes -> ATM PE Bullish Engulfing, then a green candle retesting its low
-    -> buy the ATM PE at the square (limit 144 / stop 169)."""
+    -> buy the ATM PE at the square (limit 144 / stop 169). Switched off 09-10 (no sideways trades); kept for comparison."""
+    import sniper_engine
+    monkeypatch.setattr(sniper_engine, "UV_TRADE", True)
     from datetime import date, datetime
     from sniper_engine import Bar, SniperDay
     from sniper_signal import MARKETS, build_daily_plan
@@ -373,3 +375,19 @@ def test_normal_day_each_square_touched_past_the_target_moves_the_tsl():
     assert trade.trail_stop == 196 and trade.exit_reason == ""
     day.on_candle(at("09:50"), {**other, "otm_pe": Bar(212, 190, 192, 210)})     # comes back down -> out at 196
     assert trade.exit_reason == "TRAIL_STOP" and trade.pnl_points == 52
+
+
+
+def test_no_trade_on_a_sideways_day_by_default():
+    """Owner, 09-10: no trades on sideways days - the same U/V setup gives no order."""
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
+    row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
+    day = SniperDay(date(2026, 10, 8), row)
+    at = lambda hm: datetime(2026, 10, 8, int(hm[:2]), int(hm[3:]))
+    ce, oce, ope = Bar(120, 110, 112, 118), Bar(80, 70, 72, 78), Bar(90, 80, 85, 88)
+    events = []
+    for t, pe in (("09:30", Bar(140, 125, 126, 139)), ("09:35", Bar(141, 124, 140.5, 125)), ("09:40", Bar(141, 125, 140, 127))):
+        events += day.on_candle(at(t), {"atm_ce": ce, "atm_pe": pe, "otm_ce": oce, "otm_pe": ope})
+    assert events == []
