@@ -3,12 +3,12 @@
 **Paper trades — no real orders.** Written automatically by the bot (`src/history.py`) after every entry/exit;
 don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. ₹ = points × qty, before brokerage and charges.
 
-**All days: 24 trade(s), +346.00 points, ₹+108,725**
+**All days: 27 trade(s), +406.00 points, ₹+128,225**
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
-| 2026-10-09 | SENSEX | 71600 | 544.73 | 0 | +0.00 | ₹+0 | watching |
-| 2026-10-09 | NIFTY | 22200 | 98.55 | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-09 | SENSEX | 71600 | 544.73 | 1 | +0.00 | ₹+0 | watching |
+| 2026-10-09 | NIFTY | 22200 | 98.55 | 2 | +60.00 | ₹+19,500 | watching |
 | 2026-10-08 | SENSEX | 72600 | 151.82 | 1 | +64.00 | ₹+19,200 | finished |
 | 2026-10-08 | NIFTY | 22600 | 92.88 | 2 | +116.00 | ₹+37,700 | finished |
 | 2026-10-07 | SENSEX | 73100 | 206.03 | 1 | +0.00 | ₹+0 | finished |
@@ -27,17 +27,24 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 ## 2026-10-09 (Fri)
 
-### NIFTY — watching (last update 2026-10-09 08:40)
+### NIFTY — watching (last update 2026-10-09 10:15)
 
 - NIFTY close 22231.8 on 2026-10-08, expiry 2026-10-13, qty 325.
 - Plan: ATM 22200 after 0 shift(s), Sniper 98.55.
-- No trade yet.
 
-### SENSEX — watching (last update 2026-10-09 08:40)
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O1322300CE | 09:30 ★ HIGH | 196.0 | 196 | 169 → 196 | 256 | 256 (09:50) | TARGET | +60.00 | ₹+19,500 |
+| first | 325 × NIFTY26O1322300CE | 10:10 | 256.0 | 256 | 225 | 324 | open | OPEN | – | – |
+
+### SENSEX — watching (last update 2026-10-09 09:40)
 
 - SENSEX close 71593.24 on 2026-10-08, expiry 2026-10-15, qty 300.
 - Plan: ATM 71600 after 0 shift(s), Sniper 544.73.
-- No trade yet.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 300 × SENSEX26O1571700CE | 09:30 ★ HIGH | 841.0 | 841 | 784 → 841 | 961 | 841 (09:35) | TRAIL_STOP | +0.00 | ₹+0 |
 
 ## 2026-10-08 (Thu)
 

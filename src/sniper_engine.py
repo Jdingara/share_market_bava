@@ -300,6 +300,12 @@ class SniperDay:
                     and bar.high >= (math.isqrt(trade.entry_square) + 1) ** 2):
                 trade.trail_stop = float(trade.entry_square)  # owner, 07-10: first step on a touch -> cost
                 moved_now = True
+            locked = (math.isqrt(trade.entry_square) + 1) ** 2  # one square above entry = one below the target
+            if ride and trails and bar.high >= trade.target and trade.trail_stop < locked:
+                # Owner, 2026-10-09: normal day - the price reaching the target (+2 squares) moves the TSL to +1 square
+                # at once, so even a stop-out from there is a profit.
+                trade.trail_stop = float(locked)
+                moved_now = True
             trailed = trade.trail_stop > trade.stop_loss
             stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
             target_hit = self.keep_target and not ride and bar.high >= trade.target

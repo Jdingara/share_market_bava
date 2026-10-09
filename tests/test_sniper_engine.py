@@ -344,3 +344,9 @@ def test_normal_day_rides_past_the_target_with_the_trailing_sl():
     events = day.on_candle(at("09:40"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
                                          "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target + 20, trade.target - 5, trade.target + 10, 165)})
     assert trade.exit_reason == ""  # went through the target, still open
+    # owner 09-10: reaching the target moved the TSL to one square above the entry -> a later drop exits in profit
+    locked = (int(trade.entry_square ** 0.5) + 1) ** 2
+    assert trade.trail_stop >= locked
+    events = day.on_candle(at("09:45"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
+                                         "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target, locked - 10, locked - 5, trade.target)})
+    assert trade.exit_reason == "TRAIL_STOP" and trade.pnl_points > 0
