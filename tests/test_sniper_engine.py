@@ -350,3 +350,26 @@ def test_normal_day_rides_past_the_target_with_the_trailing_sl():
     events = day.on_candle(at("09:45"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
                                          "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target, locked - 10, locked - 5, trade.target)})
     assert trade.exit_reason == "TRAIL_STOP" and trade.pnl_points > 0
+
+
+
+@pytest.mark.ride
+def test_normal_day_each_square_touched_past_the_target_moves_the_tsl():
+    """Owner, 09-10: entry 144, target 196 -> 196 touched: SL 169; 225 touched: SL 196."""
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
+    row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
+    day = SniperDay(date(2026, 10, 9), row)
+    at = lambda hm: datetime(2026, 10, 9, int(hm[:2]), int(hm[3:]))
+    other = {"atm_ce": Bar(126, 118, 120, 125), "atm_pe": Bar(155, 145, 150, 148), "otm_ce": Bar(85, 80, 82, 85)}
+    day.on_candle(at("09:30"), {**other, "atm_ce": Bar(130, 120, 125, 128), "otm_pe": Bar(150, 120, 149, 125)})
+    events = day.on_candle(at("09:35"), {**other, "otm_pe": Bar(150, 143, 148, 149)})
+    trade = next(e.trade for e in events if e.kind == "ENTRY")
+    assert (trade.entry_square, trade.target) == (144, 196)
+    day.on_candle(at("09:40"), {**other, "otm_pe": Bar(197, 175, 180, 150)})   # touches 196, closes 180
+    assert trade.trail_stop == 169 and trade.exit_reason == ""
+    day.on_candle(at("09:45"), {**other, "otm_pe": Bar(226, 200, 205, 180)})   # touches 225, closes 205
+    assert trade.trail_stop == 196 and trade.exit_reason == ""
+    day.on_candle(at("09:50"), {**other, "otm_pe": Bar(206, 190, 192, 205)})   # back to 196
+    assert trade.exit_reason == "TRAIL_STOP" and trade.pnl_points == 52
