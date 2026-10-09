@@ -104,6 +104,8 @@ from sniper_signal import (
 )
 
 CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
+RIDE_NORMAL_DAYS = True  # owner, 2026-10-09: normal days - no target exit, trailing SL only; max 2 trades
+NORMAL_DAY_MAX_TRADES = 2
 BUYERS_DAY_MAX_TRADES = 4  # owner, 2026-10-09: buyer's-day re-entries stop at 4 trades a day
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
@@ -216,6 +218,7 @@ class SniperDay:
         self.require_cross = require_cross
         self.trailing = trailing
         self.keep_target = keep_target
+        self.ride_normal_days = RIDE_NORMAL_DAYS
         self.fill_at_square = fill_at_square
         self.sl_on_close = sl_on_close
         self.first_tsl_on_touch = first_tsl_on_touch
@@ -288,7 +291,10 @@ class SniperDay:
 
         for setup, trade in list(self.open_trades):
             bar = bars[_key(setup)]
-            trails = self.trailing and id(trade) not in self.fixed_sl
+            # Owner, 2026-10-09: on a normal (non-buyer's) day no target exit - ride with the trailing SL (fixed-SL
+            # trades trail too then, or they'd never take profit). Buyer's day: targets as before.
+            ride = self.ride_normal_days and not self.buyers_day
+            trails = self.trailing and (id(trade) not in self.fixed_sl or ride)
             moved_now = False
             if (trails and self.first_tsl_on_touch and trade.trail_stop <= trade.stop_loss
                     and bar.high >= (math.isqrt(trade.entry_square) + 1) ** 2):
@@ -296,7 +302,7 @@ class SniperDay:
                 moved_now = True
             trailed = trade.trail_stop > trade.stop_loss
             stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
-            target_hit = self.keep_target and bar.high >= trade.target
+            target_hit = self.keep_target and not ride and bar.high >= trade.target
             if target_hit and (moved_now or (self.sl_on_close and not trailed)):  # target reached before the close / the drop
                 events.append(self._close(trade, when, trade.target, "TARGET"))
             elif stop_exit is not None:
@@ -504,6 +510,9 @@ class SniperDay:
         A target, trailing stop or time exit ends the day; an open trade blocks new entries."""
         if not self.trades:
             return True
+        if self.ride_normal_days and not self.buyers_day:
+            # owner, 2026-10-09: normal day - 2 trades whatever the first one's exit (no targets now)
+            return not self.open_trades and len(self.trades) < NORMAL_DAY_MAX_TRADES
         return not self.open_trades and self.trades[-1].exit_reason == "STOPLOSS"
 
     @staticmethod

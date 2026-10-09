@@ -96,6 +96,7 @@ CONFIRM_ZONE = (0.75, 0.786)  # owner, 2026-10-01: double-confirmation trade's i
 FIB_FIRST_CANDLE = time(9, 30)  # owner, 2026-10-01: the level must be reached AFTER 09:30 - the 09:25 candle doesn't count
 LAST_ENTRY_CLOSE = time(14, 55)
 EXIT_CLOSE = time(15, 0)
+NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
 CANDLE = timedelta(minutes=5)
 ATM_SEARCH_STEPS = 6
@@ -279,8 +280,8 @@ class HlcDay:
             return events
         if self.open_trade is not None or self.pending is not None:
             return events
-        if len(self.trades) >= MAX_TRADES:
-            # Owner, 2026-10-09: 4 a day on a buyer's day too (01-10 had no limit on a buyer's day).
+        if len(self.trades) >= (MAX_TRADES if self.buyers_day() else NORMAL_DAY_MAX_TRADES):
+            # Owner, 2026-10-09: buyer's day 4 (was unlimited); other days 2, riding with the trailing SL.
             return events
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
@@ -612,8 +613,11 @@ class HlcDay:
             if (pe and index.close > value) or (not pe and index.close < value):
                 return [self._exit(trade, when, prem.close, f"closed back across {name} {value:g}")]
         events = []
+        ride = not self.buyers_day()  # owner, 2026-10-09: normal days - no target exits, ride with the trailing SL
         while trade.premium_targets and prem.high >= trade.premium_targets[0]:
             high = trade.premium_targets[0]
+            if prem.close <= high and ride:
+                break  # touched, didn't close above: keep riding, look at it again next candle
             if prem.close <= high:
                 return events + [self._exit(trade, when, prem.close, f"TARGET premium high {high:g}")]
             trade.premium_trail = trade.premium_targets.pop(0)
@@ -625,6 +629,13 @@ class HlcDay:
             if not touched:
                 break
             broke = index.close < value if pe else index.close > value
+            if ride:
+                if not broke:
+                    break  # touched, not broken: no exit on a normal day
+                trade.trail_level = trade.targets.pop(0)
+                events.append(f"{name} {value:g} broken (index {index.close:.2f}) - SL moves to {name}"
+                              + (f", next level {trade.targets[0][0]} {trade.targets[0][1]:g}" if trade.targets else ""))
+                continue
             if len(trade.targets) == 1 or not broke:
                 return events + [self._exit(trade, when, prem.close, f"TARGET {name} {value:g}")]
             trade.trail_level = trade.targets.pop(0)  # broke through: SL to this level, next level is the target

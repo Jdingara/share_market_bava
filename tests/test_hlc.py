@@ -220,6 +220,7 @@ def test_panic_pe_above_yesterdays_high_blocks_ce_trades():
 
 def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit():
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
+    day.buyers_day = lambda: True  # target rules (owner 09-10: normal days ride without targets)
     day.on_candle(_at("09:15"), Candle(22760, 22770, 22740, 22745), _chain((60, 62, 55, 58)))
     day.on_candle(_at("09:20"), Candle(22745, 22750, 22738, 22742), _chain((58, 60, 57, 59)))
     day.on_candle(_at("09:25"), Candle(22742, 22743, 22734, 22735), _chain((59, 60, 58, 59)))  # plain down candle
@@ -232,9 +233,9 @@ def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit():
     day._confirm_entry = lambda *a: calls.append(1)  # reaching the entry checks = the gate let it through
     day.on_candle(_at("09:45"), Candle(22650, 22655, 22640, 22642), _chain((90, 91, 85, 86)))
     assert calls
-    # ... up to MAX_TRADES a day (owner 08-10: 4), then no more
-    from hlc_engine import MAX_TRADES
-    day.trades.extend([day.trades[0]] * (MAX_TRADES - len(day.trades)))
+    # ... up to the day's limit (owner 09-10: 2 on a normal day, 4 on a buyer's day), then no more
+    from hlc_engine import NORMAL_DAY_MAX_TRADES
+    day.trades.extend([day.trades[0]] * (NORMAL_DAY_MAX_TRADES - len(day.trades)))
     calls.clear()
     day.on_candle(_at("09:50"), Candle(22641, 22660, 22640, 22658), _chain((86, 92, 85, 91)))
     assert not calls
@@ -367,3 +368,15 @@ def test_trend_trade_pattern_retest_fib_limit_fills_next_candle():
     assert not any(e.startswith("BUY") for e in events)  # low 355 > 350.94
     events = day.on_candle(_at("11:00"), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(387.7, 422.4, 347.55, 366.4)})
     assert events[-1].startswith("BUY PE 72500 at 350.94 (TREND")
+
+
+def test_normal_day_touch_of_a_level_is_not_an_exit():
+    """Owner, 09-10: not a buyer's day -> no target exit; a broken level moves the SL, a touch doesn't exit."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # no yesterday data -> not a buyer's day
+    day.index_history = [Candle(22760, 22770, 22740, 22745)] * 3
+    trade = HlcTrade(date="2026-09-29", kind="TREND", side="PE", strike=22800, pattern="", entry_time="x",
+                     entry_fill=60, entry_index=22745, sl_premium=35, targets=[("S1", 22728.55), ("S2", 22644.35)])
+    assert day._manage(trade, _at("09:40"), Candle(22745, 22746, 22725, 22735), Candle(60, 70, 59, 66), time(9, 45)) == []
+    events = day._manage(trade, _at("09:45"), Candle(22735, 22736, 22700, 22705), Candle(66, 80, 65, 78), time(9, 50))
+    assert "S1 22728.5 broken" in events[0] and trade.exit_reason == ""

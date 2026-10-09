@@ -8,6 +8,8 @@ above 100 (SL 81, target 144). Premium bars are given directly.
 """
 
 import sys
+
+import pytest
 from datetime import date, datetime
 from pathlib import Path
 
@@ -320,3 +322,25 @@ def test_sideways_day_uv_trade_on_the_atm_after_reversal_and_retest():
     events = day.on_candle(at("09:45"), {"atm_ce": ce, "atm_pe": Bar(138, 130, 135, 137), "otm_ce": oce, "otm_pe": ope})
     trade = events[0].trade
     assert (trade.entry_fill, trade.stop_loss, trade.target) == (131.11, 100, 169)
+
+
+
+@pytest.mark.ride
+def test_normal_day_rides_past_the_target_with_the_trailing_sl():
+    """Owner, 09-10: not a buyer's day -> the target doesn't exit; the trailing SL does."""
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
+    row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
+    day = SniperDay(date(2026, 10, 9), row)
+    assert day.ride_normal_days and not day.buyers_day
+    at = lambda hm: datetime(2026, 10, 9, int(hm[:2]), int(hm[3:]))
+    ce = Bar(140, 130, 132, 135)
+    day.on_candle(at("09:30"), {"atm_ce": Bar(130, 120, 125, 128), "atm_pe": Bar(150, 140, 148, 141),
+                                "otm_ce": Bar(90, 80, 85, 88), "otm_pe": Bar(150, 120, 149, 125)})  # signal > 132.60
+    events = day.on_candle(at("09:35"), {"atm_ce": Bar(126, 118, 120, 125), "atm_pe": Bar(155, 145, 150, 148),
+                                         "otm_ce": Bar(85, 80, 82, 85), "otm_pe": Bar(170, 140, 165, 149)})
+    trade = next(e.trade for e in events if e.kind == "ENTRY")
+    events = day.on_candle(at("09:40"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
+                                         "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target + 20, trade.target - 5, trade.target + 10, 165)})
+    assert trade.exit_reason == ""  # went through the target, still open
