@@ -300,15 +300,18 @@ class SniperDay:
                     and bar.high >= (math.isqrt(trade.entry_square) + 1) ** 2):
                 trade.trail_stop = float(trade.entry_square)  # owner, 07-10: first step on a touch -> cost
                 moved_now = True
+            raise_to = None
             if ride and trails and bar.high >= trade.target:
-                # Owner, 2026-10-09: normal day - from the target (+2 squares) on, each square the price TOUCHES moves
-                # the TSL to the square below it at once: 144 entry -> 196 touched -> SL 169; 225 touched -> SL 196.
+                # Owner, 2026-10-09: normal day - we want the 2 squares. Once the target (+2 squares) is touched the SL
+                # is the target itself (144 entry: 196 touched -> SL 196; back down without reaching 225 -> out at 196);
+                # higher squares touched raise it further (256 touched -> SL 225). Applied from the next candle - the
+                # touching candle itself traded below the target on its way up.
                 m = math.isqrt(int(bar.high))
-                if (m - 1) ** 2 > trade.trail_stop:
-                    trade.trail_stop = float((m - 1) ** 2)
-                    moved_now = True
+                raise_to = float(max(trade.target, (m - 1) ** 2))
             trailed = trade.trail_stop > trade.stop_loss
             stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
+            if raise_to is not None and raise_to > trade.trail_stop and stop_exit is None:
+                trade.trail_stop = raise_to
             target_hit = self.keep_target and not ride and bar.high >= trade.target
             if target_hit and (moved_now or (self.sl_on_close and not trailed)):  # target reached before the close / the drop
                 events.append(self._close(trade, when, trade.target, "TARGET"))
