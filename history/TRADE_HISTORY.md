@@ -29,13 +29,13 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 ## 2026-10-12 (Mon)
 
-### NIFTY — watching (last update 2026-10-12 11:31)
+### NIFTY — watching (last update 2026-10-12 11:35)
 
 - NIFTY close 22520.45 on 2026-10-09, expiry 2026-10-13, qty 325.
 - Plan: ATM 22600 after 1 shift(s), Sniper 60.2.
 - No trade yet.
 
-### SENSEX — watching (last update 2026-10-12 11:31)
+### SENSEX — watching (last update 2026-10-12 11:35)
 
 - SENSEX close 72472.33 on 2026-10-09, expiry 2026-10-15, qty 160.
 - Plan: ATM 72600 after 1 shift(s), Sniper 430.5.
