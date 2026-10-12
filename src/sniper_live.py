@@ -42,6 +42,7 @@ from dashboard import DashboardState, start_dashboard
 from history import record_day
 
 from keep_awake import keep_awake
+from sizing import CapitalLedger
 from kite_auth import PROJECT_ROOT, connected_client
 from sniper_engine import CONTRACT_KEYS, Bar, Event, SniperDay, TradeResult
 from sniper_signal import (
@@ -359,6 +360,7 @@ def _feed(engine: SniperDay, when: datetime, bars: dict[str, Bar], contracts: di
     if state:
         state.add_candle(when, bars)
     events = engine.on_candle(when, bars)
+    engine.sync_capital()
     for event in events:
         if late and event.kind == "ENTRY":
             event.trade.note = "catch-up"
@@ -523,6 +525,9 @@ def main() -> None:
     notify.send("Watching " + ", ".join(c["tradingsymbol"] for c in contracts.values()) + " until 15:00.", phone=False)
     engine = SniperDay(day, plan.final, index_close=plan.index_close, near_points=market.near_atm_close,
                        buy_atm=plan.buy_atm, lot=market.lot_size, allocation=market.allocation, max_loss=market.max_loss)
+    if not args.replay:  # owner 12-10: shared Rs 5 lakh pool across the 4 bots, SENSEX first
+        engine.capital = CapitalLedger(OUT_DIR / f"capital_{day.isoformat()}.json", f"sniper_{market.name}")
+        engine.capital.release()  # a restart starts clean; the catch-up re-holds what is still open
     try:  # owner, 2026-10-08: the OTMs' yesterday highs, for the "ATM below the Sniper early" entry
         for key in ("otm_ce", "otm_pe", "atm_ce", "atm_pe"):
             start = datetime.combine(day - timedelta(days=14), time(0, 0))

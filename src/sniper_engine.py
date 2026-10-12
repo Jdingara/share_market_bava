@@ -243,7 +243,8 @@ class SniperDay:
         self.near_points = near_points
         self.pending: list[_Pending] = []
         self.buy_atm = buy_atm
-        self.lot, self.allocation, self.max_loss = lot, allocation, max_loss  # owner 12-10: sizing / daily loss  # owner, 2026-10-12: gap-failed day - the setups buy the ATM, not the OTM
+        self.lot, self.allocation, self.max_loss = lot, allocation, max_loss  # owner 12-10: sizing / daily loss
+        self.capital = None  # live bot: shared Rs 5 lakh ledger (SENSEX first); None = the fixed allotment  # owner, 2026-10-12: gap-failed day - the setups buy the ATM, not the OTM
         self.setups = trade_setups(row, buy_atm)
         self.prev = previous_closes(row)
         self.open_trades: list[tuple[TradeSetup, TradeResult]] = []
@@ -577,6 +578,11 @@ class SniperDay:
             return self._order_event("ORDER", pending, when)
         return None
 
+    def sync_capital(self) -> None:
+        """Live bot, after each candle: tell the shared ledger how much money this bot has in open trades."""
+        if self.capital:
+            self.capital.hold(sum(t.qty * t.entry_fill for _, t in self.open_trades if t.qty))
+
     def realized_rupees(self) -> float:
         return sum(t.pnl_points * t.qty for t in self.trades if t.exit_reason and t.qty)
 
@@ -647,7 +653,8 @@ class SniperDay:
             self.uv_trades[id(trade)] = {"first": (k_low + 1) ** 2, "touched_at": self.candle_no if bar.high >= (k_low + 1) ** 2 else None}
         if self.allocation and self.lot:
             # Owner, 2026-10-12: as many lots as the allotment buys, cut so a stop-out stays within today's loss limit
-            trade.qty = size_qty(self.allocation, risk_left(self.max_loss, self.realized_rupees()), self.lot,
+            money = self.capital.available(self.allocation) if self.capital else self.allocation
+            trade.qty = size_qty(money, risk_left(self.max_loss, self.realized_rupees()), self.lot,
                                  price, float(trade.stop_loss))
             if trade.qty == 0:
                 return []  # not even one lot fits - no trade

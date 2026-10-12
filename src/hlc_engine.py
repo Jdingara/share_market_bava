@@ -156,7 +156,8 @@ class HlcDay:
         # Owner, 2026-10-08: day-side TREND trade on 15-minute closes vs the first 15-minute close
         self.first5_high: dict[str, float] = {}  # owner, 2026-10-09: day side's first 5-minute candle high (BREAK)
         self.break_done = False
-        self.close_retest_done = False  # owner, 2026-10-12: index close-retest entry, once a day
+        self.close_retest_done = False
+        self.capital = None  # live bot: shared Rs 5 lakh ledger (SENSEX first); None = the fixed allotment  # owner, 2026-10-12: index close-retest entry, once a day
         self.first15_close: dict[str, float] = {}
         self.went_above: dict[str, int] = {}  # side -> candle no. when its premium closed above the first 15-min close
         # Owner, 2026-10-08: day-side pattern TREND trade - premium reversal pattern, retest, buy limit at the Fib 0.618
@@ -649,6 +650,12 @@ class HlcDay:
             return event
         return event + " | PANIC side, premium targets " + " -> ".join(f"{h:g}" for h in trade.premium_targets)
 
+    def sync_capital(self) -> None:
+        """Live bot, after each candle: tell the shared ledger how much money this bot has in its open trade."""
+        if self.capital:
+            t = self.open_trade
+            self.capital.hold(t.qty * t.entry_fill if t is not None and not t.exit_reason and t.qty else 0.0)
+
     def realized_rupees(self) -> float:
         return sum(t.pnl_points * t.qty for t in self.trades if t.exit_reason and t.qty)
 
@@ -660,7 +667,8 @@ class HlcDay:
         stop = trade.sl_premium
         if stop <= 0:  # index-SL trades (FIB): the premium exit isn't known - size on twice the points SL
             stop = trade.entry_fill - 2 * m.sl_points
-        trade.qty = size_qty(m.allocation, risk_left(m.max_loss, self.realized_rupees()), m.lot, trade.entry_fill, stop)
+        money = self.capital.available(m.allocation) if self.capital else m.allocation
+        trade.qty = size_qty(money, risk_left(m.max_loss, self.realized_rupees()), m.lot, trade.entry_fill, stop)
         return trade.qty > 0
 
     def _profit_booking_exits(self, trade: HlcTrade) -> None:

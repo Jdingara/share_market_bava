@@ -28,8 +28,9 @@ from hlc_engine import HlcDay, HlcTrade
 from hlc_history import HLC_HISTORY_DIR, record_hlc_day
 from hlc_signal import HLC_MARKETS, Candle, HlcLevels, choose_atm, hlc_levels, leg_label
 from keep_awake import keep_awake
+from sizing import CapitalLedger
 from kite_auth import PROJECT_ROOT, connected_client
-from sniper_live import (CANDLE_MINUTES, MARKET_OPEN, Notifier, OptionChain, _historical, _keep_dashboard_open,
+from sniper_live import (CANDLE_MINUTES, MARKET_OPEN, OUT_DIR, Notifier, OptionChain, _historical, _keep_dashboard_open,
                          _naive, _next_poll, _sleep_until, wait_for_closing_prices)
 from sniper_signal import MARKETS
 
@@ -162,6 +163,7 @@ def feed(engine: HlcDay, index_rows: list[dict], premiums: dict[tuple[float, str
         index = Candle(row["open"], row["high"], row["low"], row["close"])
         chain_now = {key: series[when] for key, series in premiums.items() if when in series}
         events = engine.on_candle(when, index, chain_now)
+        engine.sync_capital()
         if state:
             state.add_candle(when, index, chain_now.get((engine.levels.atm, "CE")), chain_now.get((engine.levels.atm, "PE")))
         late = late_before is not None and when + timedelta(minutes=CANDLE_MINUTES) < late_before
@@ -243,6 +245,8 @@ def live(market_name: str, open_browser: bool) -> None:
                 + "  ".join(f"{n} {v:g}" for n, v in reversed(levels.ladder())) + "\n  " + "\n  ".join(info_lines(levels, yesterday)))
 
     engine = HlcDay(day, levels, market, yesterday)
+    engine.capital = CapitalLedger(OUT_DIR / f"capital_{day.isoformat()}.json", f"hlc_{market_name}")  # owner 12-10
+    engine.capital.release()
     for side in ("CE", "PE"):
         try:
             engine.daily_highs[side] = daily_highs(kite, chain, levels.atm, side, day)
