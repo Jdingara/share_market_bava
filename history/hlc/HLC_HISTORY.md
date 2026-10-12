@@ -27,13 +27,13 @@
 
 ## 2026-10-12 (Mon)
 
-### NIFTY — watching (last update 2026-10-12 09:20)
+### NIFTY — watching (last update 2026-10-12 11:31)
 
 - Close 22520.45, ATM 22550. R3 22958.9 · R2 22754.45 · R1 22658.5 · S1 22454.05 · S2 22345.55 · S3 22141.1.
 - CE PANIC, PE PROFIT BOOKING — buyer’s day.
 - No trade.
 
-### SENSEX — watching (last update 2026-10-12 09:20)
+### SENSEX — watching (last update 2026-10-12 11:31)
 
 - Close 72472.33, ATM 72600. R3 74512.8 · R2 73556.4 · R1 73096.5 · S1 72140.1 · S2 71643.6 · S3 70687.2.
 - CE PANIC, PE PROFIT BOOKING — buyer’s day.

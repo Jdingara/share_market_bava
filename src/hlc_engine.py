@@ -637,7 +637,7 @@ class HlcDay:
             if (pe and index.close > value) or (not pe and index.close < value):
                 return [self._exit(trade, when, prem.close, f"closed back across {name} {value:g}")]
         events = []
-        ride = not self.buyers_day()  # owner, 2026-10-09: normal days - no target exits, ride with the trailing SL
+        ride = self.buyers_day()  # owner, 2026-10-12: buyer's day - no target exits, ride with the trailing SL; other days book
         while trade.premium_targets and prem.high >= trade.premium_targets[0]:
             high = trade.premium_targets[0]
             if prem.close <= high and ride:

@@ -104,7 +104,7 @@ from sniper_signal import (
 )
 
 CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
-RIDE_NORMAL_DAYS = True  # owner, 2026-10-09: normal days - no target exit, trailing SL only; max 2 trades
+RIDE_NORMAL_DAYS = True  # owner, 2026-10-12: buyer's day - no target exit, TSL ladder only (09-10 had it on normal days); normal days book the target, max 2 trades
 NORMAL_DAY_MAX_TRADES = 2
 BUYERS_DAY_MAX_TRADES = 4  # owner, 2026-10-09: buyer's-day re-entries stop at 4 trades a day
 UV_TRADE = True  # owner, 2026-10-09: sideways days - no OTM trade, but the ATM U/V trade (own SL/TSL/target)
@@ -322,7 +322,7 @@ class SniperDay:
                 continue
             # Owner, 2026-10-09: on a normal (non-buyer's) day no target exit - ride with the trailing SL (fixed-SL
             # trades trail too then, or they'd never take profit). Buyer's day: targets as before.
-            ride = self.ride_normal_days and not self.buyers_day
+            ride = self.ride_normal_days and self.buyers_day  # owner 12-10: ride on a BUYER'S day; book the target otherwise
             trails = self.trailing and (id(trade) not in self.fixed_sl or ride)
             moved_now = False
             if (trails and self.first_tsl_on_touch and trade.trail_stop <= trade.stop_loss
@@ -392,7 +392,9 @@ class SniperDay:
         # Owner, 2026-10-12: an unfilled body-entry limit doesn't block the half - the normal signal can still come
         # and replaces it (12-10 SENSEX: body limit 441 never filled; the normal 72500 PE 529 trade was missed).
         body_waiting = [p for p in self.pending if p.limit_only and p.setup.half == half]
-        if half is None or not self._next_trade_allowed() or (half in self.halves_used and not body_waiting):
+        # Owner, 2026-10-12: a buyer's day allows up to 4 trades - once flat, the same half can trade again.
+        reopen = self.ride_normal_days and self.buyers_day and not self.open_trades and not self.pending
+        if half is None or not self._next_trade_allowed() or (half in self.halves_used and not body_waiting and not reopen):
             return events
 
         current = {key: bars[key].close for key in CONTRACT_KEYS}
@@ -561,9 +563,10 @@ class SniperDay:
         A target, trailing stop or time exit ends the day; an open trade blocks new entries."""
         if not self.trades:
             return True
-        if self.ride_normal_days and not self.buyers_day:
-            # owner, 2026-10-09: normal day - 2 trades whatever the first one's exit (no targets now)
-            return not self.open_trades and len(self.trades) < NORMAL_DAY_MAX_TRADES
+        if self.ride_normal_days:
+            # owner, 2026-10-09/12: whatever the last exit - normal day up to 2 trades, buyer's day up to 4
+            limit = BUYERS_DAY_MAX_TRADES if self.buyers_day else NORMAL_DAY_MAX_TRADES
+            return not self.open_trades and len(self.trades) < limit
         return not self.open_trades and self.trades[-1].exit_reason == "STOPLOSS"
 
     @staticmethod

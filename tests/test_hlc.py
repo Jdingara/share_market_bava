@@ -221,7 +221,6 @@ def test_panic_pe_above_yesterdays_high_blocks_ce_trades():
 
 def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit():
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
-    day.buyers_day = lambda: True  # target rules (owner 09-10: normal days ride without targets)
     day.on_candle(_at("09:15"), Candle(22760, 22770, 22740, 22745), _chain((60, 62, 55, 58)))
     day.on_candle(_at("09:20"), Candle(22745, 22750, 22738, 22742), _chain((58, 60, 57, 59)))
     day.on_candle(_at("09:25"), Candle(22742, 22743, 22734, 22735), _chain((59, 60, 58, 59)))  # plain down candle
@@ -373,10 +372,12 @@ def test_trend_trade_pattern_retest_fib_limit_fills_next_candle():
     assert events[-1].startswith("BUY PE 72500 at 350.94 (TREND")
 
 
-def test_normal_day_touch_of_a_level_is_not_an_exit():
-    """Owner, 09-10: not a buyer's day -> no target exit; a broken level moves the SL, a touch doesn't exit."""
+def test_buyers_day_touch_of_a_level_is_not_an_exit():
+    """Owner, 12-10 (09-10 had it on normal days): a BUYER'S day rides - no target exit; a broken level moves the SL,
+    a touch doesn't exit."""
     from hlc_engine import HlcTrade
-    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # no yesterday data -> not a buyer's day
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    day.buyers_day = lambda: True
     day.index_history = [Candle(22760, 22770, 22740, 22745)] * 3
     trade = HlcTrade(date="2026-09-29", kind="TREND", side="PE", strike=22800, pattern="", entry_time="x",
                      entry_fill=60, entry_index=22745, sl_premium=35, targets=[("S1", 22728.55), ("S2", 22644.35)])

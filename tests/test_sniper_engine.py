@@ -336,14 +336,14 @@ def test_sideways_day_uv_trade_on_the_atm_after_reversal_and_retest(monkeypatch)
 
 
 @pytest.mark.ride
-def test_normal_day_rides_past_the_target_with_the_trailing_sl():
+def test_buyers_day_rides_past_the_target_with_the_trailing_sl():
     """Owner, 09-10: not a buyer's day -> the target doesn't exit; the trailing SL does."""
     from sniper_engine import Bar, SniperDay
     from sniper_signal import MARKETS, build_daily_plan
     closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
     row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
     day = SniperDay(date(2026, 10, 9), row)
-    assert day.ride_normal_days and not day.buyers_day
+    day.buyers_day = True  # owner 12-10: riding is for buyer's days
     at = lambda hm: datetime(2026, 10, 9, int(hm[:2]), int(hm[3:]))
     ce = Bar(140, 130, 132, 135)
     day.on_candle(at("09:30"), {"atm_ce": Bar(130, 120, 125, 128), "atm_pe": Bar(150, 140, 148, 141),
@@ -364,7 +364,7 @@ def test_normal_day_rides_past_the_target_with_the_trailing_sl():
 
 
 @pytest.mark.ride
-def test_normal_day_each_square_touched_past_the_target_moves_the_tsl():
+def test_buyers_day_each_square_touched_past_the_target_moves_the_tsl():
     """Owner, 12-10: one square below the highest square touched - entry 144: 169 -> SL 144, 196 -> SL 169, 225 -> 196;
     the exit needs a body close below the SL."""
     from sniper_engine import Bar, SniperDay
@@ -372,6 +372,7 @@ def test_normal_day_each_square_touched_past_the_target_moves_the_tsl():
     closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
     row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
     day = SniperDay(date(2026, 10, 9), row)
+    day.buyers_day = True  # owner 12-10: riding is for buyer's days
     at = lambda hm: datetime(2026, 10, 9, int(hm[:2]), int(hm[3:]))
     other = {"atm_ce": Bar(126, 118, 120, 125), "atm_pe": Bar(155, 145, 150, 148), "otm_ce": Bar(85, 80, 82, 85)}
     day.on_candle(at("09:30"), {**other, "atm_ce": Bar(130, 120, 125, 128), "otm_pe": Bar(150, 120, 149, 125)})
