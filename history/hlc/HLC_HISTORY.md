@@ -6,6 +6,8 @@
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
+| 2026-10-12 | SENSEX | 72600 | PANIC / PROFIT BOOKING | yes | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-12 | NIFTY | 22550 | PANIC / PROFIT BOOKING | yes | 0 | +0.00 | ₹+0 | watching |
 | 2026-10-09 | SENSEX | 71600 | PROFIT BOOKING / PANIC | yes | 1 | +255.80 | ₹+40,928 | finished |
 | 2026-10-09 | NIFTY | 22250 | PROFIT BOOKING / PANIC | yes | 2 | +85.95 | ₹+27,934 | finished |
 | 2026-10-08 | SENSEX | 72500 | PROFIT BOOKING / PROFIT BOOKING | no | 4 | +215.01 | ₹+64,503 | finished |
@@ -22,6 +24,20 @@
 | 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | -42.10 | ₹-13,682 | finished |
 | 2026-09-29 | SENSEX | 72900 | PROFIT BOOKING / PANIC | yes | 1 | -50.00 | ₹-15,000 | replayed |
 | 2026-09-29 | NIFTY | 22800 | PROFIT BOOKING / PANIC | yes | 1 | +45.60 | ₹+14,820 | replayed |
+
+## 2026-10-12 (Mon)
+
+### NIFTY — watching (last update 2026-10-12 09:20)
+
+- Close 22520.45, ATM 22550. R3 22958.9 · R2 22754.45 · R1 22658.5 · S1 22454.05 · S2 22345.55 · S3 22141.1.
+- CE PANIC, PE PROFIT BOOKING — buyer’s day.
+- No trade.
+
+### SENSEX — watching (last update 2026-10-12 09:20)
+
+- Close 72472.33, ATM 72600. R3 74512.8 · R2 73556.4 · R1 73096.5 · S1 72140.1 · S2 71643.6 · S3 70687.2.
+- CE PANIC, PE PROFIT BOOKING — buyer’s day.
+- No trade.
 
 ## 2026-10-09 (Fri)
 

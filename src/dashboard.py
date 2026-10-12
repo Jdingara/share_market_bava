@@ -77,7 +77,7 @@ class DashboardState:
                         "stop_loss": s.levels.stop_loss,
                         "target": s.levels.target,
                     }
-                    for s in trade_setups(plan.final)
+                    for s in trade_setups(plan.final, getattr(plan, "buy_atm", False))
                 ]
                 if plan.final
                 else []

@@ -104,9 +104,9 @@ def test_ce_fail_shifts_down():
 
 def test_both_fail_is_no_plan():
     plan = build_daily_plan(23100, NIFTY, _flat_premiums(10, 10, 23100))
-    assert plan.final is None
-    assert not plan.attempts[0].ce_ok and not plan.attempts[0].pe_ok  # 20 fails too; no OTM fallback
-    assert plan.reason.startswith("both gaps fail")
+    assert not plan.attempts[0].ce_ok and not plan.attempts[0].pe_ok
+    # owner 12-10: no gap -> trade the nearest ATM itself (not the OTM)
+    assert plan.buy_atm and plan.final.atm_strike == 23100
 
 
 def test_gap_exactly_min_passes():
@@ -145,7 +145,7 @@ def test_sensex_widening_kept_for_comparison():
 
 
 def test_nifty_still_shifts_the_atm():
-    assert not MARKETS["NIFTY"].widen_otm and MARKETS["SENSEX"].min_gap == 40
+    assert not MARKETS["NIFTY"].widen_otm and MARKETS["SENSEX"].min_gap == 30  # owner 12-10: SENSEX 30
 
 
 def test_nifty_moves_one_otm_out_when_the_shifts_oscillate():
@@ -154,11 +154,11 @@ def test_nifty_moves_one_otm_out_when_the_shifts_oscillate():
     closes = {(22600, "CE"): 164.50, (22600, "PE"): 114.65, (22700, "CE"): 113.15, (22500, "PE"): 77.50,
               (22700, "PE"): 163.35, (22800, "CE"): 74.55, (22400, "PE"): 52.10}
     # Owner, 05-10: the fallback was dropped for NIFTY ("only our trades") - 01-10 is now a no-plan day ...
-    plan = build_daily_plan(22620.5, NIFTY, _lookup(closes))
-    assert plan.final is None and [a.atm_strike for a in plan.attempts[:4]] == [22600, 22700, 22600, 22700]
+    plan = build_daily_plan(22620.5, NIFTY, lambda k, t: closes.get((k, t), 1.0))
+    assert plan.buy_atm and [a.atm_strike for a in plan.attempts[:3]] == [22600, 22700, 22500]  # owner 12-10: outward
     # ... the fallback itself still works if switched back on
     from dataclasses import replace
-    plan = build_daily_plan(22620.5, replace(NIFTY, widen_otm_fallback=True), _lookup(closes))
+    plan = build_daily_plan(22620.5, replace(NIFTY, widen_otm_fallback=True), lambda k, t: closes.get((k, t), 1.0))
     assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (22600, 22800, 22500)
     assert plan.final.sniper == pytest.approx(76.025)
     assert (plan.final.ce_gap, plan.final.pe_gap) == (pytest.approx(88.475), pytest.approx(38.625))
@@ -172,8 +172,8 @@ def test_max_three_shifts_then_no_plan():
         return 50.0
 
     plan = build_daily_plan(23100, NIFTY, lookup)
-    assert plan.final is None
-    assert [a.atm_strike for a in plan.attempts[:4]] == [23100, 23200, 23300, 23400]
+    assert plan.buy_atm  # owner 12-10: shifts fail -> ATM trade
+    assert [a.atm_strike for a in plan.attempts[:4]] == [23100, 23200, 23000, 23300]  # owner 12-10: outward search
 
 
 @pytest.mark.parametrize(
@@ -239,10 +239,11 @@ def test_relaxed_gap_20_before_the_otm_fallback_05_10_nifty():
     assert plan.final.sniper == pytest.approx(83.30)  # owner 08-10: NIFTY minimum is simply 20
 
 
-def test_sensex_shifts_first_then_widens_the_otms_08_10():
-    """Owner, 08-10: SENSEX +-100 shifts flip 72600 <-> 72500 (CE gap 20.62 / PE gap 22.28) -> widen: +-200 at 72600."""
+def test_sensex_otm_stays_100_and_trades_the_atm_when_the_gap_fails():
+    """Owner, 12-10: no OTM widening - SENSEX shifts flip 72600 <-> 72500 (gaps 20.62 / 22.28 < 30) -> trade the
+    nearest ATM 72600 itself, Sniper from OTM +-100 (was: widen to +-200, 08-10)."""
     closes = {(72600, "CE"): 211.30, (72600, "PE"): 262.05, (72700, "CE"): 166.55, (72500, "PE"): 214.80,
               (72500, "CE"): 262.90, (72400, "PE"): 173.75, (72800, "CE"): 129.90}
-    plan = build_daily_plan(72638.7, MARKETS["SENSEX"], _lookup(closes))
-    assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (72600, 72800, 72400)
-    assert plan.final.sniper == pytest.approx(151.825)
+    plan = build_daily_plan(72638.7, MARKETS["SENSEX"], lambda k, t: closes.get((k, t), 1.0))
+    assert plan.buy_atm and (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (72600, 72700, 72500)
+    assert plan.final.sniper == pytest.approx(190.675)

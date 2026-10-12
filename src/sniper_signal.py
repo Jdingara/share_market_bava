@@ -45,6 +45,7 @@ class MarketConfig:
     max_otm_steps: int = 5  # widen_otm: try OTM = ATM +- 1..5 strike steps
     relaxed_min_gap: Optional[float] = None  # owner, 2026-10-05: if the plan fails at min_gap, try again at this
     widen_otm_fallback: bool = False  # NIFTY (owner, 2026-10-01): if the ATM shifts still fail, move one OTM out
+    atm_trade_fallback: bool = True  # owner, 2026-10-12: gap fails -> trade the nearest ATM instead of the OTM
     widen_both_fallback: bool = False  # SENSEX (owner, 2026-10-08): if the shifts fail, widen both OTMs until gap 40
     near_atm_close: float = 0  # owner, 2026-10-06: first-half ATM-close trigger - "near" = within this many points
 
@@ -57,10 +58,10 @@ MARKETS = {
     "NIFTY": MarketConfig(name="NIFTY", strike_step=100, min_gap=20, expiry_weekday=1, lot_size=65, max_lots=5,
                           index_token=256265, options_exchange="NFO", widen_otm_fallback=False,  # owner 05-10: dropped
                           relaxed_min_gap=None, near_atm_close=20),  # NSE, Tuesday expiry, 325 qty (owner 09-10: Rs 1L allotted)
-    "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=40, expiry_weekday=3, lot_size=20, max_lots=8,
+    "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=30, expiry_weekday=3, lot_size=20, max_lots=8,
                            index_token=265, options_exchange="BFO",
                            widen_otm=False,  # owner 07-10: OTM +-100, shift the ATM like NIFTY (was True 29-09)
-                           widen_both_fallback=True,  # owner 08-10: ... then widen the OTMs until gap 40
+                           widen_both_fallback=False,  # owner 12-10: OTM always +-100 (08-10 widening dropped)
                            relaxed_min_gap=None,  # owner 08-10: SENSEX minimum 40 only (32 dropped)
                            near_atm_close=30),  # BSE, Thursday expiry, 160 qty (owner 09-10: Rs 1.25L allotted; was 300)
 }
@@ -137,6 +138,7 @@ class DailyPlan:
     attempts: tuple[StrikeRow, ...]  # every ATM tried, in order - the first is the nearest ATM
     final: Optional[StrikeRow]  # None -> no plan today
     reason: str
+    buy_atm: bool = False  # owner, 2026-10-12: gap below the minimum -> trade the ATM instead of the OTM
 
 
 def build_daily_plan(index_close: float, market: MarketConfig, premium: PremiumLookup) -> DailyPlan:
@@ -177,24 +179,38 @@ def build_daily_plan(index_close: float, market: MarketConfig, premium: PremiumL
             return widened
     if plan.final is None and market.widen_otm_fallback and not plan.reason.startswith("both gaps fail"):
         return _move_one_otm_out(index_close, market, premium, attempts)
+    if plan.final is None and market.atm_trade_fallback:
+        # Owner, 2026-10-12: OTM stays +-100; if no ATM passes the gap (SENSEX 30 / NIFTY 20), trade the nearest
+        # ATM itself (same triggers and squares, buying the ATM CE / PE instead of the OTM).
+        row = evaluate_strike(nearest_atm(index_close, market.strike_step), market, premium)
+        return DailyPlan(market.name, index_close, tuple(attempts) + (row,), row,
+                         f"gap below {market.min_gap:g} - ATM {row.atm_strike:g} trade (OTM +-100 for the Sniper)",
+                         buy_atm=True)
     return plan
 
 
 def _shift_atm(index_close: float, market: MarketConfig, premium: PremiumLookup,
                attempts: list[StrikeRow]) -> DailyPlan:
-    atm = nearest_atm(index_close, market.strike_step)
-    for shift in range(MAX_SHIFTS + 1):
-        row = evaluate_strike(atm, market, premium)
-        attempts.append(row)
-
-        if row.ce_ok and row.pe_ok:
-            return DailyPlan(market.name, index_close, tuple(attempts), row, f"ATM {atm:g} after {shift} shift(s)")
-        if not row.ce_ok and not row.pe_ok:
-            return DailyPlan(market.name, index_close, tuple(attempts), None, f"both gaps fail at ATM {atm:g}")
-
-        atm += market.strike_step if not row.pe_ok else -market.strike_step
-    return DailyPlan(market.name, index_close, tuple(attempts), None, f"still failing after {MAX_SHIFTS} shifts")
-
+    """Owner, 2026-10-12: the nearest ATM first; if its gap check fails, look for the ATM further out - 100, then
+    200, then 300 points away (the side the failing gap points to first: PE fails -> up, CE fails -> down) - and
+    take the first strike where both gaps pass; the OTMs are always that ATM +-100. (Was: shift one strike at a
+    time following the failing side, max 3 shifts - which could flip back and forth between two strikes.)"""
+    nearest = nearest_atm(index_close, market.strike_step)
+    first = evaluate_strike(nearest, market, premium)
+    attempts.append(first)
+    if first.ce_ok and first.pe_ok:
+        return DailyPlan(market.name, index_close, tuple(attempts), first, f"ATM {nearest:g} after 0 shift(s)")
+    toward = 1 if not first.pe_ok else -1  # PE gap fails -> ATM up; CE gap fails -> ATM down
+    for k in range(1, MAX_SHIFTS + 1):
+        for sign in (toward, -toward):
+            atm = nearest + sign * k * market.strike_step
+            row = evaluate_strike(atm, market, premium)
+            attempts.append(row)
+            if row.ce_ok and row.pe_ok:
+                return DailyPlan(market.name, index_close, tuple(attempts), row,
+                                 f"ATM {atm:g} ({sign * k * market.strike_step:+g} from the nearest {nearest:g})")
+    return DailyPlan(market.name, index_close, tuple(attempts), None,
+                     f"no ATM within +-{MAX_SHIFTS * market.strike_step:g} of {nearest:g} passes the gap")
 
 def _move_one_otm_out(index_close: float, market: MarketConfig, premium: PremiumLookup,
                       attempts: list[StrikeRow]) -> DailyPlan:
@@ -273,8 +289,9 @@ class TradeSetup:
     contract: str = ""  # bars key bought: "" = the OTM of buy_type; "atm_ce"/"atm_pe" for the U/V trade (08-10)
 
 
-def trade_setups(row: StrikeRow) -> list[TradeSetup]:
-    """The four possible trades for the day (spec §5's second table)."""
+def trade_setups(row: StrikeRow, buy_atm: bool = False) -> list[TradeSetup]:
+    """The four possible trades for the day (spec §5's second table). buy_atm (owner, 2026-10-12): the same
+    trades, but buying the ATM CE / PE instead of the OTM."""
     setups = []
     for half in ("first", "second"):
         for direction in ("down", "up"):
@@ -283,7 +300,11 @@ def trade_setups(row: StrikeRow) -> list[TradeSetup]:
             else:
                 falling_type, buy_strike, buy_type, falling_close = "PE", row.otm_ce_strike, "CE", row.atm_pe_close
             trigger = falling_close if half == "first" else row.sniper
-            setups.append(TradeSetup(half, direction, falling_type, buy_strike, buy_type, square_levels(trigger)))
+            contract = ""
+            if buy_atm:
+                buy_strike, contract = row.atm_strike, "atm_" + buy_type.lower()
+            setups.append(TradeSetup(half, direction, falling_type, buy_strike, buy_type, square_levels(trigger),
+                                     contract=contract))
     return setups
 
 

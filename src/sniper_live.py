@@ -263,7 +263,7 @@ def describe_plan(plan: DailyPlan, expiry: date, previous_day: date) -> str:
         lines.append(f"NO PLAN TODAY: {plan.reason}")
         return "\n".join(lines)
     lines.append(f"FINAL: {plan.reason}, Sniper {plan.final.sniper:.2f}")
-    for s in trade_setups(plan.final):
+    for s in trade_setups(plan.final, plan.buy_atm):
         lines.append(
             f"  {s.half:<6} half, market {s.direction:<4}: buy {s.buy_strike:g} {s.buy_type} "
             f"when a candle closes above {s.levels.entry} (trigger {s.levels.trigger:.2f}) - "
@@ -519,9 +519,10 @@ def main() -> None:
         return
 
     notify.send("Watching " + ", ".join(c["tradingsymbol"] for c in contracts.values()) + " until 15:00.", phone=False)
-    engine = SniperDay(day, plan.final, index_close=plan.index_close, near_points=market.near_atm_close)
+    engine = SniperDay(day, plan.final, index_close=plan.index_close, near_points=market.near_atm_close,
+                       buy_atm=plan.buy_atm)
     try:  # owner, 2026-10-08: the OTMs' yesterday highs, for the "ATM below the Sniper early" entry
-        for key in ("otm_ce", "otm_pe"):
+        for key in ("otm_ce", "otm_pe", "atm_ce", "atm_pe"):
             start = datetime.combine(day - timedelta(days=14), time(0, 0))
             rows = [c for c in _historical(kite, contracts[key]["instrument_token"], start,
                                            datetime.combine(day - timedelta(days=1), time(23, 59)), "day")

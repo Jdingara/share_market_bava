@@ -213,6 +213,7 @@ class SniperDay:
         first_tsl_on_touch: bool = FIRST_TSL_ON_TOUCH,
         index_close: Optional[float] = None,
         near_points: float = 0,
+        buy_atm: bool = False,
     ):
         self.day = day
         self.row = row
@@ -233,7 +234,8 @@ class SniperDay:
         self.uv_pattern: dict[str, tuple[int, float, float, str]] = {}  # leg -> (candle index, low, high, name)
         self.near_points = near_points
         self.pending: list[_Pending] = []
-        self.setups = trade_setups(row)
+        self.buy_atm = buy_atm  # owner, 2026-10-12: gap-failed day - the setups buy the ATM, not the OTM
+        self.setups = trade_setups(row, buy_atm)
         self.prev = previous_closes(row)
         self.open_trades: list[tuple[TradeSetup, TradeResult]] = []
         self.trades: list[TradeResult] = []
@@ -408,9 +410,9 @@ class SniperDay:
             falling_key = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
             if current[falling_key] >= self.prev[falling_key]:
                 continue
-            otm_key = _otm_key(setup.buy_type)
+            otm_key = _key(setup)
             buy_close = current[otm_key]
-            if self._otm_below_its_close(half, setup.buy_type, bars):
+            if self._otm_below_its_close(half, setup, bars):
                 continue
             k = highest_square_below(buy_close)  # the highest square this close is above
             # Owner, 2026-09-29: ATM below Sniper = ATM sellers strong -> OTM profit-booking/panic = buying chance.
@@ -492,10 +494,10 @@ class SniperDay:
                 return self._order_event("ORDER", pending, when)
         return None
 
-    def _otm_below_its_close(self, half: str, buy_type: str, bars: dict[str, Bar]) -> bool:
+    def _otm_below_its_close(self, half: str, setup: TradeSetup, bars: dict[str, Bar]) -> bool:
         """Owner, 2026-10-08 (point 4): in the first half, an OTM still below its own yesterday close is no trade,
         even with the ATM below its close and the Sniper. (Second half: the Sniper trigger as usual.)"""
-        key = _otm_key(buy_type)
+        key = _key(setup)
         return half == "first" and bars[key].close < self.prev[key]
 
     def _yesterday_high_entry(self, half: str, bars: dict[str, Bar], when: datetime) -> Optional[Event]:
@@ -503,7 +505,7 @@ class SniperDay:
         OTM closes above its yesterday's high, buy it at the upcoming square; SL one square down, target two up."""
         for setup in (s for s in self.setups if s.half == half):
             falling = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
-            otm_key = _otm_key(setup.buy_type)
+            otm_key = _key(setup)
             high = self.otm_yesterday_high.get(otm_key)
             if falling not in self.early_below_sniper or high is None:
                 continue
@@ -530,7 +532,7 @@ class SniperDay:
             setup = next((s for s in self.setups if s.half == half and s.buy_type == buy_type), None)
             if setup is None:  # (point 4's OTM-below-close filter doesn't apply here - 05-10 owner's trade)
                 continue
-            otm_close = bars[_otm_key(buy_type)].close
+            otm_close = bars[_key(setup)].close
             k = highest_square_below(otm_close)
             if k < 2:
                 continue
