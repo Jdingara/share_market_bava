@@ -165,8 +165,10 @@ def _ce_chain(ce):
     return {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(200, 210, 195, 205)}
 
 
-def test_low_premium_before_1330_buys_above_the_confirmation_high():
+def test_low_premium_before_1330_buys_above_the_confirmation_high(monkeypatch):
     """29-09 10:15: CE 22800 at 10.00 (10 - 25 < 0) -> buy only if the next candle breaks 10.80; SL under 2 candles."""
+    import hlc_engine
+    monkeypatch.setattr(hlc_engine, "SWING_LOW_SL", False)  # the 29-09 points SL (replaced 12-10)
     day = _low_premium_day()
     day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
     events = day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
@@ -177,7 +179,9 @@ def test_low_premium_before_1330_buys_above_the_confirmation_high():
     assert (t.entry_fill, t.sl_premium, t.sl_rule) == (10.8, 9.65, "2-candle low")
 
 
-def test_low_premium_order_not_triggered_is_cancelled():
+def test_low_premium_order_not_triggered_is_cancelled(monkeypatch):
+    import hlc_engine
+    monkeypatch.setattr(hlc_engine, "SWING_LOW_SL", False)  # the 29-09 points SL (replaced 12-10)
     day = _low_premium_day()
     day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
     day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
@@ -185,7 +189,9 @@ def test_low_premium_order_not_triggered_is_cancelled():
     assert "cancelled - not triggered" in events[0] and day.trades == []
 
 
-def test_low_premium_from_1330_uses_the_day_low_minus_one():
+def test_low_premium_from_1330_uses_the_day_low_minus_one(monkeypatch):
+    import hlc_engine
+    monkeypatch.setattr(hlc_engine, "SWING_LOW_SL", False)  # the 29-09 points SL (replaced 12-10)
     day = _low_premium_day()
     day.on_candle(_at("13:20"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
     events = day.on_candle(_at("13:25"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
@@ -263,7 +269,7 @@ def test_confirm_trade_index_back_in_the_fib_zone_plus_premium_pattern():
         events = day.on_candle(_at(t), Candle(*idx), {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(*pe)})
     assert events and events[-1].startswith("BUY PE 72500 at 248.00 (CONFIRM")
     t = day.open_trade
-    assert t.sl_premium == 198 and [n for n, _ in t.targets] == ["S1", "S2"]
+    assert t.sl_premium == 223 and [n for n, _ in t.targets] == ["S1", "S2"]  # owner 12-10: swing low 224 - 1
 
 
 def test_panic_side_premium_targets_staircase_of_earlier_daily_highs():
