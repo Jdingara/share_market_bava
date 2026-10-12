@@ -89,6 +89,7 @@ from datetime import date, datetime, time
 from typing import Literal, Optional
 
 from hlc_signal import DIRECTIONLESS, bullish_pattern
+from sizing import risk_left, size_qty
 from hlc_signal import Candle as PatternCandle
 from sniper_signal import (
     EXIT_BY,
@@ -150,6 +151,7 @@ class TradeResult:
     pnl_pct: float = 0.0
     note: str = ""  # e.g. "catch-up" when the live bot found this entry while replaying candles after a restart
     atm_below_sniper: bool = False  # at the signal: the falling ATM was already below Sniper = extra confidence
+    qty: int = 0  # owner, 2026-10-12: sized per trade (0 = the bot's fixed quantity)
 
 
 @dataclass(frozen=True)
@@ -217,6 +219,9 @@ class SniperDay:
         index_close: Optional[float] = None,
         near_points: float = 0,
         buy_atm: bool = False,
+        lot: int = 0,
+        allocation: float = 0,
+        max_loss: float = 0,
     ):
         self.day = day
         self.row = row
@@ -237,7 +242,8 @@ class SniperDay:
         self.uv_pattern: dict[str, tuple[int, float, float, str]] = {}  # leg -> (candle index, low, high, name)
         self.near_points = near_points
         self.pending: list[_Pending] = []
-        self.buy_atm = buy_atm  # owner, 2026-10-12: gap-failed day - the setups buy the ATM, not the OTM
+        self.buy_atm = buy_atm
+        self.lot, self.allocation, self.max_loss = lot, allocation, max_loss  # owner 12-10: sizing / daily loss  # owner, 2026-10-12: gap-failed day - the setups buy the ATM, not the OTM
         self.setups = trade_setups(row, buy_atm)
         self.prev = previous_closes(row)
         self.open_trades: list[tuple[TradeSetup, TradeResult]] = []
@@ -301,6 +307,12 @@ class SniperDay:
         self.candle_no += 1
         for setup, trade in list(self.open_trades):
             bar = bars[_key(setup)]
+            if trade.qty and self.max_loss and (trade.entry_fill - bar.close) * trade.qty >= risk_left(
+                    self.max_loss, self.realized_rupees()):
+                # Owner, 2026-10-12: losses under control - out at the close once today's loss limit is used up
+                events.append(self._close(trade, when, bar.close, "DAILY_LOSS_LIMIT"))
+                self.open_trades.remove((setup, trade))
+                continue
             uv = self.uv_trades.get(id(trade))
             if uv is not None:
                 # Owner, 2026-10-09 - sideways-day ATM trade: SL the square below the buy price; the first square above
@@ -565,9 +577,14 @@ class SniperDay:
             return self._order_event("ORDER", pending, when)
         return None
 
+    def realized_rupees(self) -> float:
+        return sum(t.pnl_points * t.qty for t in self.trades if t.exit_reason and t.qty)
+
     def _next_trade_allowed(self) -> bool:
         """Owner, 2026-09-30: after the day's first trade, trade again only if it was stopped out.
         A target, trailing stop or time exit ends the day; an open trade blocks new entries."""
+        if self.max_loss and self.allocation and risk_left(self.max_loss, self.realized_rupees()) <= 0:
+            return False  # owner, 2026-10-12: today's loss limit reached - no more trades
         if not self.trades:
             return True
         if self.ride_normal_days:
@@ -628,6 +645,12 @@ class SniperDay:
             trade.trail_stop = float(trade.stop_loss)
             trade.target = (k_low + 2) ** 2
             self.uv_trades[id(trade)] = {"first": (k_low + 1) ** 2, "touched_at": self.candle_no if bar.high >= (k_low + 1) ** 2 else None}
+        if self.allocation and self.lot:
+            # Owner, 2026-10-12: as many lots as the allotment buys, cut so a stop-out stays within today's loss limit
+            trade.qty = size_qty(self.allocation, risk_left(self.max_loss, self.realized_rupees()), self.lot,
+                                 price, float(trade.stop_loss))
+            if trade.qty == 0:
+                return []  # not even one lot fits - no trade
         self.trades.append(trade)
         events = [Event("ENTRY", trade, body_entry=fixed_sl)]
         stop_exit = self._stop_hit(bar, trade.stop_loss, False) if fill_candle else None

@@ -50,8 +50,8 @@ def _record_hlc_day(day: date, market: str, levels: HlcLevels, yesterday: dict[s
         "date": day.isoformat(), "market": market, "close": levels.close, "atm": f"{levels.atm:g}",
         "r1": levels.r1, "r2": levels.r2, "r3": levels.r3, "s1": levels.s1, "s2": levels.s2, "s3": levels.s3,
         "ce_label": ce_label, "pe_label": pe_label, "buyers_day": "yes" if ce_label != pe_label else "no",
-        "big_gap": "yes" if big_gap else "no", "trades": len(trades), "pnl_points": pnl, "pnl_rupees": round(pnl * qty),
-        "qty": qty, "status": status, "last_update": datetime.now().strftime("%Y-%m-%d %H:%M"), "note": note,
+        "big_gap": "yes" if big_gap else "no", "trades": len(trades), "pnl_points": pnl, "pnl_rupees": round(sum(t.pnl_points * (getattr(t, "qty", 0) or qty) for t in trades if t.exit_reason)),
+        "qty": qty if not any(getattr(t, "qty", 0) for t in trades) else "per trade", "status": status, "last_update": datetime.now().strftime("%Y-%m-%d %H:%M"), "note": note,
     }
     key = (row["date"], market)
     days = [d for d in _read(folder / "days.csv") if (d["date"], d["market"]) != key] + [row]
@@ -60,11 +60,11 @@ def _record_hlc_day(day: date, market: str, levels: HlcLevels, yesterday: dict[s
 
     trade_rows = [{
         "date": day.isoformat(), "market": market, "kind": t.kind, "side": t.side, "strike": f"{t.strike:g}",
-        "pattern": t.pattern, "qty": qty, "entry_time": t.entry_time[11:16], "entry_fill": t.entry_fill,
+        "pattern": t.pattern, "qty": getattr(t, "qty", 0) or qty, "entry_time": t.entry_time[11:16], "entry_fill": t.entry_fill,
         "sl": t.sl_premium, "sl_rule": t.sl_rule, "exit_time": t.exit_time[11:16],
         "exit_premium": t.exit_premium if t.exit_reason else "", "exit_reason": t.exit_reason or "OPEN",
         "pnl_points": t.pnl_points if t.exit_reason else "",
-        "pnl_rupees": round(t.pnl_points * qty) if t.exit_reason else "",
+        "pnl_rupees": round(t.pnl_points * (getattr(t, "qty", 0) or qty)) if t.exit_reason else "",
     } for t in trades]
     rows = [t for t in _read(folder / "trades.csv") if (t["date"], t["market"]) != key] + trade_rows
     rows.sort(key=lambda t: (t["date"], t["market"], t["entry_time"]))

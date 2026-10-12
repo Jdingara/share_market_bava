@@ -230,7 +230,8 @@ def live(market_name: str, open_browser: bool) -> None:
     if open_browser:
         webbrowser.open(url)
     notify = Notifier(day, state, prefix=f"HLC_{market_name}_log")
-    notify.send(f"HLC bot started ({market_name}, {market.quantity} qty) - PAPER MODE, no real orders.", phone=False)
+    notify.send(f"HLC bot started ({market_name}, qty per trade: up to Rs {market.allocation:,.0f}, loss limit "
+                f"Rs {market.max_loss:,.0f}) - PAPER MODE, no real orders.", phone=False)
 
     wait_for_closing_prices(market_name, state.set_status)
     state.set_status("Building the morning plan from yesterday's closing prices...")
@@ -297,8 +298,9 @@ def live(market_name: str, open_browser: bool) -> None:
     record(status)
     total = sum(t.pnl_points for t in engine.trades if t.exit_reason)
     state.set_engine(engine)
-    state.set_status(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {total * market.quantity:+,.0f}")
-    notify.send(f"HLC day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {total * market.quantity:+,.0f}")
+    rupees = sum(t.pnl_points * (t.qty or market.quantity) for t in engine.trades if t.exit_reason)
+    state.set_status(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {rupees:+,.0f}")
+    notify.send(f"HLC day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {rupees:+,.0f}")
     _keep_dashboard_open(url)
 
 
@@ -346,8 +348,9 @@ def replay(day: date, market_name: str, record: bool = False, dashboard: bool = 
         if state:
             state.log(event)
     total = sum(t.pnl_points for t in engine.trades if t.exit_reason)
-    summary = (f"{len(engine.trades)} trade(s), {total:+.2f} points = Rs {total * market.quantity:+,.0f} "
-               f"({market.quantity} qty, paper, before charges)")
+    rupees = sum(t.pnl_points * (t.qty or market.quantity) for t in engine.trades if t.exit_reason)
+    summary = (f"{len(engine.trades)} trade(s), {total:+.2f} points = Rs {rupees:+,.0f} "
+               f"(qty per trade: {', '.join(str(t.qty or market.quantity) for t in engine.trades) or '-'}; paper, before charges)")
     print("\n" + summary)
     if record:
         record_hlc_day(day, market_name, lv, yesterday, engine.big_gap, engine.trades, market.quantity, "replayed",

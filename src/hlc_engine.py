@@ -85,6 +85,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 
+from sizing import risk_left, size_qty
 from hlc_signal import (DIRECTIONLESS, Candle, HlcLevels, HlcMarket, OptionType, bearish_pattern, bullish_pattern,
                         leg_label)
 
@@ -124,6 +125,7 @@ class HlcTrade:
     premium_targets: list[float] = field(default_factory=list)  # PANIC side: earlier daily highs, next one first
     premium_high: float = 0.0  # highest premium since entry (for the trailing SL)
     premium_trail: Optional[float] = None  # PANIC side: last premium high closed above (information)
+    qty: int = 0  # owner, 2026-10-12: sized per trade (0 = the bot's fixed quantity)
     pb_target: Optional[float] = None  # PROFIT BOOKING side: Fib 0.786 of yesterday's close -> high (owner, 12-10)
     pb_index: Optional[tuple[str, float]] = None  # ... or the index reaching S2 (PE) / R2 (CE)
     exit_time: str = ""
@@ -239,6 +241,8 @@ class HlcDay:
                          big_gap=self.big_gap)
         trade.premium_targets = self.premium_ladder(trade.side, trade.strike, trade.entry_fill)
         self._profit_booking_exits(trade)
+        if not self._size(trade):
+            return None  # owner 12-10: not even one lot fits the allotment / loss limit
         self.trades.append(trade)
         self.open_trade = trade
         names = " -> ".join(f"{n} {v:g}" for n, v in targets)
@@ -297,6 +301,8 @@ class HlcDay:
             return events
         if self.open_trade is not None or self.pending is not None:
             return events
+        if self.market.max_loss and self.market.allocation and risk_left(self.market.max_loss, self.realized_rupees()) <= 0:
+            return events  # owner, 2026-10-12: today's loss limit reached - no more trades
         if len(self.trades) >= (MAX_TRADES if self.buyers_day() else NORMAL_DAY_MAX_TRADES):
             # Owner, 2026-10-09: buyer's day 4 (was unlimited); other days 2, riding with the trailing SL.
             return events
@@ -612,6 +618,8 @@ class HlcDay:
                          index_sl=sl, targets=targets, big_gap=self.big_gap)
         trade.premium_targets = self.premium_ladder(trade.side, trade.strike, trade.entry_fill)
         self._profit_booking_exits(trade)
+        if not self._size(trade):
+            return None  # owner 12-10: not even one lot fits the allotment / loss limit
         self.trades.append(trade)
         self.open_trade = trade
         return (f"BUY {side} {atm:g} at {prem.close:.2f} (FIB {FIB_ENTRY:g} of the first candle at {fib:.2f}; index {index.close:.2f}) - "
@@ -628,6 +636,8 @@ class HlcDay:
                          big_gap=self.big_gap)
         trade.premium_targets = self.premium_ladder(trade.side, trade.strike, trade.entry_fill)
         self._profit_booking_exits(trade)
+        if not self._size(trade):
+            return None  # owner 12-10: not even one lot fits the allotment / loss limit
         self.trades.append(trade)
         self.open_trade = trade
         names = " -> ".join(f"{n} {v:g}" for n, v in targets)
@@ -638,6 +648,20 @@ class HlcDay:
         if trade is None or not trade.premium_targets or not event.startswith("BUY"):
             return event
         return event + " | PANIC side, premium targets " + " -> ".join(f"{h:g}" for h in trade.premium_targets)
+
+    def realized_rupees(self) -> float:
+        return sum(t.pnl_points * t.qty for t in self.trades if t.exit_reason and t.qty)
+
+    def _size(self, trade: HlcTrade) -> bool:
+        """Owner, 2026-10-12: as many lots as the allotment buys, cut so a stop-out stays within today's loss limit."""
+        m = self.market
+        if not (m.allocation and m.lot):
+            return True
+        stop = trade.sl_premium
+        if stop <= 0:  # index-SL trades (FIB): the premium exit isn't known - size on twice the points SL
+            stop = trade.entry_fill - 2 * m.sl_points
+        trade.qty = size_qty(m.allocation, risk_left(m.max_loss, self.realized_rupees()), m.lot, trade.entry_fill, stop)
+        return trade.qty > 0
 
     def _profit_booking_exits(self, trade: HlcTrade) -> None:
         """Owner, 2026-10-12: a trade on the PROFIT BOOKING side (morning ATM) exits only at the Fib 0.786 of that
@@ -667,6 +691,11 @@ class HlcDay:
         return ladder
 
     def _manage(self, trade: HlcTrade, when: datetime, index: Candle, prem: Candle, closes: time) -> list[str]:
+        if trade.qty and self.market.max_loss:
+            # Owner, 2026-10-12: losses under control - out when this trade's loss reaches what's left of today's limit
+            left = risk_left(self.market.max_loss, self.realized_rupees())
+            if (trade.entry_fill - prem.close) * trade.qty >= left:
+                return [self._exit(trade, when, prem.close, f"daily loss limit (Rs {self.market.max_loss:,.0f})")]
         if trade.index_sl is not None:
             if (trade.side == "CE" and index.low <= trade.index_sl) or (trade.side == "PE" and index.high >= trade.index_sl):
                 return [self._exit(trade, when, prem.close, f"SL ({trade.sl_rule})")]

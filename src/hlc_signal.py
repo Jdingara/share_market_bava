@@ -29,16 +29,19 @@ class HlcMarket:
     quantity: int
     sl_points: float  # stop loss = entry premium - this (owner, 2026-09-29)
     big_gap: float  # no longer used: since 2026-10-05 a big gap day = open above R2 / below S2
+    allocation: float = 0  # owner, 2026-10-12: money per trade (0 = fixed quantity)
+    max_loss: float = 0  # owner, 2026-10-12: daily loss limit; also caps each trade's SL risk
+    lot: int = 1
     big_gap_trail: float = 100  # big-gap trade: once this many points up, trailing SL this far below the premium high
 
 
 HLC_MARKETS = {
     "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=260,  # owner 12-10 (was 325)
                          sl_points=25, big_gap=150,
-                       big_gap_trail=50),
+                       big_gap_trail=50, allocation=100_000, max_loss=7_500, lot=65),
     "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=200,  # owner 12-10 (was 160, 300 before 09-10)
                           sl_points=50, big_gap=300,
-                        big_gap_trail=100),
+                        big_gap_trail=100, allocation=175_000, max_loss=10_000, lot=20),
 }
 
 

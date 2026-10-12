@@ -291,33 +291,35 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
             how = (f"within {event.atm_close_trigger - event.signal_close:.2f} of" if event.near else "above")
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} ({how} the ATM "
                     f"{event.setup.buy_type} close {trigger:.2f}"
-                    f"{', index below yesterday' if event.near else ''}) - WOULD BUY {qty} at "
+                    f"{', index below yesterday' if event.near else ''}) - WOULD BUY at "
                     + (f"{event.square} if it comes back, or at {event.next_square} if it runs up" if event.square
                        else f"{event.next_square} when it rises there") + note)
         note = (" - HIGH confidence: ATM already below Sniper" if event.atm_below_sniper else "") + note
         if event.kind == "ORDER" and event.setup.contract:
             return (f"SIGNAL {symbol}: sideways day, ATM {event.setup.buy_type} U/V - reversal then retest, "
-                    f"candle {event.when:%H:%M} closed {event.signal_close:.2f} - WOULD BUY {qty} at the Fib 0.618 "
+                    f"candle {event.when:%H:%M} closed {event.signal_close:.2f} - WOULD BUY at the Fib 0.618 "
                     f"of that candle (limit), SL {(int(event.square ** 0.5) - 1) ** 2}, "
                     f"target {(int(event.square ** 0.5) + 2) ** 2}{note}")
         if event.kind == "ORDER" and event.body_entry:
             return (f"SIGNAL {symbol}: ATM {event.setup.buy_type} candle {event.when:%H:%M} body closed above the Sniper - "
-                    f"WOULD BUY {qty} at {event.square} (limit), fixed SL {(int(event.square ** 0.5) - 1) ** 2}, "
+                    f"WOULD BUY at {event.square} (limit), fixed SL {(int(event.square ** 0.5) - 1) ** 2}, "
                     f"target {(int(event.square ** 0.5) + 2) ** 2}{note}")
         if event.kind == "ORDER" and event.square:
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
-                    f"WOULD BUY {qty} at {event.square} if it comes back, or at {event.next_square} if it runs up{note}")
+                    f"WOULD BUY at {event.square} if it comes back, or at {event.next_square} if it runs up{note}")
         if event.kind == "ORDER":
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
-                    f"WOULD BUY {qty} at {event.next_square} when it rises there{note}")
+                    f"WOULD BUY at {event.next_square} when it rises there{note}")
         levels = f"{event.square}/{event.next_square}" if event.square else f"{event.next_square}"
         return f"Order for {symbol} at {levels} cancelled - window ended without a fill, or replaced by a newer signal{note}"
     t = event.trade
     symbol = _symbol(contracts, t.buy_type, t.buy_strike)
     if event.kind == "ENTRY":
         conf = " - HIGH confidence: ATM below Sniper" if t.atm_below_sniper else ""
+        qty = t.qty or qty
         return (f"WOULD BUY {qty} x {symbol} at {t.entry_fill:.2f} ({t.half} half, candle {t.entry_time[11:16]}) - "
                 f"SL {t.stop_loss} ({'fixed' if event.body_entry else 'trails up'}), target {t.target}{conf}{note}")
+    qty = t.qty or qty
     return (f"WOULD EXIT {qty} x {symbol} at {t.exit_premium:.2f} - {t.exit_reason} "
             f"(bought {t.entry_fill:.2f}, P&L {t.pnl_points:+.2f} points = Rs {t.pnl_points * qty:+,.0f}){note}")
 
@@ -480,7 +482,7 @@ def main() -> None:
 
     prefix = ("replay_" if args.replay else "") + ("" if market.name == "NIFTY" else f"{market.name}_")
     notify = Notifier(day, state, prefix=f"{prefix}log", phone=not args.replay)
-    notify.send(("REPLAY of " + day.isoformat() if args.replay else f"Sniper bot started ({market.name}, {qty} qty)")
+    notify.send(("REPLAY of " + day.isoformat() if args.replay else f"Sniper bot started ({market.name}, qty per trade: up to Rs {market.allocation:,.0f}, loss limit Rs {market.max_loss:,.0f})")
                 + " - PAPER MODE, no real orders.",
                 phone=False)
 
@@ -520,7 +522,7 @@ def main() -> None:
 
     notify.send("Watching " + ", ".join(c["tradingsymbol"] for c in contracts.values()) + " until 15:00.", phone=False)
     engine = SniperDay(day, plan.final, index_close=plan.index_close, near_points=market.near_atm_close,
-                       buy_atm=plan.buy_atm)
+                       buy_atm=plan.buy_atm, lot=market.lot_size, allocation=market.allocation, max_loss=market.max_loss)
     try:  # owner, 2026-10-08: the OTMs' yesterday highs, for the "ATM below the Sniper early" entry
         for key in ("otm_ce", "otm_pe", "atm_ce", "atm_pe"):
             start = datetime.combine(day - timedelta(days=14), time(0, 0))
@@ -553,9 +555,10 @@ def main() -> None:
     record(status)
     path = save_trades(engine.trades, day, prefix=f"{prefix}trades")
     total = sum(t.pnl_points for t in engine.trades if t.exit_reason)
+    rupees = sum(t.pnl_points * (t.qty or qty) for t in engine.trades if t.exit_reason)
     state.set_trades(engine.trades)
-    state.set_status(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {total * qty:+,.0f}")
-    notify.send(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {total * qty:+,.0f}."
+    state.set_status(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {rupees:+,.0f}")
+    notify.send(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {rupees:+,.0f}."
                 + (f" Saved to {path}" if path else ""))
     _keep_dashboard_open(url)
 
