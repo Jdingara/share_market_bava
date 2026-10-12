@@ -33,7 +33,7 @@
 - CE PANIC, PE PROFIT BOOKING — buyer’s day.
 - No trade.
 
-### SENSEX — watching (last update 2026-10-12 11:31)
+### SENSEX — watching (last update 2026-10-12 11:48)
 
 - Close 72472.33, ATM 72600. R3 74512.8 · R2 73556.4 · R1 73096.5 · S1 72140.1 · S2 71643.6 · S3 70687.2.
 - CE PANIC, PE PROFIT BOOKING — buyer’s day.

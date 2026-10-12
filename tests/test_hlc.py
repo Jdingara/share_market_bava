@@ -86,6 +86,7 @@ def test_fib_level_follows_the_swing_not_the_side_01_10_sensex():
     # CE: a plain red candle - no CE pattern (the real day had CE blocked by the PE PANIC anyway)
     chain = {(72500.0, "CE"): Candle(250, 251, 240, 241), (72500.0, "PE"): Candle(320, 325, 315, 320)}
     day = HlcDay(date(2026, 10, 1), levels, HLC_MARKETS["SENSEX"])
+    day.close_retest_done = True  # keep the 12-10 RETEST entry out of this test
     day.first_swing = "CE"
     candles = [("09:15", (72192.89, 72450.34, 72187.62, 72349.74)), ("09:20", (72342.87, 72374.04, 72223.99, 72239.26)),
                ("09:25", (72227.62, 72323.65, 72224.33, 72316.99)), ("09:30", (72317.48, 72437.65, 72310.38, 72310.38)),
@@ -212,7 +213,7 @@ def test_panic_pe_above_yesterdays_high_blocks_ce_trades():
     day.break_done = True  # keep the BREAK entry (owner 09-10) out of this test
     chain = lambda ce, pe: {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(*pe)}
     events = day.on_candle(_at("09:15"), Candle(22732.45, 22753, 22680, 22684), chain((26, 44, 25, 26.6), (77, 133.9, 76.5, 132)))
-    assert events == ["No CE trades today - PE PANIC yesterday and above its high 94 today"]
+    assert events == ["No CE trades today - PE PANIC yesterday and closed above its high 94 today"]
     day.gap_done = True
     day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), chain((10.4, 10.9, 9.9, 10.3), (210, 215, 205, 212)))
     day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), chain((10.3, 10.8, 9.65, 10.0), (212, 214, 208, 209)))
@@ -246,6 +247,7 @@ def test_confirm_trade_index_back_in_the_fib_zone_plus_premium_pattern():
     0.75-0.786 zone (72384.66-72394.12) and the PE premium shows a bullish pattern -> buy, SL -50, S1 -> S2."""
     levels = hlc_levels(72480.3, 72500, 232.55, 279.0)
     day = HlcDay(date(2026, 10, 1), levels, HLC_MARKETS["SENSEX"])
+    day.close_retest_done = True  # keep the 12-10 RETEST entry out of this test
     day.first_swing = "CE"
     ce = Candle(250, 255, 245, 250)
     seq = [("09:15", (72192.89, 72450.34, 72187.62, 72349.74), (300, 305, 295, 300)),
@@ -398,3 +400,20 @@ def test_break_entry_first_close_above_the_first_5_minute_high_09_10_sensex():
     for t, idx, ce, pe in seq:
         events = day.on_candle(_at(t), idx, {(71600.0, "CE"): ce, (71600.0, "PE"): pe})
     assert events[-1].startswith("BUY CE 71600 at 882.45 (BREAK")
+
+
+def test_close_retest_entry_12_10_sensex():
+    """Owner, 12-10: index closed below the close (72472.3) at 09:20, the 09:25 candle retested it, the 09:30 candle
+    closed below again -> buy PE at that close."""
+    levels = hlc_levels(72472.3, 72600, 496.5, 459.9)
+    day = HlcDay(date(2026, 10, 12), levels, HLC_MARKETS["SENSEX"], {"CE": (611.25, 220.05, 496.5), "PE": (1000, 412.7, 459.9)})
+    day.gap_done = day.break_done = True
+    seq = [("09:15", Candle(72771.32, 72884.25, 72624.57, 72643.78), Candle(530, 696.15, 520, 567), Candle(400, 420, 370, 377.1)),
+           ("09:20", Candle(72639.34, 72667.13, 72392.22, 72423.04), Candle(567, 585, 455, 462.8), Candle(377, 510, 375, 507.75)),
+           ("09:25", Candle(72424.25, 72589.21, 72407.59, 72589.21), Candle(462.8, 512.05, 460, 510.45), Candle(507, 510, 425, 428.4)),
+           ("09:30", Candle(72590.31, 72609.71, 72447.31, 72447.31), Candle(510.45, 516.3, 418, 420), Candle(428.4, 532, 425, 529.3))]
+    events = []
+    for t, idx, ce, pe in seq:
+        events = day.on_candle(_at(t), idx, {(72600.0, "CE"): ce, (72600.0, "PE"): pe})
+    assert "PE" not in day.blocked  # the 09:15 CE spike to 696 closed 567, below 611.25 - no block
+    assert events[-1].startswith("BUY PE 72600 at 529.30 (RETEST")

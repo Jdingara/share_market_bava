@@ -3,12 +3,12 @@
 **Paper trades — no real orders.** Written automatically by the bot (`src/history.py`) after every entry/exit;
 don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. ₹ = points × qty, before brokerage and charges.
 
-**All days: 27 trade(s), +406.00 points, ₹+128,225**
+**All days: 29 trade(s), +406.00 points, ₹+128,225**
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
-| 2026-10-12 | SENSEX | 72600 | 430.5 | 0 | +0.00 | ₹+0 | watching |
-| 2026-10-12 | NIFTY | 22600 | 60.2 | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-12 | SENSEX | 72600 | 430.5 | 1 | +0.00 | ₹+0 | watching |
+| 2026-10-12 | NIFTY | 22600 | 60.2 | 1 | +0.00 | ₹+0 | watching |
 | 2026-10-09 | SENSEX | 71600 | 544.73 | 1 | +0.00 | ₹+0 | finished |
 | 2026-10-09 | NIFTY | 22200 | 98.55 | 2 | +60.00 | ₹+19,500 | finished |
 | 2026-10-08 | SENSEX | 72600 | 151.82 | 1 | +64.00 | ₹+19,200 | finished |
@@ -29,17 +29,23 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 ## 2026-10-12 (Mon)
 
-### NIFTY — watching (last update 2026-10-12 11:35)
+### NIFTY — watching (last update 2026-10-12 11:40)
 
 - NIFTY close 22520.45 on 2026-10-09, expiry 2026-10-13, qty 325.
 - Plan: ATM 22600 after 1 shift(s), Sniper 60.2.
-- No trade yet.
 
-### SENSEX — watching (last update 2026-10-12 11:35)
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O1322500PE | 09:50 (catch-up) | 100.0 | 100 | 81 | 144 | open | OPEN | – | – |
+
+### SENSEX — watching (last update 2026-10-12 11:40)
 
 - SENSEX close 72472.33 on 2026-10-09, expiry 2026-10-15, qty 160.
 - Plan: ATM 72600 after 1 shift(s), Sniper 430.5.
-- No trade yet.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 160 × SENSEX26O1572500PE | 09:40 (catch-up) ★ HIGH | 529.0 | 529 | 484 | 625 | open | OPEN | – | – |
 
 ## 2026-10-09 (Fri)
 

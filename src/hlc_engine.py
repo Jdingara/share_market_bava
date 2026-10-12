@@ -149,6 +149,7 @@ class HlcDay:
         # Owner, 2026-10-08: day-side TREND trade on 15-minute closes vs the first 15-minute close
         self.first5_high: dict[str, float] = {}  # owner, 2026-10-09: day side's first 5-minute candle high (BREAK)
         self.break_done = False
+        self.close_retest_done = False  # owner, 2026-10-12: index close-retest entry, once a day
         self.first15_close: dict[str, float] = {}
         self.went_above: dict[str, int] = {}  # side -> candle no. when its premium closed above the first 15-min close
         # Owner, 2026-10-08: day-side pattern TREND trade - premium reversal pattern, retest, buy limit at the Fib 0.618
@@ -250,8 +251,9 @@ class HlcDay:
         for side, other in (("PE", "CE"), ("CE", "PE")):
             hlc = self.yesterday.get(side)
             candle = chain.get((self.levels.atm, side))
-            if hlc and candle and other not in self.blocked and leg_label(*hlc) == "PANIC" and candle.high > hlc[0]:
-                self.blocked[other] = f"{side} PANIC yesterday and above its high {hlc[0]:g} today"
+            if hlc and candle and other not in self.blocked and leg_label(*hlc) == "PANIC" and candle.close > hlc[0]:
+                # owner, 2026-10-12: a body CLOSE above yesterday's high (a wick isn't enough - 12-10's 09:15 CE spike)
+                self.blocked[other] = f"{side} PANIC yesterday and closed above its high {hlc[0]:g} today"
                 events.append(f"No {other} trades today - {self.blocked[other]}")
 
         self._track_trend(when)
@@ -294,7 +296,7 @@ class HlcDay:
         if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
 
-        event = (self._break_entry(when, index, chain) or self._pattern_trend_entry(when, index, chain)
+        event = (self._close_retest_entry(when, index, chain) or self._break_entry(when, index, chain) or self._pattern_trend_entry(when, index, chain)
                  or self._trend_entry(when, index, chain))
         if event:
             return events + [self._with_premium_targets(event)]
@@ -367,6 +369,29 @@ class HlcDay:
             elif (side in self.first15_close and side not in self.went_above
                   and history[-1].close > self.first15_close[side]):
                 self.went_above[side] = len(history) - 1
+
+    def _close_retest_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+        """Owner, 2026-10-12: the index has closed below yesterday's close (even before 09:30), a candle comes back to
+        retest it (its high reaches the close, within the level tolerance), and the NEXT candle closes below the close
+        again -> buy the ATM PE at that close. Mirror for CE. 12-10 SENSEX (close 72472.3): 09:20 closed 72423, 09:25
+        retested (72589), 09:30 closed 72447 -> PE 72600 @ 529.30. Once a day; SL -50/-25, targets the next levels."""
+        if self.close_retest_done or len(self.index_history) < 3 or when.time() < time(9, 30):
+            return None  # owner: "our condition is after 09:30" - the 09:25 candle can be the retest, not the entry
+        close, tol = self.levels.close, self.market.level_tolerance
+        before, retest, now = self.index_history[-3], self.index_history[-2], index
+        if before.close < close and retest.high >= close - tol and now.close < close:
+            side: OptionType = "PE"  # was below, came back up to the close, closed below again
+        elif before.close > close and retest.low <= close + tol and now.close > close:
+            side = "CE"
+        else:
+            return None
+        atm = self.levels.atm
+        if (atm, side) not in chain or side in self.blocked:
+            return None
+        self.close_retest_done = True
+        return self._enter("RETEST", side, atm, when, chain[(atm, side)], index,
+                           f"index retested the close {close:g} and closed {'below' if side == 'PE' else 'above'} it again",
+                           "S3" if side == "PE" else "R3")
 
     def _break_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
         """Owner, 2026-10-09: on a CE day (PE day) the CE (PE) premium CLOSES strongly above its first 5-minute candle's
