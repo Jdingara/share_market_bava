@@ -96,6 +96,7 @@ CONFIRM_ZONE = (0.75, 0.786)  # owner, 2026-10-01: double-confirmation trade's i
 FIB_FIRST_CANDLE = time(9, 30)  # owner, 2026-10-01: the level must be reached AFTER 09:30 - the 09:25 candle doesn't count
 LAST_ENTRY_CLOSE = time(14, 55)
 EXIT_CLOSE = time(15, 0)
+PB_FIB = 0.786  # PROFIT BOOKING side exit: Fib 0.786 of yesterday's close -> high (owner, 2026-10-12)
 PANIC_BLOCK = False  # owner, 2026-10-12: both sides (PROFIT BOOKING and PANIC) can trade - the index decides (29-09 block off)
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
@@ -122,6 +123,8 @@ class HlcTrade:
     premium_targets: list[float] = field(default_factory=list)  # PANIC side: earlier daily highs, next one first
     premium_high: float = 0.0  # highest premium since entry (for the trailing SL)
     premium_trail: Optional[float] = None  # PANIC side: last premium high closed above (information)
+    pb_target: Optional[float] = None  # PROFIT BOOKING side: Fib 0.786 of yesterday's close -> high (owner, 12-10)
+    pb_index: Optional[tuple[str, float]] = None  # ... or the index reaching S2 (PE) / R2 (CE)
     exit_time: str = ""
     exit_premium: float = 0.0
     exit_reason: str = ""
@@ -227,6 +230,7 @@ class HlcDay:
                          sl_premium=round(sl, 2), sl_rule=sl_rule, targets=targets,
                          big_gap=self.big_gap)
         trade.premium_targets = self.premium_ladder(trade.side, trade.strike, trade.entry_fill)
+        self._profit_booking_exits(trade)
         self.trades.append(trade)
         self.open_trade = trade
         names = " -> ".join(f"{n} {v:g}" for n, v in targets)
@@ -599,6 +603,7 @@ class HlcDay:
                          sl_rule=f"index {'below first low' if side == 'CE' else 'above first high'} {sl:g}",
                          index_sl=sl, targets=targets, big_gap=self.big_gap)
         trade.premium_targets = self.premium_ladder(trade.side, trade.strike, trade.entry_fill)
+        self._profit_booking_exits(trade)
         self.trades.append(trade)
         self.open_trade = trade
         return (f"BUY {side} {atm:g} at {prem.close:.2f} (FIB {FIB_ENTRY:g} of the first candle at {fib:.2f}; index {index.close:.2f}) - "
@@ -614,6 +619,7 @@ class HlcDay:
                          entry_index=index.close, sl_premium=order["sl"], sl_rule="2-candle low", targets=targets,
                          big_gap=self.big_gap)
         trade.premium_targets = self.premium_ladder(trade.side, trade.strike, trade.entry_fill)
+        self._profit_booking_exits(trade)
         self.trades.append(trade)
         self.open_trade = trade
         names = " -> ".join(f"{n} {v:g}" for n, v in targets)
@@ -624,6 +630,20 @@ class HlcDay:
         if trade is None or not trade.premium_targets or not event.startswith("BUY"):
             return event
         return event + " | PANIC side, premium targets " + " -> ".join(f"{h:g}" for h in trade.premium_targets)
+
+    def _profit_booking_exits(self, trade: HlcTrade) -> None:
+        """Owner, 2026-10-12: a trade on the PROFIT BOOKING side (morning ATM) exits only at the Fib 0.786 of that
+        strike's yesterday close -> high (12-10 NIFTY 22550 PE: 95.95 -> 272.77 => 234.93; the owner's 101.50 entry was
+        booked there), or when the index reaches S2 (PE) / R2 (CE) - plus the SL."""
+        hlc = self.yesterday.get(trade.side)
+        if not hlc or trade.strike != self.levels.atm or leg_label(*hlc) != "PROFIT BOOKING":
+            return
+        high, _, close = hlc
+        if high <= close:
+            return
+        trade.pb_target = round(close + PB_FIB * (high - close), 2)
+        name = "S2" if trade.side == "PE" else "R2"
+        trade.pb_index = (name, dict(self.levels.ladder())[name])
 
     def premium_ladder(self, side: OptionType, strike: float, above: float) -> list[float]:
         """PANIC side, morning ATM only: the staircase of daily highs going back from yesterday, above `above`."""
@@ -645,6 +665,17 @@ class HlcDay:
         elif prem.low <= trade.sl_premium:
             return [self._exit(trade, when, trade.sl_premium, f"SL ({trade.sl_rule})")]
         pe = trade.side == "PE"
+        if trade.pb_target is not None:
+            # Owner, 2026-10-12: PROFIT BOOKING side - exit only at the Fib 0.786 target or the index at S2 / R2
+            if prem.high >= trade.pb_target:
+                return [self._exit(trade, when, max(trade.pb_target, prem.open) if prem.open > trade.pb_target else trade.pb_target,
+                                   f"TARGET Fib {PB_FIB:g} of yesterday's close-high {trade.pb_target:g}")]
+            name, value = trade.pb_index
+            if (pe and index.low <= value) or (not pe and index.high >= value):
+                return [self._exit(trade, when, prem.close, f"TARGET {name} {value:g}")]
+            if closes >= EXIT_CLOSE:
+                return [self._exit(trade, when, prem.close, "15:00 exit")]
+            return []
         # Owner, 2026-10-05 (big-gap days), 2026-10-07 (every HLC trade): once the premium is big_gap_trail points
         # up (SENSEX 100 / NIFTY 50), trail the SL that far below its high - first at cost, then following the high.
         trail = self.market.big_gap_trail

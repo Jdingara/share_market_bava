@@ -420,3 +420,17 @@ def test_close_retest_entry_12_10_sensex():
         events = day.on_candle(_at(t), idx, {(72600.0, "CE"): ce, (72600.0, "PE"): pe})
     assert "PE" not in day.blocked  # the 09:15 CE spike to 696 closed 567, below 611.25 - no block
     assert events[-1].startswith("BUY PE 72600 at 529.30 (RETEST")
+
+
+def test_profit_booking_side_exits_at_fib_0786_of_yesterdays_close_to_high():
+    """Owner, 12-10: NIFTY 22550 PE was PROFIT BOOKING (H 272.9, C 95.95) -> target 95.95 + 0.786 x 176.95 = 235.04."""
+    from hlc_engine import HlcTrade
+    levels = hlc_levels(22520.5, 22550, 108.5, 95.95)
+    day = HlcDay(date(2026, 10, 12), levels, HLC_MARKETS["NIFTY"], {"CE": (146.85, 44.35, 108.5), "PE": (272.9, 82.35, 95.95)})
+    trade = HlcTrade(date="2026-10-12", kind="RETEST", side="PE", strike=22550, pattern="", entry_time="x",
+                     entry_fill=101.5, entry_index=22535, sl_premium=76.5)
+    day._profit_booking_exits(trade)
+    assert trade.pb_target == pytest.approx(235.04, abs=0.01) and trade.pb_index[0] == "S2"
+    day.index_history = [Candle(22500, 22510, 22490, 22500)] * 3
+    events = day._manage(trade, _at("14:25"), Candle(22340, 22350, 22346, 22347), Candle(220, 243, 219, 240), time(14, 30))
+    assert "TARGET Fib 0.786" in events[0] and trade.exit_premium == pytest.approx(235.04, abs=0.01)
