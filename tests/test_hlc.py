@@ -206,8 +206,11 @@ def test_every_trade_trails_50_below_the_premium_high_once_50_up():
     assert (day.trades[0].exit_premium, day.trades[0].pnl_points) == (20, 10)
 
 
-def test_panic_pe_above_yesterdays_high_blocks_ce_trades():
-    """29-09: 22800 PE was PANIC (H 94, L 8.4, C 71.45) and hit 133.90 at 09:15 -> no CE trade all day."""
+def test_panic_pe_above_yesterdays_high_blocks_ce_trades(monkeypatch):
+    """29-09: 22800 PE was PANIC (H 94, L 8.4, C 71.45) and hit 133.90 at 09:15 -> no CE trade all day.
+    Switched off 12-10 (owner: both sides can trade); kept behind PANIC_BLOCK."""
+    import hlc_engine
+    monkeypatch.setattr(hlc_engine, "PANIC_BLOCK", True)
     yday = {"CE": (298.5, 77.05, 84.20), "PE": (94.0, 8.4, 71.45)}
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"], yday)
     day.break_done = True  # keep the BREAK entry (owner 09-10) out of this test

@@ -96,6 +96,7 @@ CONFIRM_ZONE = (0.75, 0.786)  # owner, 2026-10-01: double-confirmation trade's i
 FIB_FIRST_CANDLE = time(9, 30)  # owner, 2026-10-01: the level must be reached AFTER 09:30 - the 09:25 candle doesn't count
 LAST_ENTRY_CLOSE = time(14, 55)
 EXIT_CLOSE = time(15, 0)
+PANIC_BLOCK = False  # owner, 2026-10-12: both sides (PROFIT BOOKING and PANIC) can trade - the index decides (29-09 block off)
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
 CANDLE = timedelta(minutes=5)
@@ -251,7 +252,7 @@ class HlcDay:
         for side, other in (("PE", "CE"), ("CE", "PE")):
             hlc = self.yesterday.get(side)
             candle = chain.get((self.levels.atm, side))
-            if hlc and candle and other not in self.blocked and leg_label(*hlc) == "PANIC" and candle.close > hlc[0]:
+            if PANIC_BLOCK and hlc and candle and other not in self.blocked and leg_label(*hlc) == "PANIC" and candle.close > hlc[0]:
                 # owner, 2026-10-12: a body CLOSE above yesterday's high (a wick isn't enough - 12-10's 09:15 CE spike)
                 self.blocked[other] = f"{side} PANIC yesterday and closed above its high {hlc[0]:g} today"
                 events.append(f"No {other} trades today - {self.blocked[other]}")
