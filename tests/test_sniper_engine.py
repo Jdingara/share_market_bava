@@ -178,11 +178,13 @@ FILLED_AT_100 = [("09:20", (78.60, 64.05, 72.10, 67.30)), ("09:25", (103.90, 71.
                  ("09:30", (112.00, 90.45, 107.95, 101.85))]
 
 
+@pytest.mark.legacy_trailing
 def test_touching_the_next_square_moves_the_first_tsl_to_cost():
     engine, _ = _run(FILLED_AT_100 + [("09:35", (125, 105, 110, 108))])  # high 125 >= 121, close 110 < 121
     assert engine.open_trades[0][1].trail_stop == 100
 
 
+@pytest.mark.legacy_trailing
 def test_same_candle_back_to_cost_exits_at_cost():
     # 07-10 NIFTY 22600 PE @ 144: 09:40 high 170 >= 169, low 143.75 -> out at 144.
     engine, events = _run(FILLED_AT_100 + [("09:35", (125, 99, 110, 108))])
@@ -190,6 +192,7 @@ def test_same_candle_back_to_cost_exits_at_cost():
     assert (t.exit_reason, t.exit_premium, t.pnl_points) == ("TRAIL_STOP", 100, 0)
 
 
+@pytest.mark.legacy_trailing
 def test_later_steps_still_need_a_close():
     engine, _ = _run(FILLED_AT_100 + [("09:35", (125, 105, 120, 108)), ("09:40", (140, 115, 130, 120))])
     assert engine.open_trades[0][1].trail_stop == 100  # 09:40 touched 144? no; closed 130 < 144 -> still 100
@@ -378,8 +381,8 @@ def test_normal_day_each_square_touched_past_the_target_moves_the_tsl():
     assert trade.trail_stop == 196 and trade.exit_reason == ""
     day.on_candle(at("09:45"), {**other, "otm_pe": Bar(220, 197, 210, 196.5)})   # rides on, 225 not reached
     assert trade.trail_stop == 196 and trade.exit_reason == ""
-    day.on_candle(at("09:50"), {**other, "otm_pe": Bar(212, 190, 192, 210)})     # comes back down -> out at 196
-    assert trade.exit_reason == "TRAIL_STOP" and trade.pnl_points == 52
+    day.on_candle(at("09:50"), {**other, "otm_pe": Bar(212, 190, 192, 210)})     # body closes below 196 -> out
+    assert trade.exit_reason == "TRAIL_STOP" and trade.pnl_points == 48  # owner 12-10: exit at the close (192)
 
 
 
@@ -396,3 +399,28 @@ def test_sideways_day_trades_only_the_atm(monkeypatch):
     for t, pe in (("09:30", Bar(140, 125, 126, 139)), ("09:35", Bar(141, 124, 140.5, 125)), ("09:40", Bar(141, 125, 140, 127))):
         events += day.on_candle(at(t), {"atm_ce": ce, "atm_pe": pe, "otm_ce": oce, "otm_pe": ope})
     assert [e.setup.contract for e in events if e.kind == "ORDER"] == ["atm_pe"]
+
+
+
+def test_12_10_sensex_529_sl_484_only_on_a_body_close_no_trailing_before_target():
+    """Owner, 12-10: 72500 PE bought 529, SL 484 - the 576 touch doesn't move the SL, the 09:55 wick to 498.25 (close
+    525.35) isn't an exit; buyer's day -> out at the 625 target."""
+    from sniper_engine import Bar, SniperDay, TradeResult
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(72600, "CE"): 496.50, (72600, "PE"): 459.90, (72700, "CE"): 442.45, (72500, "PE"): 418.55,
+              (72500, "CE"): 554.45, (72400, "PE"): 378.00, (72700, "PE"): 505.75, (72800, "CE"): 391.80}
+    row = build_daily_plan(72472.3, MARKETS["SENSEX"], lambda k, t: closes.get((k, t), 1.0)).final
+    day = SniperDay(date(2026, 10, 12), row)
+    day.buyers_day = True
+    at = lambda hm: datetime(2026, 10, 12, int(hm[:2]), int(hm[3:]))
+    other = {"atm_ce": Bar(400, 380, 390, 395), "atm_pe": Bar(600, 560, 590, 565), "otm_ce": Bar(300, 280, 290, 295)}
+    setup = next(s for s in day.setups if s.half == "first" and s.buy_type == "PE")
+    day._open(setup, 23, at("09:40"), 529.0, Bar(529.6, 480, 529.6, 513), True)
+    trade = day.trades[0]
+    assert (trade.stop_loss, trade.target) == (484, 625)
+    day.on_candle(at("09:50"), {**other, "otm_pe": Bar(591.85, 509.9, 591.85, 513.1)})   # touches 576
+    assert trade.trail_stop == 484
+    day.on_candle(at("09:55"), {**other, "otm_pe": Bar(600, 498.25, 525.35, 591.85)})   # wick, close above 484
+    assert trade.exit_reason == ""
+    day.on_candle(at("10:30"), {**other, "otm_pe": Bar(640, 600, 630, 610)})             # 625 touched
+    assert trade.exit_reason == "TARGET" and trade.pnl_points == 96

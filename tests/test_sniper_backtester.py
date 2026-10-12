@@ -254,6 +254,7 @@ def test_trailed_stop(stop, close, expected):
 ENTRY = {"09:40": (23100, 23090, 23095)}
 
 
+@pytest.mark.legacy_trailing
 def test_trailing_moves_stop_to_entry_then_exits_there():
     candles = _day({**ENTRY,
                     "09:45": (23080, 23070, 23075),  # PE 120-130, closes 125 > 121 -> SL 100
@@ -282,6 +283,7 @@ def test_fixed_target_still_exits_first_when_kept():
     assert (t.exit_reason, t.exit_premium) == ("TARGET", 144)
 
 
+@pytest.mark.legacy_trailing
 def test_without_target_trailing_rides_the_move():
     [t] = simulate_day(DAY, ROW, _day(RUN_UP), _price, keep_target=False)[0]
     assert (t.exit_reason, t.exit_premium, t.exit_time[11:16]) == ("TRAIL_STOP", 144, "10:00")

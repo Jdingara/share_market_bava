@@ -311,7 +311,7 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
                     f"WOULD BUY {qty} at {event.next_square} when it rises there{note}")
         levels = f"{event.square}/{event.next_square}" if event.square else f"{event.next_square}"
-        return f"Order for {symbol} at {levels} cancelled - window ended without a fill{note}"
+        return f"Order for {symbol} at {levels} cancelled - window ended without a fill, or replaced by a newer signal{note}"
     t = event.trade
     symbol = _symbol(contracts, t.buy_type, t.buy_strike)
     if event.kind == "ENTRY":

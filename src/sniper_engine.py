@@ -113,7 +113,9 @@ TRAILING_SL = True
 KEEP_FIXED_TARGET = True
 FILL_AT_SQUARE = True
 SL_ON_CLOSE = True
-FIRST_TSL_ON_TOUCH = True
+FIRST_TSL_ON_TOUCH = False  # owner, 2026-10-12: no cost-on-touch step (12-10 SENSEX 529 was knocked out at 0)
+ALL_STOPS_ON_CLOSE = True  # owner, 2026-10-12: every Sniper SL/TSL needs a candle BODY close below it
+TRAIL_BEFORE_TARGET = False  # owner, 2026-10-12: SL stays one square down until the target
 
 
 @dataclass(frozen=True)
@@ -210,7 +212,7 @@ class SniperDay:
         keep_target: bool = KEEP_FIXED_TARGET,
         fill_at_square: bool = FILL_AT_SQUARE,
         sl_on_close: bool = SL_ON_CLOSE,
-        first_tsl_on_touch: bool = FIRST_TSL_ON_TOUCH,
+        first_tsl_on_touch: Optional[bool] = None,
         index_close: Optional[float] = None,
         near_points: float = 0,
         buy_atm: bool = False,
@@ -223,7 +225,7 @@ class SniperDay:
         self.ride_normal_days = RIDE_NORMAL_DAYS
         self.fill_at_square = fill_at_square
         self.sl_on_close = sl_on_close
-        self.first_tsl_on_touch = first_tsl_on_touch
+        self.first_tsl_on_touch = FIRST_TSL_ON_TOUCH if first_tsl_on_touch is None else first_tsl_on_touch
         self.index_close = index_close  # yesterday's index close, for the ATM-close trigger's "near" form
         # Owner, 2026-10-08: ATM leg opened below the Sniper, or closed below it on a candle ending by 09:30 ->
         # the opposite OTM closing above ITS yesterday high is a signal (buy at the upcoming square).
@@ -262,7 +264,7 @@ class SniperDay:
         """The exit price if this candle hits `stop`, else None. Owner, 2026-10-06: for the FIRST SL only a
         candle CLOSING below it counts (exit at that close); 06-10 SENSEX 72600 CE @ 484, SL 441: the 10:55
         low 440.65 was only a wick, the candle closed 460.85. A trailed stop still exits on a touch."""
-        if self.sl_on_close and not trailed:
+        if self.sl_on_close and (ALL_STOPS_ON_CLOSE or not trailed):
             return bar.close if bar.close < stop else None
         return stop if bar.low <= stop else None
 
@@ -301,7 +303,7 @@ class SniperDay:
             if uv is not None:
                 # Owner, 2026-10-09 - sideways-day ATM trade: SL the square below the buy price; the first square above
                 # touched and the NEXT candle closing above it -> TSL there; exit at the second square (the target).
-                stop_exit = trade.trail_stop if bar.low <= trade.trail_stop else None
+                stop_exit = self._stop_hit(bar, trade.trail_stop, trade.trail_stop > trade.stop_loss)
                 if stop_exit is not None:
                     events.append(self._close(trade, when, stop_exit,
                                               "TRAIL_STOP" if trade.trail_stop > trade.stop_loss else "STOPLOSS"))
@@ -349,7 +351,7 @@ class SniperDay:
             elif closes_at_exit:
                 events.append(self._close(trade, when, bar.close, "TIME_EXIT_1500"))
             else:
-                if trails:
+                if trails and (TRAIL_BEFORE_TARGET or trade.trail_stop >= trade.target):
                     trade.trail_stop = trailed_stop(trade.trail_stop, bar.close)
                 continue
             self.open_trades.remove((setup, trade))
@@ -388,7 +390,10 @@ class SniperDay:
                 events.append(self._order_event("ORDER", pending, when))
                 return events
 
-        if half is None or half in self.halves_used or not self._next_trade_allowed():
+        # Owner, 2026-10-12: an unfilled body-entry limit doesn't block the half - the normal signal can still come
+        # and replaces it (12-10 SENSEX: body limit 441 never filled; the normal 72500 PE 529 trade was missed).
+        body_waiting = [p for p in self.pending if p.limit_only and p.setup.half == half]
+        if half is None or not self._next_trade_allowed() or (half in self.halves_used and not body_waiting):
             return events
 
         current = {key: bars[key].close for key in CONTRACT_KEYS}
@@ -423,6 +428,9 @@ class SniperDay:
                     pending = self._atm_close_signal(setup, buy_close, confident, bars) if half == "first" else None
                     if pending is None:
                         continue
+                    for waiting in body_waiting:  # replaces an unfilled body-entry limit too
+                        self.pending.remove(waiting)
+                        events.append(self._order_event("CANCEL", waiting, when))
                     self.halves_used.add(half)
                     self.pending.append(pending)
                     events.append(self._order_event("ORDER", pending, when))
@@ -431,6 +439,9 @@ class SniperDay:
                     pending = _Pending(setup, setup.levels.n - 1, buy_close, has_limit=False, atm_below_sniper=confident)
                 else:
                     pending = _Pending(setup, k, buy_close, atm_below_sniper=confident)
+                for waiting in body_waiting:  # the normal signal replaces an unfilled body-entry limit
+                    self.pending.remove(waiting)
+                    events.append(self._order_event("CANCEL", waiting, when))
                 self.halves_used.add(half)
                 self.pending.append(pending)
                 events.append(self._order_event("ORDER", pending, when))
@@ -503,6 +514,8 @@ class SniperDay:
     def _yesterday_high_entry(self, half: str, bars: dict[str, Bar], when: datetime) -> Optional[Event]:
         """Owner, 2026-10-08: an ATM leg opened below the Sniper (or closed below it by 09:30) -> when the opposite
         OTM closes above its yesterday's high, buy it at the upcoming square; SL one square down, target two up."""
+        if half in self.halves_used:
+            return None
         for setup in (s for s in self.setups if s.half == half):
             falling = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
             otm_key = _key(setup)
@@ -524,6 +537,8 @@ class SniperDay:
         buy that side's OTM at the square it has crossed - a limit at k^2 only (the owner bought at 49),
         fixed SL (k-1)^2 (no trailing), target (k+2)^2. 05-10 NIFTY (ATM 22500, Sniper 83.30): 10:20 22500 PE 65.10 -> 84.00
         -> 22400 PE @ 49, SL 36, target 81. No retest needed."""
+        if half in self.halves_used:  # one body order per half; a waiting one mustn't be duplicated
+            return None
         sniper = self.row.sniper
         for atm_key, buy_type in (("atm_pe", "PE"), ("atm_ce", "CE")):
             bar = bars[atm_key]
