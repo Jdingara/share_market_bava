@@ -269,7 +269,7 @@ def test_confirm_trade_index_back_in_the_fib_zone_plus_premium_pattern():
         events = day.on_candle(_at(t), Candle(*idx), {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(*pe)})
     assert events and events[-1].startswith("BUY PE 72500 at 248.00 (CONFIRM")
     t = day.open_trade
-    assert t.sl_premium == 223 and [n for n, _ in t.targets] == ["S1", "S2"]  # owner 12-10: swing low 224 - 1
+    assert t.sl_premium == 224 and [n for n, _ in t.targets] == ["S1", "S2"]  # owner 12-10: previous candle low 225 - 1
 
 
 def test_panic_side_premium_targets_staircase_of_earlier_daily_highs():

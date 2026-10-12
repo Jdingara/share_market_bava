@@ -30,4 +30,4 @@ date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_t
 2026-10-09,NIFTY,BREAK,CE,22250,CE closed 223 above its first 5-min high 221.4,325,09:25,223,198,25 points,11:15,333.95,TARGET R2 22529.5,110.95,36059
 2026-10-09,NIFTY,TREND,CE,22250,"CE Bullish Engulfing, retest 299.05, Fib 0.618 303.52",325,11:40,303.52,278.52,25 points,11:50,278.52,SL (25 points),-25.0,-8125
 2026-10-09,SENSEX,BREAK,CE,71600,CE closed 882.45 above its first 5-min high 859,160,09:25,882.45,832.45,50 points,11:30,1138.25,trailing SL 1138.25 (100 below the high 1238.25),255.8,40928
-2026-10-12,NIFTY,RETEST,PE,22550,index retested the close 22520.5 and closed below it again,325,09:50,134.2,109.2,25 points,09:55,109.2,SL (25 points),-25.0,-8125
+2026-10-12,NIFTY,RETEST,PE,22550,index retested the close 22520.5 and closed below it again,325,09:50,134.2,95.65,swing low - 1,14:10,227.9,TARGET S2 22345.5,93.7,30452
