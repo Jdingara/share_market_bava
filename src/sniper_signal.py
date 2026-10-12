@@ -55,16 +55,16 @@ class MarketConfig:
 
 
 MARKETS = {
-    "NIFTY": MarketConfig(name="NIFTY", strike_step=100, min_gap=20, expiry_weekday=1, lot_size=65, max_lots=5,
+    "NIFTY": MarketConfig(name="NIFTY", strike_step=100, min_gap=20, expiry_weekday=1, lot_size=65, max_lots=4,
                           index_token=256265, options_exchange="NFO", widen_otm_fallback=False,  # owner 05-10: dropped
-                          relaxed_min_gap=None, near_atm_close=20),  # NSE, Tuesday expiry, 325 qty (owner 09-10: Rs 1L allotted)
+                          relaxed_min_gap=None, near_atm_close=20),  # NSE, Tuesday expiry, 260 qty (owner 12-10; was 325)
     "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=27,  # owner 12-10: 30, "slightly less is fine" -> 27
-                            expiry_weekday=3, lot_size=20, max_lots=8,
+                            expiry_weekday=3, lot_size=20, max_lots=10,
                            index_token=265, options_exchange="BFO",
                            widen_otm=False,  # owner 07-10: OTM +-100, shift the ATM like NIFTY (was True 29-09)
                            widen_both_fallback=False,  # owner 12-10: OTM always +-100 (08-10 widening dropped)
                            relaxed_min_gap=None,  # owner 08-10: SENSEX minimum 40 only (32 dropped)
-                           near_atm_close=30),  # BSE, Thursday expiry, 160 qty (owner 09-10: Rs 1.25L allotted; was 300)
+                           near_atm_close=30),  # BSE, Thursday expiry, 200 qty (owner 12-10; was 160, 300 before 09-10)
 }
 
 MAX_SHIFTS = 3

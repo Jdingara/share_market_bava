@@ -33,10 +33,10 @@ class HlcMarket:
 
 
 HLC_MARKETS = {
-    "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=325,  # owner 09-10: Rs 1L
+    "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=260,  # owner 12-10 (was 325)
                          sl_points=25, big_gap=150,
                        big_gap_trail=50),
-    "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=160,  # owner 09-10: Rs 1.75L (was 300)
+    "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=200,  # owner 12-10 (was 160, 300 before 09-10)
                           sl_points=50, big_gap=300,
                         big_gap_trail=100),
 }

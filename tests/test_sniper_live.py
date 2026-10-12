@@ -216,9 +216,9 @@ def test_full_day_watch_loop_with_fake_clock(monkeypatch, tmp_path):
     assert seen_future  # the fake did serve forming candles, and they were skipped
     assert clock.now.time() < sniper_live.time(15, 5)
     log = (tmp_path / "log_2026-09-29.txt").read_text(encoding="utf-8")
-    assert "WOULD BUY 325 x NIFTY26092923100PE at 103.00" in log
-    assert "WOULD EXIT 325 x NIFTY26092923100PE at 144.00 - TARGET" in log
-    assert "Rs +13,325" in log  # 41 points x 325 qty
+    assert "WOULD BUY 260 x NIFTY26092923100PE at 103.00" in log
+    assert "WOULD EXIT 260 x NIFTY26092923100PE at 144.00 - TARGET" in log
+    assert "Rs +10,660" in log  # 41 points x 260 qty (owner 12-10)
     assert "catch-up" not in log
 
 
