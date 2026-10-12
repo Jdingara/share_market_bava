@@ -380,9 +380,11 @@ class HlcDay:
             return None  # owner: "our condition is after 09:30" - the 09:25 candle can be the retest, not the entry
         close, tol = self.levels.close, self.market.level_tolerance
         before, retest, now = self.index_history[-3], self.index_history[-2], index
-        if before.close < close and retest.high >= close - tol and now.close < close:
-            side: OptionType = "PE"  # was below, came back up to the close, closed below again
-        elif before.close > close and retest.low <= close + tol and now.close > close:
+        # the confirming candle must move the trade's way (owner, 12-10: NIFTY's 09:30 candle closed above the close
+        # but was RED - 22584 -> 22535 - so it was no CE confirmation)
+        if before.close < close and retest.high >= close - tol and now.close < close and now.red:
+            side: OptionType = "PE"  # was below, came back up to the close, closed below again on a red candle
+        elif before.close > close and retest.low <= close + tol and now.close > close and now.green:
             side = "CE"
         else:
             return None
