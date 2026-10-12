@@ -115,7 +115,8 @@ FILL_AT_SQUARE = True
 SL_ON_CLOSE = True
 FIRST_TSL_ON_TOUCH = False  # owner, 2026-10-12: no cost-on-touch step (12-10 SENSEX 529 was knocked out at 0)
 ALL_STOPS_ON_CLOSE = True  # owner, 2026-10-12: every Sniper SL/TSL needs a candle BODY close below it
-TRAIL_BEFORE_TARGET = False  # owner, 2026-10-12: SL stays one square down until the target
+TRAIL_BEFORE_TARGET = False  # (legacy close-based trailing switch)
+SQUARE_LADDER_TSL = True  # owner, 2026-10-12: TSL = one square below the highest square TOUCHED (exit on a close)
 
 
 @dataclass(frozen=True)
@@ -328,20 +329,18 @@ class SniperDay:
                     and bar.high >= (math.isqrt(trade.entry_square) + 1) ** 2):
                 trade.trail_stop = float(trade.entry_square)  # owner, 07-10: first step on a touch -> cost
                 moved_now = True
-            raise_to = None
-            if ride and trails and bar.high >= trade.target:
-                # Owner, 2026-10-09: normal day - we want the 2 squares. Once the target (+2 squares) is touched the SL
-                # is the target itself (144 entry: 196 touched -> SL 196; back down without reaching 225 -> out at 196);
-                # higher squares touched raise it further (256 touched -> SL 225). Applied from the next candle - the
-                # touching candle itself traded below the target on its way up.
+            if trails and SQUARE_LADDER_TSL:
+                # Owner, 2026-10-12: TSL by touch, one square below the highest square touched since entry - entry 529,
+                # SL 484: 576 touched -> SL 529 (cost); 625 touched -> SL 576; ... The exit itself still needs a candle
+                # BODY close below the SL (ALL_STOPS_ON_CLOSE).
                 m = math.isqrt(int(bar.high))
-                raise_to = float(max(trade.target, (m - 1) ** 2))
+                if m >= math.isqrt(trade.entry_square) + 1 and (m - 1) ** 2 > trade.trail_stop:
+                    trade.trail_stop = float((m - 1) ** 2)
             trailed = trade.trail_stop > trade.stop_loss
             stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
-            if raise_to is not None and raise_to > trade.trail_stop and stop_exit is None:
-                trade.trail_stop = raise_to
             target_hit = self.keep_target and not ride and bar.high >= trade.target
-            if target_hit and (moved_now or (self.sl_on_close and not trailed)):  # target reached before the close / the drop
+            if target_hit and (moved_now or (self.sl_on_close and (ALL_STOPS_ON_CLOSE or not trailed))):
+                # target reached during the candle, before a stop that only counts on the close
                 events.append(self._close(trade, when, trade.target, "TARGET"))
             elif stop_exit is not None:
                 reason = "TRAIL_STOP" if trade.trail_stop > trade.stop_loss else "STOPLOSS"
@@ -351,7 +350,7 @@ class SniperDay:
             elif closes_at_exit:
                 events.append(self._close(trade, when, bar.close, "TIME_EXIT_1500"))
             else:
-                if trails and (TRAIL_BEFORE_TARGET or trade.trail_stop >= trade.target):
+                if trails and not SQUARE_LADDER_TSL and (TRAIL_BEFORE_TARGET or trade.trail_stop >= trade.target):
                     trade.trail_stop = trailed_stop(trade.trail_stop, bar.close)
                 continue
             self.open_trades.remove((setup, trade))

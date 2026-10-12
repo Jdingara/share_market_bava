@@ -20,6 +20,7 @@ def sniper_target_mode(monkeypatch, request):
         monkeypatch.setattr(sniper_engine, "FIRST_TSL_ON_TOUCH", True)
         monkeypatch.setattr(sniper_engine, "ALL_STOPS_ON_CLOSE", False)
         monkeypatch.setattr(sniper_engine, "TRAIL_BEFORE_TARGET", True)
+        monkeypatch.setattr(sniper_engine, "SQUARE_LADDER_TSL", False)
 
 
 def pytest_configure(config):
