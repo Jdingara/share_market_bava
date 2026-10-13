@@ -616,18 +616,26 @@ class SniperDay:
             return None
         bar = bars[_key(r["setup"])]
         level = r["high"] - REENTRY_FIB * (r["high"] - r["low"])
-        if bar.low > level:
-            if bar.high > r["high"]:  # the move goes on before any pull-back - stretch the Fib
-                r["high"] = bar.high
+        if bar.close < r["low"]:  # the move failed - no re-entry
+            self.reentry = None
+            return None
+        if "tested_at" not in r:
+            if bar.low > level:
+                if bar.high > r["high"]:  # the move goes on before any pull-back - stretch the Fib
+                    r["high"] = bar.high
+                return None
+            r["tested_at"] = self.candle_no  # 0.618 tested - now wait for a confirmation candle
+            return None
+        # Owner, 2026-10-13: after the 0.618 test, a confirmation candle (green, closing above the 0.618 level) ->
+        # buy at its close; no confirmation -> no entry.
+        if self.candle_no <= r["tested_at"] or bar.open is None or not (bar.close > bar.open and bar.close > level):
             return None
         self.reentry = None
-        fill = min(level, bar.open) if bar.open is not None else level
-        if fill < 1:
-            return None
+        fill = bar.close
         setup = TradeSetup(half, r["setup"].direction, r["setup"].falling_type, r["setup"].buy_strike,
                            r["setup"].buy_type, square_levels(fill), contract=r["setup"].contract)
         self.halves_used.add(half)
-        return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, True, reentry=True)
+        return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, False, reentry=True)
 
     def sync_capital(self) -> None:
         """Live bot, after each candle: tell the shared ledger how much money this bot has in open trades."""

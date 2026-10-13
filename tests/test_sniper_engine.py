@@ -468,7 +468,11 @@ def test_reentry_at_the_0618_pullback_of_the_previous_move():
     day.on_candle(at("09:45"), {**other, "otm_pe": Bar(231, 160, 165, 230)})            # trail exit on the close
     assert day.trades[0].exit_reason in ("TRAIL_STOP", "STOPLOSS")
     level = 240 - 0.618 * (240 - 140)  # 178.2
-    events = day.on_candle(at("09:50"), {**other, "otm_pe": Bar(185, 175, 180, 182)})   # pull-back to 0.618
+    events = day.on_candle(at("09:50"), {**other, "otm_pe": Bar(185, 175, 180, 182)})   # tests 0.618 - no entry yet
+    assert not [e for e in events if e.kind == "ENTRY"]
+    events = day.on_candle(at("09:55"), {**other, "otm_pe": Bar(186, 176, 179, 184)})   # red candle - no confirmation
+    assert not [e for e in events if e.kind == "ENTRY"]
+    events = day.on_candle(at("10:00"), {**other, "otm_pe": Bar(195, 178, 192, 180)})   # green, closes above 178.2
     entries = [e for e in events if e.kind == "ENTRY"]
-    assert entries and entries[0].trade.entry_fill == pytest.approx(level, abs=0.01)
-    assert entries[0].trade.stop_loss == pytest.approx(level - 25, abs=0.01)  # owner 13-10: re-entry SL = buy - 25
+    assert entries and entries[0].trade.entry_fill == 192
+    assert entries[0].trade.stop_loss == 167  # owner 13-10: re-entry SL = buy - 25
