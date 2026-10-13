@@ -344,9 +344,9 @@ class SniperDay:
                 trade.trail_stop = float(trade.entry_square)  # owner, 07-10: first step on a touch -> cost
                 moved_now = True
             if trails and SQUARE_LADDER_TSL:
-                # Owner, 2026-10-12: nothing moves until the price reaches 2 squares above the entry. Entry 529 (k=23),
-                # SL 484: 625 touched -> SL 529 (cost); a LATER candle trading above 625 -> SL 576; after that one
-                # square below each higher square touched (676 -> 625, ...). Exits need a body close below the SL.
+                # Owner, 2026-10-12/13: nothing moves until the price reaches 2 squares above the entry. Entry 529 (k=23),
+                # SL 484: 625 touched -> SL 529 (cost); a LATER candle CLOSING above 625 -> SL 625 (2 squares locked);
+                # then one square below each higher square touched (729 -> 676, ...). Exits need a body close below.
                 k = math.isqrt(trade.entry_square)
                 m = math.isqrt(int(bar.high))
                 state = self.ladder.setdefault(id(trade), {"cost_at": None})
@@ -355,7 +355,10 @@ class SniperDay:
                         state["cost_at"] = self.candle_no
                         trade.trail_stop = max(trade.trail_stop, float(k * k))
                     elif self.candle_no > state["cost_at"]:
-                        trade.trail_stop = max(trade.trail_stop, float((k + 1) ** 2), float((m - 1) ** 2) if m >= k + 3 else 0.0)
+                        # owner, 2026-10-13: a LATER candle CLOSING above the target -> SL at the target (2 squares
+                        # locked); higher squares touched -> one square below them
+                        locked = float((k + 2) ** 2) if bar.close > (k + 2) ** 2 else 0.0
+                        trade.trail_stop = max(trade.trail_stop, locked, float((m - 1) ** 2) if m >= k + 3 else 0.0)
             trailed = trade.trail_stop > trade.stop_loss
             stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
             target_hit = self.keep_target and not ride and bar.high >= trade.target

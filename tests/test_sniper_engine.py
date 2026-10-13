@@ -354,11 +354,13 @@ def test_buyers_day_rides_past_the_target_with_the_trailing_sl():
     events = day.on_candle(at("09:40"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
                                          "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target + 20, trade.target - 5, trade.target + 10, 165)})
     assert trade.exit_reason == ""  # went through the target, still open
-    # owner 12-10: 2 squares reached -> SL at cost; a later candle above the target -> one square above cost
+    # owner 12-13: 2 squares reached -> SL at cost; a later candle CLOSING above the target -> SL at the target
     assert trade.trail_stop == trade.entry_square
-    one_up = (int(trade.entry_square ** 0.5) + 1) ** 2
-    events = day.on_candle(at("09:45"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
-                                         "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target + 1, one_up - 10, one_up - 5, trade.target)})
+    day.on_candle(at("09:45"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
+                                "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target + 15, trade.target - 2, trade.target + 5, trade.target)})
+    assert trade.trail_stop == trade.target
+    events = day.on_candle(at("09:50"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
+                                         "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target + 5, trade.target - 10, trade.target - 3, trade.target + 5)})
     assert trade.exit_reason == "TRAIL_STOP" and trade.pnl_points > 0
 
 
@@ -427,5 +429,5 @@ def test_12_10_sensex_529_tsl_only_after_two_squares():
     assert trade.exit_reason == ""
     day.on_candle(at("10:40"), {**other, "otm_pe": Bar(630, 590, 600, 595)})             # 625 touched -> cost
     assert trade.trail_stop == 529 and trade.exit_reason == ""
-    day.on_candle(at("10:45"), {**other, "otm_pe": Bar(640, 600, 632, 600)})             # later candle above 625
-    assert trade.trail_stop == 576
+    day.on_candle(at("10:45"), {**other, "otm_pe": Bar(640, 600, 632, 600)})             # later candle CLOSES above 625
+    assert trade.trail_stop == 625  # owner 13-10: 2 squares locked
