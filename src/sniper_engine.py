@@ -626,7 +626,7 @@ class SniperDay:
         setup = TradeSetup(half, r["setup"].direction, r["setup"].falling_type, r["setup"].buy_strike,
                            r["setup"].buy_type, square_levels(fill), contract=r["setup"].contract)
         self.halves_used.add(half)
-        return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, True)
+        return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, True, reentry=True)
 
     def sync_capital(self) -> None:
         """Live bot, after each candle: tell the shared ledger how much money this bot has in open trades."""
@@ -679,7 +679,8 @@ class SniperDay:
         return None
 
     def _open(self, setup: TradeSetup, k: int, when: datetime, price: float, bar: Bar, fill_candle: bool,
-              atm_below_sniper: bool = False, fixed_sl: bool = False, trigger: Optional[float] = None) -> list[Event]:
+              atm_below_sniper: bool = False, fixed_sl: bool = False, trigger: Optional[float] = None,
+              reentry: bool = False) -> list[Event]:
         trade = TradeResult(
             date=self.day.isoformat(),
             half=setup.half,
@@ -695,6 +696,9 @@ class SniperDay:
             trail_stop=float((k - 1) ** 2),
             atm_below_sniper=atm_below_sniper,
         )
+        if reentry:  # owner, 2026-10-13: a re-entry's SL is the square right below the buy price (143.74 -> 121)
+            trade.stop_loss = k * k
+            trade.trail_stop = float(trade.stop_loss)
         if setup.contract:  # the sideways-day ATM (U/V) trade: SL = the square below the buy price, target +2 squares
             k_low = math.isqrt(int(price))
             trade.stop_loss = k_low * k_low
