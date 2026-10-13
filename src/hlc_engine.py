@@ -319,6 +319,11 @@ class HlcDay:
             return events
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
+        if not self.buyers_day():
+            # Owner, 2026-10-13: normal day - one entry 09:30-12:00 and one 12:30-15:00 (each with its own signal)
+            window = "am" if closes <= time(12, 0) else "pm" if closes >= time(12, 30) else None
+            if window is None or any(self._window_of(t) == window for t in self.trades):
+                return events
 
         atm = self.levels.atm
         if self.big_gap:  # big gap: the round strike nearest the market now
@@ -689,6 +694,11 @@ class HlcDay:
         if self.capital:
             t = self.open_trade
             self.capital.hold(t.qty * t.entry_fill if t is not None and not t.exit_reason and t.qty else 0.0)
+
+    @staticmethod
+    def _window_of(trade: HlcTrade) -> str:
+        closes = _closes_at(datetime.fromisoformat(trade.entry_time))
+        return "am" if closes <= time(12, 0) else "pm"
 
     def realized_rupees(self) -> float:
         return sum(t.pnl_points * t.qty for t in self.trades if t.exit_reason and t.qty)

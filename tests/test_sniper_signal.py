@@ -205,8 +205,8 @@ def test_square_levels_rejects_non_positive():
         ("09:25", "first"),  # closes 09:30 - counts (owner, 2026-09-29)
         ("09:30", "first"),
         ("11:55", "first"),  # closes 12:00
-        ("12:00", "second"),  # closes 12:05 - second half starts right after 12:00 (owner)
-        ("12:20", "second"),
+        ("12:00", None),  # closes 12:05 - owner 13-10: the second half is 12:30-15:00 (was 12:05)
+        ("12:20", None),
         ("12:25", "second"),  # closes 12:30
         ("12:30", "second"),
         ("14:55", "second"),  # closes 15:00

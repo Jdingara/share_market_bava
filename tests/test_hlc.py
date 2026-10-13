@@ -242,16 +242,19 @@ def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit():
     day.on_candle(_at("09:35"), Candle(22748, 22749, 22700, 22705), _chain((60, 75, 59, 74)))  # S1 broken -> trail
     day.on_candle(_at("09:40"), Candle(22705, 22706, 22640, 22650), _chain((74, 95, 73, 90)))  # S2 touched: final target
     assert day.trades[0].exit_reason.startswith("TARGET S2")
-    # Owner, 05-10: a second trade is allowed after a target (not a buyer's day: no yesterday data here) ...
+    # Owner, 05-10: a second trade is allowed after a target (not a buyer's day) - owner 13-10: in the 12:30-15:00
+    # window (one entry in the morning, one in the afternoon)
     calls = []
     day._confirm_entry = lambda *a: calls.append(1)  # reaching the entry checks = the gate let it through
     day.on_candle(_at("09:45"), Candle(22650, 22655, 22640, 22642), _chain((90, 91, 85, 86)))
+    assert not calls  # the morning already had its entry
+    day.on_candle(_at("12:30"), Candle(22650, 22655, 22640, 22642), _chain((90, 91, 85, 86)))
     assert calls
     # ... up to the day's limit (owner 09-10: 2 on a normal day, 4 on a buyer's day), then no more
     from hlc_engine import NORMAL_DAY_MAX_TRADES
     day.trades.extend([day.trades[0]] * (NORMAL_DAY_MAX_TRADES - len(day.trades)))
     calls.clear()
-    day.on_candle(_at("09:50"), Candle(22641, 22660, 22640, 22658), _chain((86, 92, 85, 91)))
+    day.on_candle(_at("12:35"), Candle(22641, 22660, 22640, 22658), _chain((86, 92, 85, 91)))
     assert not calls
 
 

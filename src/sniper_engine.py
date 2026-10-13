@@ -607,6 +607,8 @@ class SniperDay:
                 or self.candle_no <= r["at"]):  # not on the exit candle itself
             return None  # (the 2/4-trades-a-day rules live with ride_normal_days - old-rule tests run without them)
         limit = BUYERS_DAY_MAX_TRADES if self.buyers_day else NORMAL_DAY_MAX_TRADES
+        if not self.buyers_day and half in self.halves_used:
+            return None  # owner 13-10: normal day - one entry 09:30-12:00 and one 12:30-15:00
         if len(self.trades) >= limit or (self.max_loss and self.allocation
                                          and risk_left(self.max_loss, self.realized_rupees()) <= 0):
             self.reentry = None
@@ -623,6 +625,7 @@ class SniperDay:
             return None
         setup = TradeSetup(half, r["setup"].direction, r["setup"].falling_type, r["setup"].buy_strike,
                            r["setup"].buy_type, square_levels(fill), contract=r["setup"].contract)
+        self.halves_used.add(half)
         return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, True)
 
     def sync_capital(self) -> None:
