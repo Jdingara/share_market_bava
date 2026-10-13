@@ -168,6 +168,8 @@ def _ce_chain(ce):
 
 def test_low_premium_before_1330_buys_above_the_confirmation_high(monkeypatch):
     """29-09 10:15: CE 22800 at 10.00 (10 - 25 < 0) -> buy only if the next candle breaks 10.80; SL under 2 candles."""
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "R3_S3_FULL_PROFIT", False)  # tests other rules at the 29-09 S3
     import hlc_engine
     monkeypatch.setattr(hlc_engine, "SWING_LOW_SL", False)  # the 29-09 points SL (replaced 12-10)
     day = _low_premium_day()
@@ -181,6 +183,8 @@ def test_low_premium_before_1330_buys_above_the_confirmation_high(monkeypatch):
 
 
 def test_low_premium_order_not_triggered_is_cancelled(monkeypatch):
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "R3_S3_FULL_PROFIT", False)  # tests other rules at the 29-09 S3
     import hlc_engine
     monkeypatch.setattr(hlc_engine, "SWING_LOW_SL", False)  # the 29-09 points SL (replaced 12-10)
     day = _low_premium_day()
@@ -191,6 +195,8 @@ def test_low_premium_order_not_triggered_is_cancelled(monkeypatch):
 
 
 def test_low_premium_from_1330_uses_the_day_low_minus_one(monkeypatch):
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "R3_S3_FULL_PROFIT", False)  # tests other rules at the 29-09 S3
     import hlc_engine
     monkeypatch.setattr(hlc_engine, "SWING_LOW_SL", False)  # the 29-09 points SL (replaced 12-10)
     day = _low_premium_day()
@@ -200,9 +206,11 @@ def test_low_premium_from_1330_uses_the_day_low_minus_one(monkeypatch):
     assert (day.open_trade.sl_premium, day.open_trade.sl_rule) == (8.65, "day low - 1")
 
 
-def test_every_trade_trails_50_below_the_premium_high_once_50_up():
+def test_every_trade_trails_50_below_the_premium_high_once_50_up(monkeypatch):
     """Owner, 07-10: NIFTY 50 / SENSEX 100 points up -> trailing SL that far below the premium's high (not only on
     big-gap days). CE bought 10.00 at 13:30 (SL 8.65); premium runs to 70 -> SL 20; comes back to 19.5 -> out at 20."""
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "R3_S3_FULL_PROFIT", False)  # tests other rules at the 29-09 S3
     from dataclasses import replace
     day = _low_premium_day()
     day.market = replace(day.market, profit_lock_step=0)  # the 07-10 trailing (NIFTY uses the +50/+25 lock since 13-10)
@@ -493,3 +501,33 @@ def test_sensex_profit_lock_after_a_confirming_close():
     day.index_history.append(idx)
     events = day._manage(trade, _at("09:50"), idx, Candle(895, 896, 880, 885), time(9, 55))
     assert "profit lock +100" in events[0] and trade.pnl_points == 100
+
+
+def test_expiry_day_panic_side_u_v_reversal_then_confirmation():
+    """Owner, 13-10: expiry day, CE PROFIT BOOKING / PE PANIC yesterday - the PE falls to a new low, a reversal candle
+    there, then a green confirmation candle -> buy the ATM PE; SL the square below, TSL the first square, exit 2 squares."""
+    yesterday = {"CE": (120.0, 60.0, 62.0), "PE": (100.0, 40.0, 98.0)}  # CE PROFIT BOOKING, PE PANIC
+    day = HlcDay(date(2026, 10, 13), LEVELS, HLC_MARKETS["NIFTY"], yesterday)
+    day.expiry_day = True
+    day.gap_done = True  # (no FIB first trade in this test)
+    index = Candle(22760, 22762, 22758, 22760)
+    pe = [(95, 96, 80, 82), (82, 83, 70, 72), (72, 73, 60, 61), (61, 62, 50, 61.5),  # falls, Hammer at the new low
+          (61.5, 70, 61, 69),                                                       # green confirmation -> buy 69
+          (69, 82, 68, 80), (80, 90, 79, 85), (85, 101, 84, 95)]
+    events = []
+    for i, p in enumerate(pe):
+        chain = {(22800.0, "CE"): Candle(20, 22, 18, 21), (22800.0, "PE"): Candle(*p)}
+        events += day.on_candle(_at(f"09:{15 + 5 * i:02d}"), index, chain)
+    t = day.trades[0]
+    assert t.kind == "EXPIRY U/V" and t.side == "PE" and t.entry_fill == 69 and "reversal" in t.pattern
+    assert t.exit_premium == 100 and t.exit_reason.startswith("2 square numbers reached")
+    assert any("TSL moves to 81" in e for e in events)
+
+
+def test_r3_touch_is_full_profit_no_more_trades():
+    """Owner, 13-10: NIFTY touched R3 -> full profit, no trade after that (SENSEX too)."""
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    assert not day.on_candle(_at("09:15"), Candle(22790, 22800, 22785, 22795), _chain((70, 72, 68, 71)))
+    events = day.on_candle(_at("09:20"), Candle(22795, LEVELS.r3 + 1, 22790, 23000), _chain((70, 72, 68, 71)))
+    assert day.done and events[0].startswith(f"index touched R3 {LEVELS.r3:g}")
+    assert day.on_candle(_at("09:25"), Candle(23000, 23010, 22990, 23005), _chain((70, 72, 68, 71))) == []

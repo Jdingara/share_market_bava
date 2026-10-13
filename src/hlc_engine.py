@@ -81,6 +81,7 @@ candles closing 09:30-14:55):
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Optional
@@ -101,6 +102,7 @@ REENTRY_POINTS_SL = True  # owner, 2026-10-13: re-entries use entry - 25 / 50 po
 SWING_LOW_SL = True  # owner, 2026-10-12: SL = the candle before the entry candle's low - 1 (was -25 / -50 points)
 PB_FIB = 0.786  # PROFIT BOOKING side exit: Fib 0.786 of yesterday's close -> high (owner, 2026-10-12)
 PANIC_BLOCK = False  # owner, 2026-10-12: both sides (PROFIT BOOKING and PANIC) can trade - the index decides (29-09 block off)
+R3_S3_FULL_PROFIT = True  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
 CANDLE = timedelta(minutes=5)
@@ -131,6 +133,7 @@ class HlcTrade:
     lock_level: float = 0.0  # profit lock: premium SL locking +N x step (owner, 13-10)
     pb_target: Optional[float] = None  # PROFIT BOOKING side: Fib 0.786 of yesterday's close -> high (owner, 12-10)
     pb_index: Optional[tuple[str, float]] = None  # ... or the index reaching S2 (PE) / R2 (CE)
+    uv: Optional[dict] = None  # expiry-day PANIC-side U/V trade (owner 13-10): {"first": (k+1)^2, "target": (k+2)^2, "touched_at"}
     exit_time: str = ""
     exit_premium: float = 0.0
     exit_reason: str = ""
@@ -173,6 +176,12 @@ class HlcDay:
         self.premium_history: dict[tuple[float, str], list[Candle]] = {}
         self.done = False
         self.pending: Optional[dict] = None  # low-premium buy stop above the confirmation candle
+        # Owner, 2026-10-13: expiry day + PB/PANIC day - after the profit booking the PANIC side falls to a new low and
+        # turns (U / V): a reversal candle there, then a green confirmation candle -> buy the PANIC side's ATM.
+        self.expiry_day = False  # set by the live bot (today is the contract's expiry)
+        self.expiry_uv: Optional[dict] = None  # {"side", "at", "low", "high", "name", "confirm"}
+        self.expiry_uv_done = False
+        self.full_profit: Optional[str] = None  # owner 13-10: the index touched R3 / S3 -> full profit, no more trades
 
     # --- helpers ---
 
@@ -290,6 +299,7 @@ class HlcDay:
 
         self._track_trend(when)
         self._track_trend_patterns(chain)
+        self._track_expiry_uv()
 
         if len(self.index_history) >= 3 and self._zone_touch(index):
             self.zone_touched_at = len(self.index_history) - 1
@@ -304,6 +314,16 @@ class HlcDay:
                     events.append(event)
             else:
                 events.append(f"Order {order['side']} {order['strike']:g} above {order['stop']:.2f} cancelled - not triggered")
+
+        if R3_S3_FULL_PROFIT and self.full_profit is None and not self.big_gap and (index.high >= self.levels.r3 or index.low <= self.levels.s3):
+            # Owner, 2026-10-13 (NIFTY touched R3 22567 at 11:00): an R3 / S3 touch = the day's full profit - close what
+            # is open and take no more trades today (NIFTY and SENSEX). (Big-gap days open beyond R2/S2 - not counted.)
+            name, value = ("R3", self.levels.r3) if index.high >= self.levels.r3 else ("S3", self.levels.s3)
+            self.full_profit = f"index touched {name} {value:g} in candle {when:%H:%M} - full profit, no more trades today"
+            events.append(self.full_profit)
+            events += self.close_now(when, chain, self.full_profit)
+            self.done = True
+            return events
 
         trade = self.open_trade
         if trade is not None and trade.entry_time != when.isoformat():
@@ -334,6 +354,10 @@ class HlcDay:
             atm = float(round(index.close / self.market.strike_step) * self.market.strike_step)
         if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
+
+        event = self._expiry_uv_entry(when, index, chain)
+        if event:
+            return events + [event]
 
         event = (self._close_retest_entry(when, index, chain) or self._level_break_entry(when, index, chain)
                  or self._break_entry(when, index, chain) or self._pattern_trend_entry(when, index, chain)
@@ -551,6 +575,97 @@ class HlcDay:
         index_against = index.close < self.levels.close if side == "CE" else index.close > self.levels.close
         return index_against and premium.close < yesterday[2]
 
+    def close_now(self, when: datetime, chain: dict[tuple[float, str], Candle], reason: str) -> list[str]:
+        """Close the open trade at this candle's premium close (R3/S3 full profit, or the owner's own call)."""
+        trade = self.open_trade
+        if trade is None:
+            return []
+        prem = chain.get((trade.strike, trade.side))
+        price = prem.close if prem is not None else (self.premium_history.get((trade.strike, trade.side)) or [None])[-1]
+        if price is None:
+            return []
+        price = price if isinstance(price, (int, float)) else price.close
+        return [self._exit(trade, when, price, reason)]
+
+    def panic_side(self) -> Optional[OptionType]:
+        return next((s for s in ("CE", "PE") if self.yesterday.get(s) and leg_label(*self.yesterday[s]) == "PANIC"), None)
+
+    def _track_expiry_uv(self) -> None:
+        """Owner, 2026-10-13: expiry day with one leg PROFIT BOOKING and the other PANIC yesterday. In the first half,
+        once the profit booking has played out the PANIC side falls; at its new low it turns U / V. A reversal candle
+        AT the day's low (the leg below its yesterday close) -> the NEXT candle must close green (and not below that
+        low) = confirmation -> entry (in _expiry_uv_entry). No confirmation -> wait for the next reversal."""
+        if not (self.expiry_day and self.buyers_day()) or self.expiry_uv_done:
+            return
+        side = self.panic_side()
+        hist = self.premium_history.get((self.levels.atm, side)) if side else None
+        if not hist:
+            return
+        n, c = len(self.index_history), hist[-1]
+        st = self.expiry_uv
+        if st is not None and not st.get("confirm"):
+            if n == st["at"] + 1 and c.green and c.close > c.open and c.low >= st["low"]:
+                st["confirm"] = n
+                return
+            self.expiry_uv = None  # not confirmed - look for a new reversal (this candle may be one)
+        if self.expiry_uv is not None:
+            return
+        found = bullish_pattern(hist[-3:])
+        if not found or found[0] in DIRECTIONLESS:  # a proper reversal candle, not a Doji / Spinning Top
+            return
+        span = hist[-found[1]:]
+        low = min(x.low for x in span)
+        if low <= min(x.low for x in hist) and low < self.yesterday[side][2]:
+            self.expiry_uv = dict(side=side, at=n, low=low, high=max(x.high for x in span), name=found[0])
+
+    def _expiry_uv_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+        st = self.expiry_uv
+        if st is None or st.get("confirm") != len(self.index_history) or _closes_at(when) > time(12, 0):
+            return None  # first half only
+        side, strike = st["side"], self.levels.atm
+        prem = chain.get((strike, side))
+        if prem is None:
+            return None
+        self.expiry_uv, self.expiry_uv_done = None, True
+        price = round(prem.close, 2)
+        k = math.isqrt(int(price))
+        if k < 2:
+            return None
+        # Like the Sniper's sideways U/V trade: SL the square below the buy price, TSL to the first square once a
+        # later candle closes above it, exit at the second square (the target).
+        trade = HlcTrade(date=self.day.isoformat(), kind="EXPIRY U/V", side=side, strike=strike,
+                         pattern=(f"expiry day, PB/PANIC: PANIC {side} new low {st['low']:g}, {st['name']} reversal, "
+                                  f"green confirmation closed {price:g}"),
+                         entry_time=when.isoformat(), entry_fill=price, entry_index=index.close,
+                         sl_premium=float(k * k), sl_rule=f"square below the buy price ({k * k})")
+        trade.uv = {"first": (k + 1) ** 2, "target": (k + 2) ** 2, "touched_at": None}
+        if not self._size(trade):
+            return None
+        self.trades.append(trade)
+        self.open_trade = trade
+        return (f"BUY {side} {strike:g} at {price:.2f} (EXPIRY U/V, {trade.pattern}; index {index.close:.2f}) - "
+                f"SL {k * k} (on a candle close), TSL {(k + 1) ** 2}, target {(k + 2) ** 2} (2 squares)")
+
+    def _manage_uv(self, trade: HlcTrade, when: datetime, prem: Candle, closes: time) -> list[str]:
+        uv = trade.uv
+        trailed = trade.sl_premium >= uv["first"]
+        if prem.close < trade.sl_premium:
+            what = "the trailing SL" if trailed else "the SL"
+            return [self._exit(trade, when, prem.close, f"{'TSL' if trailed else 'SL'} - candle {when:%H:%M} closed "
+                                                        f"{prem.close:g}, below {what} {trade.sl_premium:g}")]
+        if prem.high >= uv["target"]:
+            return [self._exit(trade, when, uv["target"], f"2 square numbers reached (target {uv['target']}) -> exit")]
+        if closes >= EXIT_CLOSE:
+            return [self._exit(trade, when, prem.close, "15:00 exit")]
+        n = len(self.index_history)
+        if uv["touched_at"] is not None and n > uv["touched_at"] and prem.close > uv["first"] and not trailed:
+            trade.sl_premium = float(uv["first"])
+            trade.sl_rule = f"TSL - a later candle closed above the first square {uv['first']}"
+            return [f"{trade.side} {trade.strike:g}: candle closed {prem.close:g} above {uv['first']} - TSL moves to {uv['first']}"]
+        if uv["touched_at"] is None and prem.high >= uv["first"]:
+            uv["touched_at"] = n
+        return []
+
     def buyers_day(self) -> bool:
         """One leg PROFIT BOOKING yesterday, the other PANIC."""
         ce, pe = self.yesterday.get("CE"), self.yesterday.get("PE")
@@ -752,6 +867,8 @@ class HlcDay:
             left = risk_left(self.market.max_loss, self.realized_rupees())
             if (trade.entry_fill - prem.close) * trade.qty >= left:
                 return [self._exit(trade, when, prem.close, f"daily loss limit (Rs {self.market.max_loss:,.0f}) - candle {when:%H:%M} closed {prem.close:g}")]
+        if trade.uv is not None:
+            return self._manage_uv(trade, when, prem, closes)
         if trade.index_sl is not None:
             if (trade.side == "CE" and index.low <= trade.index_sl) or (trade.side == "PE" and index.high >= trade.index_sl):
                 return [self._exit(trade, when, prem.close, f"SL ({trade.sl_rule}) - index reached the SL {trade.index_sl:g} in candle {when:%H:%M}")]

@@ -163,6 +163,12 @@ def feed(engine: HlcDay, index_rows: list[dict], premiums: dict[tuple[float, str
         index = Candle(row["open"], row["high"], row["low"], row["close"])
         chain_now = {key: series[when] for key, series in premiums.items() if when in series}
         events = engine.on_candle(when, index, chain_now)
+        stop = OUT_DIR / f"close_hlc_{engine.market.name}_{engine.day.isoformat()}.flag"
+        if not engine.done and stop.exists() and when + timedelta(minutes=CANDLE_MINUTES) >= datetime.fromtimestamp(stop.stat().st_mtime):
+            # Owner's own call (13-10 "today close the trade"): close at this candle's close, no more trades today
+            events += engine.close_now(when, chain_now, "closed on the owner's call - no more trades today")
+            events.append("Closed for the day on the owner's call")
+            engine.done = True
         engine.sync_capital()
         if state:
             state.add_candle(when, index, chain_now.get((engine.levels.atm, "CE")), chain_now.get((engine.levels.atm, "PE")))
@@ -245,6 +251,7 @@ def live(market_name: str, open_browser: bool) -> None:
                 + "  ".join(f"{n} {v:g}" for n, v in reversed(levels.ladder())) + "\n  " + "\n  ".join(info_lines(levels, yesterday)))
 
     engine = HlcDay(day, levels, market, yesterday)
+    engine.expiry_day = chain.expiry == day  # owner 13-10: expiry-day PANIC-side U/V trade
     engine.capital = CapitalLedger(OUT_DIR / f"capital_{day.isoformat()}.json", f"hlc_{market_name}")  # owner 12-10
     engine.capital.release()
     for side in ("CE", "PE"):
@@ -338,6 +345,7 @@ def replay(day: date, market_name: str, record: bool = False, dashboard: bool = 
                 premiums[(strike, option_type)] = _series(_historical(kite, contract["instrument_token"], start, end, "5minute"))
 
     engine = HlcDay(day, lv, market, yesterday)
+    engine.expiry_day = chain.expiry == day
     for side in ("CE", "PE"):
         engine.daily_highs[side] = daily_highs(kite, chain, lv.atm, side, day)
     engine.first_swing = first_swing(kite, market_name, day)
