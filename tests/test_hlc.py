@@ -457,3 +457,13 @@ def test_level_break_opened_above_close_15_min_close_above_r1():
                    ("09:25", Candle(22405, 22425, 22400, 22420))):
         events = day.on_candle(_at(t), idx, chain)
     assert events[-1].startswith("BUY CE 22350 at 158.00 (LEVEL")
+
+
+def test_far_sl_moves_to_fib_0618_up_from_the_low():
+    """Owner, 13-10: SENSEX entry 788, previous low 614.10 (174 points > 100) -> SL 614.10 + 0.618 x 173.9 - 1."""
+    levels = hlc_levels(71924.7, 71800, 443.95, 429.9)
+    day = HlcDay(date(2026, 10, 13), levels, HLC_MARKETS["SENSEX"])
+    day.premium_history[(71800.0, "CE")] = [Candle(700, 720, 614.10, 700), Candle(700, 790, 690, 788)]
+    day.index_history = [Candle(72300, 72310, 72290, 72301)] * 3
+    day._enter("LEVEL", "CE", 71800.0, _at("09:25"), Candle(700, 790, 690, 788), Candle(72300, 72310, 72290, 72301), "x", "R3")
+    assert day.open_trade.sl_premium == pytest.approx(614.10 + 0.618 * 173.9 - 1, abs=0.01)

@@ -29,16 +29,16 @@
 
 ## 2026-10-13 (Tue)
 
-### NIFTY — watching (last update 2026-10-13 09:45)
+### NIFTY — watching (last update 2026-10-13 10:20)
 
 - Close 22363.35, ATM 22350. R3 22567.2 · R2 22501.4 · R1 22415.8 · S1 22264.4 · S2 22198.6 · S3 22113.0.
 - CE PROFIT BOOKING, PE PANIC — buyer’s day.
 
 | Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|---|---|
-| BREAK | 130 × 22350 CE | CE closed 157.1 above its first 5-min high 155.2 | 09:25 | 157.1 | 110.95 (previous candle low - 1) | 191.7 (09:35) | TARGET R2 22501.4 | +34.60 | ₹+4,498 |
+| LEVEL | 130 × 22350 CE | opened above the close, 15-min close 22471.4 beyond R1 | 09:25 | 157.1 | 110.95 (previous candle low - 1) | 191.7 (09:35) | TARGET R2 22501.4 | +34.60 | ₹+4,498 |
 
-### SENSEX — watching (last update 2026-10-13 10:16)
+### SENSEX — watching (last update 2026-10-13 10:24)
 
 - Close 71924.68, ATM 71800. R3 73117.8 · R2 72673.85 · R1 72243.95 · S1 71370.1 · S2 70926.15 · S3 70496.25.
 - CE PROFIT BOOKING, PE PANIC — buyer’s day.

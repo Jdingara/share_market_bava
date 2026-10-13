@@ -226,6 +226,11 @@ class HlcDay:
             history = self.premium_history.get((strike, side), [prem])
             before = history[-2] if len(history) >= 2 else history[-1]
             sl, sl_rule = round(before.low - 1, 2), "previous candle low - 1"
+            if prem.close - before.low > self.market.far_sl_points:
+                # owner, 2026-10-13: a far SL (SENSEX > 100 / NIFTY > 40 points) -> Fib 0.618 up from that low, 1 below
+                # (13-10 SENSEX: entry 788, low 614.10 -> 614.10 + 0.618 x 173.9 = 721.6 -> SL 720.6)
+                sl = round(before.low + 0.618 * (prem.close - before.low) - 1, 2)
+                sl_rule = "Fib 0.618 of the previous low - 1"
         else:
             sl, sl_rule = prem.close - self.market.sl_points, f"{self.market.sl_points:g} points"
         if sl <= 0:  # premium too low for a points SL
