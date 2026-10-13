@@ -533,3 +533,22 @@ def test_r3_touch_is_full_profit_no_more_trades():
     events = day.on_candle(_at("09:20"), Candle(22795, LEVELS.r3 + 1, 22790, 23000), _chain((70, 72, 68, 71)))
     assert day.done and events[0].startswith(f"index touched R3 {LEVELS.r3:g}")
     assert day.on_candle(_at("09:25"), Candle(23000, 23010, 22990, 23005), _chain((70, 72, 68, 71))) == []
+
+
+def test_hlc_second_entry_only_from_1230_on_a_reversal():
+    """Owner, 13-10: after the morning trade, one more - from 12:30, reversal + green confirmation, SL reversal low - 1."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    day.trades.append(HlcTrade(date="2026-09-29", kind="LEVEL", side="PE", strike=22800, pattern="", entry_time="2026-09-29T09:30:00",
+                               entry_fill=60, entry_index=22770, sl_premium=50, exit_reason="TARGET", exit_premium=80))
+    index = Candle(22770, 22772, 22768, 22770)
+    seq = [("11:00", (60, 61, 50, 50.5)), ("11:05", (50.5, 51, 40, 50.8)),   # Hammer at 11:05
+           ("11:10", (50.8, 58, 50, 57)),                                   # green confirmation, but before 12:30
+           ("12:15", (57, 57.5, 45, 47)), ("12:20", (47, 47.5, 38, 47.2)),  # Hammer at 12:20, low 38
+           ("12:25", (47.2, 55, 46, 54))]                                   # green, closes 12:30 -> buy 54
+    events = []
+    for hhmm, pe in seq:
+        events += day.on_candle(_at(hhmm), index, _chain(pe))
+    assert len(day.trades) == 2
+    t = day.trades[1]
+    assert t.kind == "PM REVERSAL" and t.entry_fill == 54 and t.sl_premium == 37
