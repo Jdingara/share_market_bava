@@ -2,12 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 36 trade(s), +2226.35 points, ₹+578,586**
+**All days: 37 trade(s), +2226.35 points, ₹+578,586**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-13 | SENSEX | 71800 | PROFIT BOOKING / PANIC | yes | 1 | +200.00 | ₹+28,000 | watching |
-| 2026-10-13 | NIFTY | 22350 | PROFIT BOOKING / PANIC | yes | 2 | +50.30 | ₹+32,884 | watching |
+| 2026-10-13 | NIFTY | 22350 | PROFIT BOOKING / PANIC | yes | 3 | +50.30 | ₹+32,884 | watching |
 | 2026-10-12 | SENSEX | 72600 | PANIC / PROFIT BOOKING | yes | 1 | +355.12 | ₹+56,819 | finished |
 | 2026-10-12 | NIFTY | 22550 | PANIC / PROFIT BOOKING | yes | 1 | +93.70 | ₹+30,452 | finished |
 | 2026-10-09 | SENSEX | 71600 | PROFIT BOOKING / PANIC | yes | 1 | +255.80 | ₹+40,928 | finished |
@@ -29,7 +29,7 @@
 
 ## 2026-10-13 (Tue)
 
-### NIFTY — watching (last update 2026-10-13 10:55)
+### NIFTY — watching (last update 2026-10-13 11:15)
 
 - Close 22363.35, ATM 22350. R3 22567.2 · R2 22501.4 · R1 22415.8 · S1 22264.4 · S2 22198.6 · S3 22113.0.
 - CE PROFIT BOOKING, PE PANIC — buyer’s day.
@@ -38,6 +38,7 @@
 |---|---|---|---|---|---|---|---|---|---|
 | LEVEL | 390 × 22350 CE | opened above the close, 15-min close 22471.4 beyond R1 | 09:25 | 157.1 | 138.85 (Fib 0.618 of the previous low - 1) | 191.7 (09:35) | TARGET R2 22501.4 | +34.60 | ₹+13,494 |
 | TREND | 1235 × 22350 CE | CE retest of its first 15-min close 157.1 | 10:35 | 157.1 | 152.85 (previous candle low - 1) | 172.8 (10:40) | TARGET R2 22501.4 | +15.70 | ₹+19,390 |
+| TREND | 1105 × 22350 CE | CE retest of its first 15-min close 157.1 | 11:10 | 157.1 | 150.55 (previous candle low - 1) | open | OPEN | – | – |
 
 ### SENSEX — watching (last update 2026-10-13 10:55)
 

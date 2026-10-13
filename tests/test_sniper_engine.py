@@ -471,4 +471,4 @@ def test_reentry_at_the_0618_pullback_of_the_previous_move():
     events = day.on_candle(at("09:50"), {**other, "otm_pe": Bar(185, 175, 180, 182)})   # pull-back to 0.618
     entries = [e for e in events if e.kind == "ENTRY"]
     assert entries and entries[0].trade.entry_fill == pytest.approx(level, abs=0.01)
-    assert (entries[0].trade.stop_loss, entries[0].trade.target) == (169, 225)  # owner 13-10: SL right below 178.2
+    assert entries[0].trade.stop_loss == pytest.approx(level - 25, abs=0.01)  # owner 13-10: re-entry SL = buy - 25

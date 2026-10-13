@@ -108,6 +108,7 @@ CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
 RIDE_NORMAL_DAYS = True  # owner, 2026-10-12: buyer's day - no target exit, TSL ladder only (09-10 had it on normal days); normal days book the target, max 2 trades
 NORMAL_DAY_MAX_TRADES = 2
 BUYERS_DAY_MAX_TRADES = 4  # owner, 2026-10-09: buyer's-day re-entries stop at 4 trades a day
+REENTRY_SL_POINTS = 25  # owner, 2026-10-13: re-entry SL = buy price - 25 (NIFTY and SENSEX)
 REENTRY_FIB = 0.618  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
 UV_TRADE = True  # owner, 2026-10-09: sideways days - no OTM trade, but the ATM U/V trade (own SL/TSL/target)
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
@@ -696,8 +697,8 @@ class SniperDay:
             trail_stop=float((k - 1) ** 2),
             atm_below_sniper=atm_below_sniper,
         )
-        if reentry:  # owner, 2026-10-13: a re-entry's SL is the square right below the buy price (143.74 -> 121)
-            trade.stop_loss = k * k
+        if reentry:  # owner, 2026-10-13: a re-entry's SL is 25 points below the buy price (143.74 -> 118.74)
+            trade.stop_loss = round(price - REENTRY_SL_POINTS, 2)
             trade.trail_stop = float(trade.stop_loss)
         if setup.contract:  # the sideways-day ATM (U/V) trade: SL = the square below the buy price, target +2 squares
             k_low = math.isqrt(int(price))
