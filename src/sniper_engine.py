@@ -108,6 +108,7 @@ CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
 RIDE_NORMAL_DAYS = True  # owner, 2026-10-12: buyer's day - no target exit, TSL ladder only (09-10 had it on normal days); normal days book the target, max 2 trades
 NORMAL_DAY_MAX_TRADES = 2
 BUYERS_DAY_MAX_TRADES = 4  # owner, 2026-10-09: buyer's-day re-entries stop at 4 trades a day
+REENTRY_FIB = 0.618  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
 UV_TRADE = True  # owner, 2026-10-09: sideways days - no OTM trade, but the ATM U/V trade (own SL/TSL/target)
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
@@ -244,7 +245,9 @@ class SniperDay:
         self.pending: list[_Pending] = []
         self.buy_atm = buy_atm
         self.lot, self.allocation, self.max_loss = lot, allocation, max_loss  # owner 12-10: sizing / daily loss
-        self.capital = None  # live bot: shared Rs 5 lakh ledger (SENSEX first); None = the fixed allotment  # owner, 2026-10-12: gap-failed day - the setups buy the ATM, not the OTM
+        self.capital = None  # live bot: shared Rs 5 lakh ledger (SENSEX first); None = the fixed allotment
+        self.trade_range: dict[int, list[float]] = {}  # id(trade) -> [low, high] of its contract since entry
+        self.reentry: Optional[dict] = None  # owner 13-10: after an exit, re-enter at the Fib 0.618 of low -> high  # owner, 2026-10-12: gap-failed day - the setups buy the ATM, not the OTM
         self.setups = trade_setups(row, buy_atm)
         self.prev = previous_closes(row)
         self.open_trades: list[tuple[TradeSetup, TradeResult]] = []
@@ -308,6 +311,8 @@ class SniperDay:
         self.candle_no += 1
         for setup, trade in list(self.open_trades):
             bar = bars[_key(setup)]
+            rng = self.trade_range.setdefault(id(trade), [bar.low, bar.high])
+            rng[0], rng[1] = min(rng[0], bar.low), max(rng[1], bar.high)
             if trade.qty and self.max_loss and (trade.entry_fill - bar.close) * trade.qty >= risk_left(
                     self.max_loss, self.realized_rupees()):
                 # Owner, 2026-10-12: losses under control - out at the close once today's loss limit is used up
@@ -378,6 +383,7 @@ class SniperDay:
                     trade.trail_stop = trailed_stop(trade.trail_stop, bar.close)
                 continue
             self.open_trades.remove((setup, trade))
+            self._arm_reentry(setup, trade)
             if self.buyers_day and trade.exit_reason == "TARGET":
                 # (re-entering after stops too was tried on 01-10 SENSEX: 11 trades, -Rs 23,700 - dropped)
                 self.continuation = (setup, trade.target)
@@ -416,6 +422,10 @@ class SniperDay:
         # Owner, 2026-10-12: an unfilled body-entry limit doesn't block the half - the normal signal can still come
         # and replaces it (12-10 SENSEX: body limit 441 never filled; the normal 72500 PE 529 trade was missed).
         body_waiting = [p for p in self.pending if p.limit_only and p.setup.half == half]
+        event = self._reentry_entry(half, bars, when)
+        if event:
+            return events + event
+
         # Owner, 2026-10-13: no re-entry without a fresh reason - the 12-10 "same half can trade again once flat"
         # re-bought on the same morning signal (13-10: three losing re-entries). A half trades once; the buyer's-day
         # cap of 4 still counts the other entries (second half, continuation after a target).
@@ -584,6 +594,37 @@ class SniperDay:
             return self._order_event("ORDER", pending, when)
         return None
 
+    def _arm_reentry(self, setup: TradeSetup, trade: TradeResult) -> None:
+        """Owner, 2026-10-13: the reason for a re-entry - draw the Fib from the move's low to its high; a pull-back to
+        0.618 is the re-entry (buy there). Normal day 2 entries, buyer's day 4."""
+        rng = self.trade_range.get(id(trade))
+        if rng and rng[1] > rng[0]:
+            self.reentry = {"setup": setup, "low": rng[0], "high": rng[1], "at": self.candle_no}
+
+    def _reentry_entry(self, half: Optional[str], bars: dict[str, Bar], when: datetime) -> Optional[list[Event]]:
+        r = self.reentry
+        if (r is None or half is None or self.open_trades or self.pending or not self.ride_normal_days
+                or self.candle_no <= r["at"]):  # not on the exit candle itself
+            return None  # (the 2/4-trades-a-day rules live with ride_normal_days - old-rule tests run without them)
+        limit = BUYERS_DAY_MAX_TRADES if self.buyers_day else NORMAL_DAY_MAX_TRADES
+        if len(self.trades) >= limit or (self.max_loss and self.allocation
+                                         and risk_left(self.max_loss, self.realized_rupees()) <= 0):
+            self.reentry = None
+            return None
+        bar = bars[_key(r["setup"])]
+        level = r["high"] - REENTRY_FIB * (r["high"] - r["low"])
+        if bar.low > level:
+            if bar.high > r["high"]:  # the move goes on before any pull-back - stretch the Fib
+                r["high"] = bar.high
+            return None
+        self.reentry = None
+        fill = min(level, bar.open) if bar.open is not None else level
+        if fill < 1:
+            return None
+        setup = TradeSetup(half, r["setup"].direction, r["setup"].falling_type, r["setup"].buy_strike,
+                           r["setup"].buy_type, square_levels(fill), contract=r["setup"].contract)
+        return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, True)
+
     def sync_capital(self) -> None:
         """Live bot, after each candle: tell the shared ledger how much money this bot has in open trades."""
         if self.capital:
@@ -665,6 +706,7 @@ class SniperDay:
             if trade.qty == 0:
                 return []  # not even one lot fits - no trade
         self.trades.append(trade)
+        self.trade_range[id(trade)] = [bar.low, bar.high]  # the move's low includes the entry candle
         events = [Event("ENTRY", trade, body_entry=fixed_sl)]
         stop_exit = self._stop_hit(bar, trade.stop_loss, False) if fill_candle else None
         if stop_exit is not None:  # filled and stopped in the same candle
