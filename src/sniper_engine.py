@@ -619,16 +619,24 @@ class SniperDay:
         if bar.close < r["low"]:  # the move failed - no re-entry
             self.reentry = None
             return None
+        if bar.open is not None:
+            r.setdefault("candles", []).append(PatternCandle(bar.open, bar.high, bar.low, bar.close))
         if "tested_at" not in r:
             if bar.low > level:
                 if bar.high > r["high"]:  # the move goes on before any pull-back - stretch the Fib
                     r["high"] = bar.high
                 return None
-            r["tested_at"] = self.candle_no  # 0.618 tested - now wait for a confirmation candle
-            return None
-        # Owner, 2026-10-13: after the 0.618 test, a confirmation candle (green, closing above the 0.618 level) ->
-        # buy at its close; no confirmation -> no entry.
-        if self.candle_no <= r["tested_at"] or bar.open is None or not (bar.close > bar.open and bar.close > level):
+            r["tested_at"] = self.candle_no  # 0.618 tested - now wait for a reversal candle
+        # Owner, 2026-10-13: after the 0.618 test -> a REVERSAL candle -> then a CONFIRMATION candle closing green
+        # (above the 0.618 level) -> buy at its close. No reversal + confirmation -> no entry.
+        if "reversal_at" in r and self.candle_no > r["reversal_at"]:
+            if bar.open is not None and bar.close > bar.open and bar.close > level:
+                r["confirmed"] = True
+            else:
+                del r["reversal_at"]  # not confirmed - wait for a new reversal
+        if not r.get("confirmed"):
+            if "reversal_at" not in r and r.get("candles") and bar.open is not None and bullish_pattern(r["candles"]):
+                r["reversal_at"] = self.candle_no
             return None
         self.reentry = None
         fill = bar.close
