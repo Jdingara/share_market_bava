@@ -354,8 +354,8 @@ def test_buyers_day_rides_past_the_target_with_the_trailing_sl():
     events = day.on_candle(at("09:40"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
                                          "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target + 20, trade.target - 5, trade.target + 10, 165)})
     assert trade.exit_reason == ""  # went through the target, still open
-    # owner 12-13: 2 squares reached -> SL at cost; a later candle CLOSING above the target -> SL at the target
-    assert trade.trail_stop == trade.entry_square
+    # owner 13-10: 2 squares reached -> SL one square above the entry; a later candle CLOSING above the target -> target
+    assert trade.trail_stop == (int(trade.entry_square ** 0.5) + 1) ** 2
     day.on_candle(at("09:45"), {"atm_ce": Bar(120, 110, 112, 120), "atm_pe": Bar(170, 150, 168, 150),
                                 "otm_ce": Bar(82, 75, 78, 82), "otm_pe": Bar(trade.target + 15, trade.target - 2, trade.target + 5, trade.target)})
     assert trade.trail_stop == trade.target
@@ -381,8 +381,8 @@ def test_buyers_day_each_square_touched_past_the_target_moves_the_tsl():
     events = day.on_candle(at("09:35"), {**other, "otm_pe": Bar(150, 143, 148, 149)})
     trade = next(e.trade for e in events if e.kind == "ENTRY")
     assert (trade.entry_square, trade.target) == (144, 196)
-    day.on_candle(at("09:40"), {**other, "otm_pe": Bar(197, 175, 196.5, 150)})   # touches 196 -> SL 144 (cost)
-    assert trade.trail_stop == 144 and trade.exit_reason == ""
+    day.on_candle(at("09:40"), {**other, "otm_pe": Bar(197, 175, 196.5, 150)})   # touches 196 -> SL 169 (1 square)
+    assert trade.trail_stop == 169 and trade.exit_reason == ""
     day.on_candle(at("09:45"), {**other, "otm_pe": Bar(226, 197, 210, 196.5)})   # later candle, 225 touched -> SL 196
     assert trade.trail_stop == 196 and trade.exit_reason == ""
     day.on_candle(at("09:50"), {**other, "otm_pe": Bar(212, 190, 192, 210)})     # body closes below 196 -> out at 192
@@ -427,7 +427,7 @@ def test_12_10_sensex_529_tsl_only_after_two_squares():
     assert trade.trail_stop == 484
     day.on_candle(at("09:55"), {**other, "otm_pe": Bar(600, 498.25, 525.35, 591.85)})   # wick; close above 484
     assert trade.exit_reason == ""
-    day.on_candle(at("10:40"), {**other, "otm_pe": Bar(630, 590, 600, 595)})             # 625 touched -> cost
-    assert trade.trail_stop == 529 and trade.exit_reason == ""
+    day.on_candle(at("10:40"), {**other, "otm_pe": Bar(630, 590, 600, 595)})             # 625 touched -> SL 576
+    assert trade.trail_stop == 576 and trade.exit_reason == ""
     day.on_candle(at("10:45"), {**other, "otm_pe": Bar(640, 600, 632, 600)})             # later candle CLOSES above 625
     assert trade.trail_stop == 625  # owner 13-10: 2 squares locked

@@ -345,7 +345,7 @@ class SniperDay:
                 moved_now = True
             if trails and SQUARE_LADDER_TSL:
                 # Owner, 2026-10-12/13: nothing moves until the price reaches 2 squares above the entry. Entry 529 (k=23),
-                # SL 484: 625 touched -> SL 529 (cost); a LATER candle CLOSING above 625 -> SL 625 (2 squares locked);
+                # SL 484: 625 touched -> SL 576 (1 square of profit); a LATER candle CLOSING above 625 -> SL 625 (2 squares);
                 # then one square below each higher square touched (729 -> 676, ...). Exits need a body close below.
                 k = math.isqrt(trade.entry_square)
                 m = math.isqrt(int(bar.high))
@@ -353,7 +353,8 @@ class SniperDay:
                 if m >= k + 2:
                     if state["cost_at"] is None:
                         state["cost_at"] = self.candle_no
-                        trade.trail_stop = max(trade.trail_stop, float(k * k))
+                        # owner, 2026-10-13: at least one square of profit once 2 squares are reached (was cost)
+                        trade.trail_stop = max(trade.trail_stop, float((k + 1) ** 2))
                     elif self.candle_no > state["cost_at"]:
                         # owner, 2026-10-13: a LATER candle CLOSING above the target -> SL at the target (2 squares
                         # locked); higher squares touched -> one square below them
