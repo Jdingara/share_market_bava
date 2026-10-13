@@ -134,6 +134,7 @@ def test_pe_fib_trade_trails_through_s1():
 
 def test_big_gap_uses_the_strike_near_the_market_and_exits_when_the_pattern_turns():
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, R2 22955.65
+    day.level_break_done = True  # keep the 13-10 15-min R1/S1 break out of this test
     chain = lambda ce: {(22950.0, "CE"): Candle(*ce), (22950.0, "PE"): Candle(40, 42, 38, 40),
                         (22800.0, "CE"): Candle(150, 155, 148, 150), (22800.0, "PE"): Candle(5, 6, 4, 5)}
     day.first_swing = "CE"  # up swing -> level 22947.5
@@ -231,6 +232,7 @@ def test_panic_pe_above_yesterdays_high_blocks_ce_trades(monkeypatch):
 
 def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit():
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
+    day.level_break_done = True  # keep the 13-10 15-min R1/S1 break out of this test
     day.on_candle(_at("09:15"), Candle(22760, 22770, 22740, 22745), _chain((60, 62, 55, 58)))
     day.on_candle(_at("09:20"), Candle(22745, 22750, 22738, 22742), _chain((58, 60, 57, 59)))
     day.on_candle(_at("09:25"), Candle(22742, 22743, 22734, 22735), _chain((59, 60, 58, 59)))  # plain down candle
@@ -349,6 +351,7 @@ def test_trend_trade_retest_of_the_first_15_minute_close():
     day = HlcDay(date(2026, 10, 8), levels, HLC_MARKETS["SENSEX"], {"CE": (622.6, 232.6, 262.9), "PE": (335, 113.3, 214.8)})
     day.gap_done = True  # keep the FIB morning trade out of this test
     day.break_done = True  # and the BREAK entry (owner 09-10)
+    day.level_break_done = True  # and the 15-min R1/S1 break (owner 13-10)
     idx = Candle(72250, 72260, 72240, 72245)  # below the close
     ce = Candle(90, 95, 85, 88)  # below its close 262.9 -> PE day
     seq = [("09:15", Candle(216.95, 310.95, 216.9, 267.1)), ("09:20", Candle(267.1, 277.05, 225.5, 275.5)),
@@ -369,6 +372,7 @@ def test_trend_trade_pattern_retest_fib_limit_fills_next_candle():
     day = HlcDay(date(2026, 10, 8), levels, HLC_MARKETS["SENSEX"], {"CE": (622.6, 232.6, 262.9), "PE": (335, 113.3, 214.8)})
     day.gap_done = True  # keep the FIB morning trade out of this test
     day.break_done = True  # and the BREAK entry (owner 09-10)
+    day.level_break_done = True  # and the 15-min R1/S1 break (owner 13-10)
     idx = Candle(72250, 72260, 72240, 72245)  # below the close
     ce = Candle(90, 95, 85, 88)  # below its close 262.9 -> PE day
     seq = [("10:25", Candle(347.55, 351.4, 316.2, 331.85)), ("10:30", Candle(331.85, 414, 331.85, 368.95)),
@@ -440,3 +444,16 @@ def test_profit_booking_side_exits_at_fib_0786_of_yesterdays_close_to_high():
     day.index_history = [Candle(22500, 22510, 22490, 22500)] * 3
     events = day._manage(trade, _at("14:25"), Candle(22340, 22350, 22346, 22347), Candle(220, 243, 219, 240), time(14, 30))
     assert "TARGET Fib 0.786" in events[0] and trade.exit_premium == pytest.approx(235.04, abs=0.01)
+
+
+def test_level_break_opened_above_close_15_min_close_above_r1():
+    """Owner, 13-10: index opened above yesterday's close and a 15-minute candle closed above R1 -> CE."""
+    levels = hlc_levels(22363.3, 22350, 65.80, 85.60)  # R1 22415.8
+    day = HlcDay(date(2026, 10, 13), levels, HLC_MARKETS["NIFTY"], {"CE": (330, 59, 65.8), "PE": (97.45, 15.1, 85.6)})
+    day.gap_done = day.break_done = day.close_retest_done = True
+    chain = {(22350.0, "CE"): Candle(150, 160, 145, 158), (22350.0, "PE"): Candle(60, 62, 55, 56)}
+    events = []
+    for t, idx in (("09:15", Candle(22380, 22400, 22375, 22398)), ("09:20", Candle(22398, 22410, 22395, 22405)),
+                   ("09:25", Candle(22405, 22425, 22400, 22420))):
+        events = day.on_candle(_at(t), idx, chain)
+    assert events[-1].startswith("BUY CE 22350 at 158.00 (LEVEL")

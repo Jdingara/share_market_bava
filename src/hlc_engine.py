@@ -157,6 +157,7 @@ class HlcDay:
         self.first5_high: dict[str, float] = {}  # owner, 2026-10-09: day side's first 5-minute candle high (BREAK)
         self.break_done = False
         self.close_retest_done = False
+        self.level_break_done = False  # owner, 2026-10-13: 15-minute R1/S1 break entry, once a day
         self.capital = None  # live bot: shared Rs 5 lakh ledger (SENSEX first); None = the fixed allotment  # owner, 2026-10-12: index close-retest entry, once a day
         self.first15_close: dict[str, float] = {}
         self.went_above: dict[str, int] = {}  # side -> candle no. when its premium closed above the first 15-min close
@@ -316,7 +317,8 @@ class HlcDay:
         if (atm, "CE") not in chain or (atm, "PE") not in chain:
             return events
 
-        event = (self._close_retest_entry(when, index, chain) or self._break_entry(when, index, chain) or self._pattern_trend_entry(when, index, chain)
+        event = (self._close_retest_entry(when, index, chain) or self._level_break_entry(when, index, chain)
+                 or self._break_entry(when, index, chain) or self._pattern_trend_entry(when, index, chain)
                  or self._trend_entry(when, index, chain))
         if event:
             return events + [self._with_premium_targets(event)]
@@ -389,6 +391,29 @@ class HlcDay:
             elif (side in self.first15_close and side not in self.went_above
                   and history[-1].close > self.first15_close[side]):
                 self.went_above[side] = len(history) - 1
+
+    def _level_break_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+        """Owner, 2026-10-13: the index OPENED above yesterday's close and a 15-minute candle closes above R1 -> buy
+        the ATM CE at that close (mirror: opened below the close, a 15-minute candle closes below S1 -> PE). E.g. CE
+        PROFIT BOOKING: it can run to R2/R3, and our target comes before that. Once a day."""
+        if self.level_break_done or self.day_open is None or _closes_at(when).minute % 15 or len(self.index_history) < 3:
+            return None
+        close15 = index.close  # the 15-minute candle closes with this 5-minute candle
+        ladder = dict(self.levels.ladder())
+        if self.day_open > self.levels.close and close15 > ladder["R1"]:
+            side: OptionType = "CE"
+        elif self.day_open < self.levels.close and close15 < ladder["S1"]:
+            side = "PE"
+        else:
+            return None
+        atm = self.levels.atm
+        if (atm, side) not in chain or side in self.blocked:
+            return None
+        self.level_break_done = True
+        name = "R1" if side == "CE" else "S1"
+        return self._enter("LEVEL", side, atm, when, chain[(atm, side)], index,
+                           f"opened {'above' if side == 'CE' else 'below'} the close, 15-min close {close15:g} beyond {name}",
+                           "R3" if side == "CE" else "S3", ladder[name])
 
     def _close_retest_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
         """Owner, 2026-10-12: the index has closed below yesterday's close (even before 09:30), a candle comes back to

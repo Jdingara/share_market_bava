@@ -3,12 +3,12 @@
 **Paper trades — no real orders.** Written automatically by the bot (`src/history.py`) after every entry/exit;
 don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. ₹ = points × qty, before brokerage and charges.
 
-**All days: 31 trade(s), +817.70 points, ₹+208,411**
+**All days: 33 trade(s), +817.70 points, ₹+208,411**
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
-| 2026-10-13 | SENSEX | 71800 | 390.15 | 0 | +0.00 | ₹+0 | watching |
-| 2026-10-13 | NIFTY | 22300 | 37.85 | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-13 | SENSEX | 71800 | 390.15 | 1 | +0.00 | ₹+0 | watching |
+| 2026-10-13 | NIFTY | 22300 | 37.85 | 1 | +0.00 | ₹+0 | watching |
 | 2026-10-12 | SENSEX | 72600 | 430.5 | 2 | +324.95 | ₹+51,992 | finished |
 | 2026-10-12 | NIFTY | 22600 | 60.2 | 2 | +86.75 | ₹+28,194 | finished |
 | 2026-10-09 | SENSEX | 71600 | 544.73 | 1 | +0.00 | ₹+0 | finished |
@@ -31,17 +31,23 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 ## 2026-10-13 (Tue)
 
-### NIFTY — watching (last update 2026-10-13 10:01)
+### NIFTY — watching (last update 2026-10-13 10:05)
 
-- NIFTY close 22363.35 on 2026-10-12, expiry 2026-10-13, qty 260.
+- NIFTY close 22363.35 on 2026-10-12, expiry 2026-10-13, qty per trade.
 - Plan: ATM 22300 after 1 shift(s), Sniper 37.85.
-- No trade yet.
 
-### SENSEX — watching (last update 2026-10-13 10:01)
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O1322400CE | 09:30 (catch-up) ★ HIGH | 121.0 | 121 | 100 | 169 | open | OPEN | – | – |
 
-- SENSEX close 71924.68 on 2026-10-12, expiry 2026-10-15, qty 200.
+### SENSEX — watching (last update 2026-10-13 10:05)
+
+- SENSEX close 71924.68 on 2026-10-12, expiry 2026-10-15, qty per trade.
 - Plan: ATM 71800 after 1 shift(s), Sniper 390.15.
-- No trade yet.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 160 × SENSEX26O1571900CE | 09:30 (catch-up) ★ HIGH | 729.0 | 729 | 676 | 841 | open | OPEN | – | – |
 
 ## 2026-10-12 (Mon)
 
