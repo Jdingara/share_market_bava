@@ -203,7 +203,9 @@ def test_low_premium_from_1330_uses_the_day_low_minus_one(monkeypatch):
 def test_every_trade_trails_50_below_the_premium_high_once_50_up():
     """Owner, 07-10: NIFTY 50 / SENSEX 100 points up -> trailing SL that far below the premium's high (not only on
     big-gap days). CE bought 10.00 at 13:30 (SL 8.65); premium runs to 70 -> SL 20; comes back to 19.5 -> out at 20."""
+    from dataclasses import replace
     day = _low_premium_day()
+    day.market = replace(day.market, profit_lock_step=0)  # the 07-10 trailing (NIFTY uses the +50/+25 lock since 13-10)
     day.on_candle(_at("13:20"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
     day.on_candle(_at("13:25"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
     flat = Candle(22585, 22590, 22580, 22586)  # index stays below S2 22644.35 - no level target
