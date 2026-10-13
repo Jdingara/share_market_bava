@@ -319,10 +319,12 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
         conf = " - HIGH confidence: ATM below Sniper" if t.atm_below_sniper else ""
         qty = t.qty or qty
         return (f"WOULD BUY {qty} x {symbol} at {t.entry_fill:.2f} ({t.half} half, candle {t.entry_time[11:16]}) - "
-                f"SL {t.stop_loss} ({'fixed' if event.body_entry else 'trails up'}), target {t.target}{conf}{note}")
+                f"SL {t.stop_loss} ({'fixed' if event.body_entry else 'trails up'}), target {t.target}{conf}"
+                + (f" | REASON: {t.entry_reason}" if t.entry_reason else "") + note)
     qty = t.qty or qty
     return (f"WOULD EXIT {qty} x {symbol} at {t.exit_premium:.2f} - {t.exit_reason} "
-            f"(bought {t.entry_fill:.2f}, P&L {t.pnl_points:+.2f} points = Rs {t.pnl_points * qty:+,.0f}){note}")
+            f"(bought {t.entry_fill:.2f}, P&L {t.pnl_points:+.2f} points = Rs {t.pnl_points * qty:+,.0f})"
+            + (f" | REASON: {t.exit_detail}" if t.exit_detail else "") + note)
 
 
 def save_trades(trades: list[TradeResult], today: date, prefix: str = "trades") -> Optional[Path]:

@@ -478,3 +478,6 @@ def test_reentry_at_the_0618_pullback_of_the_previous_move():
     entries = [e for e in events if e.kind == "ENTRY"]
     assert entries and entries[0].trade.entry_fill == 216
     assert entries[0].trade.stop_loss == 191  # owner 13-10: re-entry SL = buy - 25
+    # owner 13-10: every entry and exit has a reason
+    assert "0.618 = 201.80" in entries[0].trade.entry_reason and "Hammer" in entries[0].trade.entry_reason
+    assert day.trades[0].entry_reason and "closed 165" in day.trades[0].exit_detail

@@ -154,6 +154,10 @@ class TradeResult:
     note: str = ""  # e.g. "catch-up" when the live bot found this entry while replaying candles after a restart
     atm_below_sniper: bool = False  # at the signal: the falling ATM was already below Sniper = extra confidence
     qty: int = 0  # owner, 2026-10-12: sized per trade (0 = the bot's fixed quantity)
+    # Owner, 2026-10-13: "every entry and exit needs a reason" - plain words for the log and the history
+    entry_reason: str = ""
+    exit_detail: str = ""
+    tsl_why: str = ""  # why the trailing SL sits where it is (the ladder step that set it)
 
 
 @dataclass(frozen=True)
@@ -183,6 +187,7 @@ class _Pending:
     atm_close_trigger: float = 0.0  # first-half ATM-close trigger (owner, 06-10) - becomes the trade's trigger
     near: bool = False
     limit_price: Optional[float] = None  # U/V trade (owner, 08-10): buy limit at the confirmation candle's Fib 0.618
+    reason: str = ""  # owner 13-10: why this buy - becomes the trade's entry_reason
 
 
 def _key(setup: TradeSetup) -> str:
@@ -269,9 +274,24 @@ class SniperDay:
         trade.exit_time = when.isoformat()
         trade.exit_premium = round(premium, 2)
         trade.exit_reason = reason
+        trade.exit_detail = self._exit_detail(trade, when, premium, reason)
         trade.pnl_points = round(premium - trade.entry_fill, 2)
         trade.pnl_pct = round((premium - trade.entry_fill) / trade.entry_fill * 100, 2)
         return Event("EXIT", trade)
+
+    def _exit_detail(self, trade: TradeResult, when: datetime, premium: float, reason: str) -> str:
+        if reason == "STOPLOSS":
+            return f"candle {when:%H:%M} closed {premium:g}, below the SL {trade.stop_loss:g}"
+        if reason == "TRAIL_STOP":
+            why = f" ({trade.tsl_why})" if trade.tsl_why else ""
+            return f"candle {when:%H:%M} closed {premium:g}, below the trailing SL {trade.trail_stop:g}{why}"
+        if reason == "TARGET":
+            return f"2 square numbers reached (target {trade.target:g}) in candle {when:%H:%M} -> exit"
+        if reason == "DAILY_LOSS_LIMIT":
+            return f"candle {when:%H:%M} closed {premium:g} - today's loss limit Rs {self.max_loss:,.0f} reached"
+        if reason == "TIME_EXIT_1500":
+            return "15:00 - the day's trading ends, closed at the candle close"
+        return reason
 
     def _stop_hit(self, bar: Bar, stop: float, trailed: bool) -> Optional[float]:
         """The exit price if this candle hits `stop`, else None. Owner, 2026-10-06: for the FIRST SL only a
@@ -334,7 +354,9 @@ class SniperDay:
                     events.append(self._close(trade, when, bar.close, "TIME_EXIT_1500"))
                 else:
                     if uv["touched_at"] is not None and self.candle_no > uv["touched_at"] and bar.close > uv["first"]:
-                        trade.trail_stop = max(trade.trail_stop, float(uv["first"]))
+                        if float(uv["first"]) > trade.trail_stop:
+                            trade.trail_stop = float(uv["first"])
+                            trade.tsl_why = f"a later candle closed above the first square {uv['first']}"
                     if uv["touched_at"] is None and bar.high >= uv["first"]:
                         uv["touched_at"] = self.candle_no
                     continue
@@ -348,6 +370,7 @@ class SniperDay:
             if (trails and self.first_tsl_on_touch and trade.trail_stop <= trade.stop_loss
                     and bar.high >= (math.isqrt(trade.entry_square) + 1) ** 2):
                 trade.trail_stop = float(trade.entry_square)  # owner, 07-10: first step on a touch -> cost
+                trade.tsl_why = "next square touched - SL to cost"
                 moved_now = True
             if trails and SQUARE_LADDER_TSL:
                 # Owner, 2026-10-12/13: nothing moves until the price reaches 2 squares above the entry. Entry 529 (k=23),
@@ -360,12 +383,18 @@ class SniperDay:
                     if state["cost_at"] is None:
                         state["cost_at"] = self.candle_no
                         # owner, 2026-10-13: at least one square of profit once 2 squares are reached (was cost)
-                        trade.trail_stop = max(trade.trail_stop, float((k + 1) ** 2))
+                        if (k + 1) ** 2 > trade.trail_stop:
+                            trade.trail_stop = float((k + 1) ** 2)
+                            trade.tsl_why = f"2 squares up ({(k + 2) ** 2}) touched - SL to {(k + 1) ** 2}, 1 square of profit"
                     elif self.candle_no > state["cost_at"]:
                         # owner, 2026-10-13: a LATER candle CLOSING above the target -> SL at the target (2 squares
                         # locked); higher squares touched -> one square below them
                         locked = float((k + 2) ** 2) if bar.close > (k + 2) ** 2 else 0.0
-                        trade.trail_stop = max(trade.trail_stop, locked, float((m - 1) ** 2) if m >= k + 3 else 0.0)
+                        higher = float((m - 1) ** 2) if m >= k + 3 else 0.0
+                        if max(locked, higher) > trade.trail_stop:
+                            trade.trail_stop = max(locked, higher)
+                            trade.tsl_why = (f"square {m * m} touched - SL one square below it" if higher >= locked
+                                             else f"a later candle closed {bar.close:g} above the target {(k + 2) ** 2} - SL to the target")
             trailed = trade.trail_stop > trade.stop_loss
             stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
             target_hit = self.keep_target and not ride and bar.high >= trade.target
@@ -402,7 +431,7 @@ class SniperDay:
                 k, price = fill
                 events += self._open(pending.setup, k, when, price, bars[_key(pending.setup)], True,
                                      pending.atm_below_sniper, fixed_sl=pending.limit_only,
-                                     trigger=pending.atm_close_trigger or None)
+                                     trigger=pending.atm_close_trigger or None, reason=pending.reason)
 
         if closes_at_exit:
             self.done = True
@@ -415,7 +444,8 @@ class SniperDay:
             close = bars[_key(setup)].close
             if close > booked:
                 self.continuation = None
-                pending = _Pending(setup, highest_square_below(close), close)
+                pending = _Pending(setup, highest_square_below(close), close,
+                                   reason=f"buyer's day: after the target {booked}, candle {when:%H:%M} closed {close:g} above it")
                 self.pending.append(pending)
                 events.append(self._order_event("ORDER", pending, when))
                 return events
@@ -466,6 +496,15 @@ class SniperDay:
                     pending = self._atm_close_signal(setup, buy_close, confident, bars) if half == "first" else None
                     if pending is None:
                         continue
+                    sq = (f"the square {pending.k ** 2} or the upcoming square {(pending.k + 1) ** 2}" if pending.has_limit
+                          else f"the upcoming square {(pending.k + 1) ** 2}")
+                    pending.reason = ((f"ATM {setup.falling_type} went below the Sniper {self.row.sniper:g}, so " if confident
+                                       else f"ATM {setup.falling_type} below its close, ")
+                                      + f"OTM {setup.buy_type} closed {buy_close:g} "
+                                      + (f"within {self.near_points} of" if pending.near else "above")
+                                      + f" the ATM {setup.buy_type} close {pending.atm_close_trigger:g}"
+                                      + (" (index below yesterday's close)" if pending.near else "")
+                                      + f" (candle {when:%H:%M}) -> entry at {sq}")
                     for waiting in body_waiting:  # replaces an unfilled body-entry limit too
                         self.pending.remove(waiting)
                         events.append(self._order_event("CANCEL", waiting, when))
@@ -477,6 +516,14 @@ class SniperDay:
                     pending = _Pending(setup, setup.levels.n - 1, buy_close, has_limit=False, atm_below_sniper=confident)
                 else:
                     pending = _Pending(setup, k, buy_close, atm_below_sniper=confident)
+                above = ("the Sniper" if abs(setup.levels.trigger - self.row.sniper) < 0.01
+                         else "the trigger") + f" {setup.levels.trigger:g}"
+                sq = (f"the square {pending.k ** 2} or the upcoming square {(pending.k + 1) ** 2}" if pending.has_limit
+                      else f"the upcoming square {(pending.k + 1) ** 2}")
+                pending.reason = (f"ATM {setup.falling_type} travelled from its close {self.prev[falling_key]:g} toward the "
+                                  f"Sniper {self.row.sniper:g} (now {current[falling_key]:g}"
+                                  + (", below the Sniper" if confident else "") + f"), so OTM {setup.buy_type} closed "
+                                  f"{buy_close:g} above {above} (candle {when:%H:%M}) -> entry at {sq}")
                 for waiting in body_waiting:  # the normal signal replaces an unfilled body-entry limit
                     self.pending.remove(waiting)
                     events.append(self._order_event("CANCEL", waiting, when))
@@ -489,7 +536,8 @@ class SniperDay:
             if self.require_cross and previous_otm_close[otm_key] > k * k:
                 continue
             self.halves_used.add(half)
-            events += self._open(setup, k, when, buy_close, bars[otm_key], False, confident)
+            events += self._open(setup, k, when, buy_close, bars[otm_key], False, confident,
+                                 reason=f"{setup.buy_type} closed {buy_close:g} above the square {k * k} (candle {when:%H:%M})")
             break
 
         return events
@@ -537,7 +585,9 @@ class SniperDay:
                 entry = round(c.high - UV_FIB * (c.high - c.low), 2)
                 setup = TradeSetup(half, "up" if buy_type == "CE" else "down", "PE" if buy_type == "CE" else "CE",
                                    self.row.atm_strike, buy_type, square_levels(entry), contract=leg)
-                pending = _Pending(setup, highest_square_below(entry), c.close, limit_price=entry)
+                pending = _Pending(setup, highest_square_below(entry), c.close, limit_price=entry,
+                                   reason=f"sideways day: {name} reversal on the ATM {buy_type}, then a green candle retested "
+                                          f"its low - limit at that candle's Fib 0.618 {entry:g}")
                 self.halves_used.add(half)
                 self.pending.append(pending)
                 return self._order_event("ORDER", pending, when)
@@ -564,7 +614,9 @@ class SniperDay:
             if close <= high:
                 continue
             pending = _Pending(setup, highest_square_below(close), close, has_limit=False,
-                               atm_below_sniper=bars[falling].close < self.row.sniper)
+                               atm_below_sniper=bars[falling].close < self.row.sniper,
+                               reason=f"ATM {setup.falling_type} went below the Sniper early; {setup.buy_type} closed "
+                                      f"{close:g} above its yesterday high {high:g} (candle {when:%H:%M})")
             self.halves_used.add(half)
             self.pending.append(pending)
             return self._order_event("ORDER", pending, when)
@@ -589,7 +641,9 @@ class SniperDay:
             k = highest_square_below(otm_close)
             if k < 2:
                 continue
-            pending = _Pending(setup, k, otm_close, limit_only=True)
+            pending = _Pending(setup, k, otm_close, limit_only=True,
+                               reason=f"ATM {buy_type} candle {when:%H:%M} body crossed the Sniper {sniper:g} "
+                                      f"({bar.open:g} -> {bar.close:g}) - limit at {k * k}")
             self.halves_used.add(half)
             self.pending.append(pending)
             return self._order_event("ORDER", pending, when)
@@ -627,6 +681,7 @@ class SniperDay:
                     r["high"] = bar.high
                 return None
             r["tested_at"] = self.candle_no  # 0.618 tested - now wait for a reversal candle
+            r["tested_when"] = when
         # Owner, 2026-10-13: after the 0.618 test -> a REVERSAL candle -> then a CONFIRMATION candle closing green
         # (above the 0.618 level) -> buy at its close. No reversal + confirmation -> no entry.
         if "reversal_at" in r and self.candle_no > r["reversal_at"]:
@@ -635,15 +690,18 @@ class SniperDay:
             else:
                 del r["reversal_at"]  # not confirmed - wait for a new reversal
         if not r.get("confirmed"):
-            if "reversal_at" not in r and r.get("candles") and bar.open is not None and bullish_pattern(r["candles"]):
-                r["reversal_at"] = self.candle_no
+            found = bullish_pattern(r["candles"]) if "reversal_at" not in r and r.get("candles") and bar.open is not None else None
+            if found:
+                r["reversal_at"], r["reversal"] = self.candle_no, f"{found[0]} at {when:%H:%M}"
             return None
         self.reentry = None
         fill = bar.close
         setup = TradeSetup(half, r["setup"].direction, r["setup"].falling_type, r["setup"].buy_strike,
                            r["setup"].buy_type, square_levels(fill), contract=r["setup"].contract)
         self.halves_used.add(half)
-        return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, False, reentry=True)
+        why = (f"re-entry: Fib {r['low']:g} -> {r['high']:g}, 0.618 = {level:.2f} tested at {r['tested_when']:%H:%M}; "
+               f"reversal {r['reversal']}; green confirmation candle {when:%H:%M} closed {fill:g} above 0.618")
+        return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, False, reentry=True, reason=why)
 
     def sync_capital(self) -> None:
         """Live bot, after each candle: tell the shared ledger how much money this bot has in open trades."""
@@ -697,7 +755,7 @@ class SniperDay:
 
     def _open(self, setup: TradeSetup, k: int, when: datetime, price: float, bar: Bar, fill_candle: bool,
               atm_below_sniper: bool = False, fixed_sl: bool = False, trigger: Optional[float] = None,
-              reentry: bool = False) -> list[Event]:
+              reentry: bool = False, reason: str = "") -> list[Event]:
         trade = TradeResult(
             date=self.day.isoformat(),
             half=setup.half,
@@ -712,6 +770,7 @@ class SniperDay:
             entry_fill=round(price, 2),
             trail_stop=float((k - 1) ** 2),
             atm_below_sniper=atm_below_sniper,
+            entry_reason=reason,
         )
         if reentry:  # owner, 2026-10-13: a re-entry's SL is 25 points below the buy price (143.74 -> 118.74)
             trade.stop_loss = round(price - REENTRY_SL_POINTS, 2)

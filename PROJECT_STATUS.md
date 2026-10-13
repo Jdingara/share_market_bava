@@ -292,3 +292,5 @@ data/
   paper_trades/          # raw per-day plans, logs, trades (gitignored - history/ is the permanent record)
 .cache/                  # today's Kite session token (gitignored)
 ```
+
+- **Reasons (owner, 13-10: "every entry and exit needs a reason")**: Sniper trades carry `entry_reason` / `exit_detail` (log line "| REASON: ...", history/trades.csv columns, a "Why" list in TRADE_HISTORY.md), worded the owner's way - e.g. "ATM CE travelled from its close toward the Sniper, so OTM PE closed above the Sniper -> entry at the upcoming square", "2 square numbers reached -> exit", TSL exits say which ladder step set the SL; re-entries name the 0.618 test, the reversal candle and the confirmation. HLC exit reasons now carry the numbers (SL level, candle, profit-lock level).

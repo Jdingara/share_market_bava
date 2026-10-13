@@ -751,12 +751,12 @@ class HlcDay:
             # Owner, 2026-10-12: losses under control - out when this trade's loss reaches what's left of today's limit
             left = risk_left(self.market.max_loss, self.realized_rupees())
             if (trade.entry_fill - prem.close) * trade.qty >= left:
-                return [self._exit(trade, when, prem.close, f"daily loss limit (Rs {self.market.max_loss:,.0f})")]
+                return [self._exit(trade, when, prem.close, f"daily loss limit (Rs {self.market.max_loss:,.0f}) - candle {when:%H:%M} closed {prem.close:g}")]
         if trade.index_sl is not None:
             if (trade.side == "CE" and index.low <= trade.index_sl) or (trade.side == "PE" and index.high >= trade.index_sl):
-                return [self._exit(trade, when, prem.close, f"SL ({trade.sl_rule})")]
+                return [self._exit(trade, when, prem.close, f"SL ({trade.sl_rule}) - index reached the SL {trade.index_sl:g} in candle {when:%H:%M}")]
         elif prem.low <= trade.sl_premium:
-            return [self._exit(trade, when, trade.sl_premium, f"SL ({trade.sl_rule})")]
+            return [self._exit(trade, when, trade.sl_premium, f"SL ({trade.sl_rule}) - premium low {prem.low:g} touched the SL {trade.sl_premium:g} in candle {when:%H:%M}")]
         pe = trade.side == "PE"
         step = self.market.profit_lock_step
         if step:
@@ -764,7 +764,9 @@ class HlcDay:
             # too, the SL locks that profit (entry + 100); then the same for every further +50 (150, 200, ...).
             # Exit on a touch of the locked level.
             if trade.lock_level and prem.low <= trade.lock_level:
-                return [self._exit(trade, when, trade.lock_level, f"profit lock {trade.lock_level - trade.entry_fill:+g}")]
+                return [self._exit(trade, when, trade.lock_level,
+                                   f"profit lock {trade.lock_level - trade.entry_fill:+g} - a later candle had closed above "
+                                   f"{trade.lock_level:g}, so the SL was locked there; candle {when:%H:%M} came back to it")]
             now = len(self.index_history)
             add = self.market.profit_lock_add or step
             if trade.lock_seen and now > trade.lock_seen[1]:
