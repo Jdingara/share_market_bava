@@ -109,7 +109,10 @@ RIDE_NORMAL_DAYS = True  # owner, 2026-10-12: buyer's day - no target exit, TSL 
 NORMAL_DAY_MAX_TRADES = 2
 BUYERS_DAY_MAX_TRADES = 4  # owner, 2026-10-09: buyer's-day re-entries stop at 4 trades a day
 REENTRY_SL_POINTS = 25  # owner, 2026-10-13: re-entry SL = buy price - 25 (NIFTY and SENSEX)
-REENTRY_FIB = 0.618  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
+REENTRY_FIB = 0.618
+# Owner, 2026-10-13 (all bots): after the morning trade, ONE more entry, only from 12:30, only with a proper reversal
+# (reversal candle + green confirmation), SL = the reversal low - 1. Every day, buyer's day too.
+SECOND_ENTRY_PM_REVERSAL = True  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
 UV_TRADE = True  # owner, 2026-10-09: sideways days - no OTM trade, but the ATM U/V trade (own SL/TSL/target)
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
@@ -437,7 +440,7 @@ class SniperDay:
             self.done = True
             return events
 
-        if (self.continuation and not self.open_trades and not self.pending and half is not None
+        if (self.continuation and not SECOND_ENTRY_PM_REVERSAL and not self.open_trades and not self.pending and half is not None
                 and len(self.trades) < BUYERS_DAY_MAX_TRADES):  # owner, 2026-10-09: max 4 on a buyer's day
             # Owner, 2026-10-01 (buyer's day): after a target, a candle closing above it -> buy the next square again.
             setup, booked = self.continuation
@@ -456,6 +459,8 @@ class SniperDay:
         event = self._reentry_entry(half, bars, when)
         if event:
             return events + event
+        if SECOND_ENTRY_PM_REVERSAL and self.trades and self.ride_normal_days:
+            return events  # owner 13-10: after the morning trade only the 12:30+ reversal re-entry
 
         # Owner, 2026-10-13: no re-entry without a fresh reason - the 12-10 "same half can trade again once flat"
         # re-bought on the same morning signal (13-10: three losing re-entries). A half trades once; the buyer's-day
@@ -658,11 +663,15 @@ class SniperDay:
 
     def _reentry_entry(self, half: Optional[str], bars: dict[str, Bar], when: datetime) -> Optional[list[Event]]:
         r = self.reentry
-        if (r is None or half is None or self.open_trades or self.pending or not self.ride_normal_days
+        pm = SECOND_ENTRY_PM_REVERSAL
+        if (r is None or (half is None and not pm) or self.open_trades or self.pending or not self.ride_normal_days
                 or self.candle_no <= r["at"]):  # not on the exit candle itself
             return None  # (the 2/4-trades-a-day rules live with ride_normal_days - old-rule tests run without them)
-        limit = BUYERS_DAY_MAX_TRADES if self.buyers_day else NORMAL_DAY_MAX_TRADES
-        if not self.buyers_day and half in self.halves_used:
+        limit = 2 if pm else BUYERS_DAY_MAX_TRADES if self.buyers_day else NORMAL_DAY_MAX_TRADES
+        if pm and "second" in self.halves_used:
+            self.reentry = None
+            return None
+        if not pm and not self.buyers_day and half in self.halves_used:
             return None  # owner 13-10: normal day - one entry 09:30-12:00 and one 12:30-15:00
         if len(self.trades) >= limit or (self.max_loss and self.allocation
                                          and risk_left(self.max_loss, self.realized_rupees()) <= 0):
@@ -693,15 +702,24 @@ class SniperDay:
             found = bullish_pattern(r["candles"]) if "reversal_at" not in r and r.get("candles") and bar.open is not None else None
             if found:
                 r["reversal_at"], r["reversal"] = self.candle_no, f"{found[0]} at {when:%H:%M}"
+                r["reversal_low"] = min(c.low for c in r["candles"][-found[1]:])
+            return None
+        if pm and half != "second":
+            # owner 13-10: the second entry only from 12:30 - a confirmation before that doesn't count; wait for a new one
+            r.pop("confirmed", None)
+            r.pop("reversal_at", None)
             return None
         self.reentry = None
         fill = bar.close
         setup = TradeSetup(half, r["setup"].direction, r["setup"].falling_type, r["setup"].buy_strike,
                            r["setup"].buy_type, square_levels(fill), contract=r["setup"].contract)
         self.halves_used.add(half)
+        stop = round(r["reversal_low"] - 1, 2) if pm else None
         why = (f"re-entry: Fib {r['low']:g} -> {r['high']:g}, 0.618 = {level:.2f} tested at {r['tested_when']:%H:%M}; "
-               f"reversal {r['reversal']}; green confirmation candle {when:%H:%M} closed {fill:g} above 0.618")
-        return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, False, reentry=True, reason=why)
+               f"reversal {r['reversal']}; green confirmation candle {when:%H:%M} closed {fill:g} above 0.618"
+               + (f"; SL = reversal low {r['reversal_low']:g} - 1" if pm else ""))
+        return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, False, reentry=True, reason=why,
+                          stop=stop)
 
     def sync_capital(self) -> None:
         """Live bot, after each candle: tell the shared ledger how much money this bot has in open trades."""
@@ -755,7 +773,7 @@ class SniperDay:
 
     def _open(self, setup: TradeSetup, k: int, when: datetime, price: float, bar: Bar, fill_candle: bool,
               atm_below_sniper: bool = False, fixed_sl: bool = False, trigger: Optional[float] = None,
-              reentry: bool = False, reason: str = "") -> list[Event]:
+              reentry: bool = False, reason: str = "", stop: Optional[float] = None) -> list[Event]:
         trade = TradeResult(
             date=self.day.isoformat(),
             half=setup.half,
@@ -773,7 +791,7 @@ class SniperDay:
             entry_reason=reason,
         )
         if reentry:  # owner, 2026-10-13: a re-entry's SL is 25 points below the buy price (143.74 -> 118.74)
-            trade.stop_loss = round(price - REENTRY_SL_POINTS, 2)
+            trade.stop_loss = round(stop if stop is not None else price - REENTRY_SL_POINTS, 2)
             trade.trail_stop = float(trade.stop_loss)
         if setup.contract:  # the sideways-day ATM (U/V) trade: SL = the square below the buy price, target +2 squares
             k_low = math.isqrt(int(price))

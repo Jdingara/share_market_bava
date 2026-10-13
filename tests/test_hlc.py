@@ -240,7 +240,9 @@ def test_panic_pe_above_yesterdays_high_blocks_ce_trades(monkeypatch):
     assert day.trades == []  # the S3 Bullish Engulfing CE reversal is blocked
 
 
-def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit():
+def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit(monkeypatch):
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "SECOND_ENTRY_PM_REVERSAL", False)  # the older 4-a-day rule
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
     day.level_break_done = True  # keep the 13-10 15-min R1/S1 break out of this test
     day.on_candle(_at("09:15"), Candle(22760, 22770, 22740, 22745), _chain((60, 62, 55, 58)))

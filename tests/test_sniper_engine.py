@@ -452,8 +452,10 @@ def test_no_reentry_in_the_same_half_on_the_same_signal_13_10():
 
 
 @pytest.mark.ride
-def test_reentry_at_the_0618_pullback_of_the_previous_move():
+def test_reentry_at_the_0618_pullback_of_the_previous_move(monkeypatch):
     """Owner, 13-10: after an exit, draw the Fib from the move's low to its high - a pull-back to 0.618 re-enters."""
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "SECOND_ENTRY_PM_REVERSAL", False)  # the 0.618 mechanics; the 12:30 rule has its own test
     from sniper_engine import Bar, SniperDay
     from sniper_signal import MARKETS, build_daily_plan
     closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
@@ -481,3 +483,33 @@ def test_reentry_at_the_0618_pullback_of_the_previous_move():
     # owner 13-10: every entry and exit has a reason
     assert "0.618 = 201.80" in entries[0].trade.entry_reason and "Hammer" in entries[0].trade.entry_reason
     assert day.trades[0].entry_reason and "closed 165" in day.trades[0].exit_detail
+
+
+@pytest.mark.ride
+def test_second_entry_only_from_1230_with_reversal_sl_under_its_low():
+    """Owner, 13-10 (all bots): after the morning trade, one more entry - only from 12:30, reversal + green
+    confirmation, SL = the reversal low - 1."""
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
+    row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
+    day = SniperDay(date(2026, 10, 13), row)
+    day.buyers_day = True
+    at = lambda hm: datetime(2026, 10, 13, int(hm[:2]), int(hm[3:]))
+    other = {"atm_ce": Bar(126, 118, 120, 125), "atm_pe": Bar(155, 145, 150, 148), "otm_ce": Bar(85, 80, 82, 85)}
+    day.on_candle(at("09:30"), {**other, "atm_ce": Bar(130, 120, 125, 128), "otm_pe": Bar(150, 120, 149, 125)})
+    day.on_candle(at("09:35"), {**other, "otm_pe": Bar(150, 140, 148, 149)})
+    day.on_candle(at("09:40"), {**other, "otm_pe": Bar(240, 147, 230, 148)})
+    day.on_candle(at("09:45"), {**other, "otm_pe": Bar(231, 160, 165, 230)})
+    assert len(day.trades) == 1 and day.trades[0].exit_reason
+    # morning: 0.618 (201.8) tested, Hammer, green confirmation - but before 12:30 -> no entry
+    day.on_candle(at("09:50"), {**other, "otm_pe": Bar(219, 199, 204, 216)})
+    day.on_candle(at("09:55"), {**other, "otm_pe": Bar(220, 200, 218, 205)})
+    day.on_candle(at("10:00"), {**other, "otm_pe": Bar(210.5, 194, 209.5, 209)})
+    events = day.on_candle(at("10:05"), {**other, "otm_pe": Bar(219, 208, 216, 210)})
+    assert not [e for e in events if e.kind == "ENTRY"]
+    # 12:20 Hammer, 12:25 green confirmation (closes 12:30) -> entry, SL = 196 - 1
+    day.on_candle(at("12:20"), {**other, "otm_pe": Bar(210.5, 196, 209.5, 209)})
+    events = day.on_candle(at("12:25"), {**other, "otm_pe": Bar(219, 208, 216, 210)})
+    entries = [e for e in events if e.kind == "ENTRY"]
+    assert entries and entries[0].trade.entry_fill == 216 and entries[0].trade.stop_loss == 195

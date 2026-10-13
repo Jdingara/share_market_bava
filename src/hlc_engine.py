@@ -102,6 +102,7 @@ REENTRY_POINTS_SL = True  # owner, 2026-10-13: re-entries use entry - 25 / 50 po
 SWING_LOW_SL = True  # owner, 2026-10-12: SL = the candle before the entry candle's low - 1 (was -25 / -50 points)
 PB_FIB = 0.786  # PROFIT BOOKING side exit: Fib 0.786 of yesterday's close -> high (owner, 2026-10-12)
 PANIC_BLOCK = False  # owner, 2026-10-12: both sides (PROFIT BOOKING and PANIC) can trade - the index decides (29-09 block off)
+SECOND_ENTRY_PM_REVERSAL = True  # owner 13-10 (all bots): after the morning trade one more, from 12:30, reversal + confirmation, SL reversal low - 1
 R3_S3_FULL_PROFIT = True  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
@@ -181,6 +182,7 @@ class HlcDay:
         self.expiry_day = False  # set by the live bot (today is the contract's expiry)
         self.expiry_uv: Optional[dict] = None  # {"side", "at", "low", "high", "name", "confirm"}
         self.expiry_uv_done = False
+        self.second_rev: Optional[dict] = None  # owner 13-10: the 12:30+ reversal entry - {"at", "low", "name", "confirm"}
         self.full_profit: Optional[str] = None  # owner 13-10: the index touched R3 / S3 -> full profit, no more trades
 
     # --- helpers ---
@@ -300,6 +302,7 @@ class HlcDay:
         self._track_trend(when)
         self._track_trend_patterns(chain)
         self._track_expiry_uv()
+        self._track_second_reversal()
 
         if len(self.index_history) >= 3 and self._zone_touch(index):
             self.zone_touched_at = len(self.index_history) - 1
@@ -343,6 +346,9 @@ class HlcDay:
             return events
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
+        if SECOND_ENTRY_PM_REVERSAL and self.trades:
+            event = self._second_reversal_entry(when, index, chain) if len(self.trades) < 2 else None
+            return events + ([event] if event else [])
         if not self.buyers_day():
             # Owner, 2026-10-13: normal day - one entry 09:30-12:00 and one 12:30-15:00 (each with its own signal)
             window = "am" if closes <= time(12, 0) else "pm" if closes >= time(12, 30) else None
@@ -586,6 +592,55 @@ class HlcDay:
             return []
         price = price if isinstance(price, (int, float)) else price.close
         return [self._exit(trade, when, price, reason)]
+
+    def _track_second_reversal(self) -> None:
+        """Owner, 2026-10-13: after the morning trade, the next (last) entry needs a proper reversal on the same option:
+        a reversal candle (not a Doji / Spinning Top), then the NEXT candle closing green without breaking its low."""
+        if not (SECOND_ENTRY_PM_REVERSAL and self.trades and self.open_trade is None and len(self.trades) < 2):
+            return
+        first = self.trades[0]
+        hist = self.premium_history.get((first.strike, first.side))
+        if not hist:
+            return
+        n, c = len(self.index_history), hist[-1]
+        st = self.second_rev
+        if st is not None and not st.get("confirm"):
+            if n == st["at"] + 1 and c.close > c.open and c.low >= st["low"]:
+                st["confirm"] = n
+                return
+            self.second_rev = None
+        if self.second_rev is not None and self.second_rev.get("confirm") != n:
+            self.second_rev = None  # a confirmation that wasn't used (before 12:30) - look again
+        if self.second_rev is not None:
+            return
+        found = bullish_pattern(hist[-3:])
+        if found and found[0] not in DIRECTIONLESS:
+            self.second_rev = dict(at=n, low=min(x.low for x in hist[-found[1]:]), name=found[0])
+
+    def _second_reversal_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+        st = self.second_rev
+        if st is None or st.get("confirm") != len(self.index_history) or _closes_at(when) < time(12, 30):
+            return None
+        first = self.trades[0]
+        prem = chain.get((first.strike, first.side))
+        if prem is None:
+            return None
+        self.second_rev = None
+        targets = self._targets(first.side, index.close, "S3" if first.side == "PE" else "R3")
+        if not targets:
+            return None
+        price = round(prem.close, 2)
+        trade = HlcTrade(date=self.day.isoformat(), kind="PM REVERSAL", side=first.side, strike=first.strike,
+                         pattern=f"12:30+ entry: {st['name']} reversal, green confirmation closed {price:g}",
+                         entry_time=when.isoformat(), entry_fill=price, entry_index=index.close,
+                         sl_premium=round(st["low"] - 1, 2), sl_rule=f"reversal low {st['low']:g} - 1", targets=targets)
+        if trade.sl_premium >= price or not self._size(trade):
+            return None
+        self.trades.append(trade)
+        self.open_trade = trade
+        names = " -> ".join(f"{n} {v:g}" for n, v in targets)
+        return (f"BUY {trade.side} {trade.strike:g} at {price:.2f} (PM REVERSAL, {trade.pattern}; index {index.close:.2f}) - "
+                f"SL {trade.sl_premium:.2f} ({trade.sl_rule}), targets {names}")
 
     def panic_side(self) -> Optional[OptionType]:
         return next((s for s in ("CE", "PE") if self.yesterday.get(s) and leg_label(*self.yesterday[s]) == "PANIC"), None)
