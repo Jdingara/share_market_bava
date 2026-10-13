@@ -32,6 +32,8 @@ class HlcMarket:
     allocation: float = 0  # owner, 2026-10-12: money per trade (0 = fixed quantity)
     max_loss: float = 0  # owner, 2026-10-12: daily loss limit; also caps each trade's SL risk
     lot: int = 1
+    profit_lock_step: float = 0  # owner, 2026-10-13: lock +step profit after a confirming close (0 = old trailing)
+    profit_lock_add: float = 0  # ... then every further +add (owner, 13-10: +100, then +50 steps)
     far_sl_points: float = 1e9  # owner, 2026-10-13: SL further than this -> SL at Fib 0.618 up from the low, 1 below
     big_gap_trail: float = 100  # big-gap trade: once this many points up, trailing SL this far below the premium high
 
@@ -42,7 +44,7 @@ HLC_MARKETS = {
                        big_gap_trail=50, allocation=100_000, max_loss=7_500, lot=65, far_sl_points=40),
     "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=200,  # owner 12-10 (was 160, 300 before 09-10)
                           sl_points=50, big_gap=300,
-                        big_gap_trail=100, allocation=175_000, max_loss=10_000, lot=20, far_sl_points=100),
+                        big_gap_trail=100, allocation=175_000, max_loss=10_000, lot=20, far_sl_points=100, profit_lock_step=100, profit_lock_add=50),
 }
 
 

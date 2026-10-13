@@ -323,7 +323,8 @@ def test_big_gap_trade_trails_100_below_the_high_once_100_up():
     """Owner, 05-10: big-gap day - no level targets; once the premium is 100 up (SENSEX), SL = high - 100."""
     from hlc_engine import HlcTrade
     levels = hlc_levels(71909.7, 72100, 553.65, 568.0)
-    day = HlcDay(date(2026, 10, 5), levels, HLC_MARKETS["SENSEX"])
+    from dataclasses import replace
+    day = HlcDay(date(2026, 10, 5), levels, replace(HLC_MARKETS["SENSEX"], profit_lock_step=0))  # old 100-below-high trailing
     for t in ("09:15", "09:20", "09:25"):
         day.index_history.append(Candle(73300, 73310, 73290, 73300))
     trade = HlcTrade(date="2026-10-05", kind="FIB", side="CE", strike=73300, pattern="", entry_time="x",
@@ -467,3 +468,23 @@ def test_far_sl_moves_to_fib_0618_up_from_the_low():
     day.index_history = [Candle(72300, 72310, 72290, 72301)] * 3
     day._enter("LEVEL", "CE", 71800.0, _at("09:25"), Candle(700, 790, 690, 788), Candle(72300, 72310, 72290, 72301), "x", "R3")
     assert day.open_trade.sl_premium == pytest.approx(614.10 + 0.618 * 173.9 - 1, abs=0.01)
+
+
+def test_sensex_profit_lock_after_a_confirming_close():
+    """Owner, 13-10: SENSEX HLC rides to the target; +100 reached, a later candle closes above +100 -> SL entry + 100."""
+    from hlc_engine import HlcTrade
+    levels = hlc_levels(71924.7, 71800, 443.95, 429.9)
+    day = HlcDay(date(2026, 10, 13), levels, HLC_MARKETS["SENSEX"])
+    day.index_history = [Candle(72300, 72310, 72290, 72301)] * 3
+    trade = HlcTrade(date="2026-10-13", kind="LEVEL", side="CE", strike=71800, pattern="", entry_time="x",
+                     entry_fill=788, entry_index=72301, sl_premium=720.95, targets=[("R2", 72673.9)])
+    idx = Candle(72350, 72360, 72340, 72355)
+    day.index_history.append(idx)
+    assert day._manage(trade, _at("09:40"), idx, Candle(790, 905, 785, 880), time(9, 45)) == []  # +117 touched
+    assert trade.lock_level == 0
+    day.index_history.append(idx)
+    assert day._manage(trade, _at("09:45"), idx, Candle(880, 900, 870, 895), time(9, 50)) == []  # closes above 888
+    assert trade.lock_level == 888
+    day.index_history.append(idx)
+    events = day._manage(trade, _at("09:50"), idx, Candle(895, 896, 880, 885), time(9, 55))
+    assert "profit lock +100" in events[0] and trade.pnl_points == 100

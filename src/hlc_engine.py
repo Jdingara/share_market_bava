@@ -126,6 +126,8 @@ class HlcTrade:
     premium_high: float = 0.0  # highest premium since entry (for the trailing SL)
     premium_trail: Optional[float] = None  # PANIC side: last premium high closed above (information)
     qty: int = 0  # owner, 2026-10-12: sized per trade (0 = the bot's fixed quantity)
+    lock_seen: Optional[tuple[float, int]] = None  # profit lock: (profit reached, candle no.) waiting for a confirming close
+    lock_level: float = 0.0  # profit lock: premium SL locking +N x step (owner, 13-10)
     pb_target: Optional[float] = None  # PROFIT BOOKING side: Fib 0.786 of yesterday's close -> high (owner, 12-10)
     pb_index: Optional[tuple[str, float]] = None  # ... or the index reaching S2 (PE) / R2 (CE)
     exit_time: str = ""
@@ -740,6 +742,25 @@ class HlcDay:
         elif prem.low <= trade.sl_premium:
             return [self._exit(trade, when, trade.sl_premium, f"SL ({trade.sl_rule})")]
         pe = trade.side == "PE"
+        step = self.market.profit_lock_step
+        if step:
+            # Owner, 2026-10-13 (SENSEX): ride to the target; once the premium is +100 and a LATER candle closes there
+            # too, the SL locks that profit (entry + 100); then the same for every further +50 (150, 200, ...).
+            # Exit on a touch of the locked level.
+            if trade.lock_level and prem.low <= trade.lock_level:
+                return [self._exit(trade, when, trade.lock_level, f"profit lock {trade.lock_level - trade.entry_fill:+g}")]
+            now = len(self.index_history)
+            add = self.market.profit_lock_add or step
+            if trade.lock_seen and now > trade.lock_seen[1]:
+                level = trade.entry_fill + trade.lock_seen[0]
+                if prem.close >= level:
+                    trade.lock_level = max(trade.lock_level, level)
+                    trade.lock_seen = None
+            gain = prem.high - trade.entry_fill  # profit reached: +100, then +150, +200, ... (owner 13-10)
+            reached = 0.0 if gain < step else step + ((gain - step) // add) * add
+            if reached and trade.entry_fill + reached > trade.lock_level and (
+                    not trade.lock_seen or reached > trade.lock_seen[0]):
+                trade.lock_seen = (reached, now)
         if trade.pb_target is not None:
             # Owner, 2026-10-12: PROFIT BOOKING side - exit only at the Fib 0.786 target or the index at S2 / R2
             if prem.high >= trade.pb_target:
@@ -754,7 +775,7 @@ class HlcDay:
         # Owner, 2026-10-05 (big-gap days), 2026-10-07 (every HLC trade): once the premium is big_gap_trail points
         # up (SENSEX 100 / NIFTY 50), trail the SL that far below its high - first at cost, then following the high.
         trail = self.market.big_gap_trail
-        if trade.premium_high >= trade.entry_fill + trail and prem.low <= trade.premium_high - trail:
+        if not step and trade.premium_high >= trade.entry_fill + trail and prem.low <= trade.premium_high - trail:
             return [self._exit(trade, when, trade.premium_high - trail,
                                f"trailing SL {trade.premium_high - trail:.2f} ({trail:g} below the high {trade.premium_high:g})")]
         trade.premium_high = max(trade.premium_high, prem.high)

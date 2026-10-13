@@ -2,12 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 34 trade(s), +2010.65 points, ₹+522,200**
+**All days: 34 trade(s), +2010.65 points, ₹+531,196**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-13 | SENSEX | 71800 | PROFIT BOOKING / PANIC | yes | 0 | +0.00 | ₹+0 | watching |
-| 2026-10-13 | NIFTY | 22350 | PROFIT BOOKING / PANIC | yes | 1 | +34.60 | ₹+4,498 | watching |
+| 2026-10-13 | NIFTY | 22350 | PROFIT BOOKING / PANIC | yes | 1 | +34.60 | ₹+13,494 | watching |
 | 2026-10-12 | SENSEX | 72600 | PANIC / PROFIT BOOKING | yes | 1 | +355.12 | ₹+56,819 | finished |
 | 2026-10-12 | NIFTY | 22550 | PANIC / PROFIT BOOKING | yes | 1 | +93.70 | ₹+30,452 | finished |
 | 2026-10-09 | SENSEX | 71600 | PROFIT BOOKING / PANIC | yes | 1 | +255.80 | ₹+40,928 | finished |
@@ -29,16 +29,16 @@
 
 ## 2026-10-13 (Tue)
 
-### NIFTY — watching (last update 2026-10-13 10:20)
+### NIFTY — watching (last update 2026-10-13 10:25)
 
 - Close 22363.35, ATM 22350. R3 22567.2 · R2 22501.4 · R1 22415.8 · S1 22264.4 · S2 22198.6 · S3 22113.0.
 - CE PROFIT BOOKING, PE PANIC — buyer’s day.
 
 | Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|---|---|
-| LEVEL | 130 × 22350 CE | opened above the close, 15-min close 22471.4 beyond R1 | 09:25 | 157.1 | 110.95 (previous candle low - 1) | 191.7 (09:35) | TARGET R2 22501.4 | +34.60 | ₹+4,498 |
+| LEVEL | 390 × 22350 CE | opened above the close, 15-min close 22471.4 beyond R1 | 09:25 | 157.1 | 138.85 (Fib 0.618 of the previous low - 1) | 191.7 (09:35) | TARGET R2 22501.4 | +34.60 | ₹+13,494 |
 
-### SENSEX — watching (last update 2026-10-13 10:24)
+### SENSEX — watching (last update 2026-10-13 10:38)
 
 - Close 71924.68, ATM 71800. R3 73117.8 · R2 72673.85 · R1 72243.95 · S1 71370.1 · S2 70926.15 · S3 70496.25.
 - CE PROFIT BOOKING, PE PANIC — buyer’s day.
