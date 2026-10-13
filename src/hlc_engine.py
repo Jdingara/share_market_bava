@@ -97,6 +97,7 @@ CONFIRM_ZONE = (0.75, 0.786)  # owner, 2026-10-01: double-confirmation trade's i
 FIB_FIRST_CANDLE = time(9, 30)  # owner, 2026-10-01: the level must be reached AFTER 09:30 - the 09:25 candle doesn't count
 LAST_ENTRY_CLOSE = time(14, 55)
 EXIT_CLOSE = time(15, 0)
+REENTRY_POINTS_SL = True  # owner, 2026-10-13: re-entries use entry - 25 / 50 points
 SWING_LOW_SL = True  # owner, 2026-10-12: SL = the candle before the entry candle's low - 1 (was -25 / -50 points)
 PB_FIB = 0.786  # PROFIT BOOKING side exit: Fib 0.786 of yesterday's close -> high (owner, 2026-10-12)
 PANIC_BLOCK = False  # owner, 2026-10-12: both sides (PROFIT BOOKING and PANIC) can trade - the index decides (29-09 block off)
@@ -222,7 +223,10 @@ class HlcDay:
         targets = self._targets(side, start, final)
         if not targets or side in self.blocked:
             return None
-        if SWING_LOW_SL:
+        if self.trades and REENTRY_POINTS_SL:
+            # Owner, 2026-10-13: a re-entry (any trade after the day's first) - SL = entry - 25 (NIFTY) / 50 (SENSEX)
+            sl, sl_rule = round(prem.close - self.market.sl_points, 2), f"re-entry {self.market.sl_points:g} points"
+        elif SWING_LOW_SL:
             # Owner, 2026-10-12: HLC SL = the low of the candle BEFORE the entry candle - 1 point (was entry - 25 / 50
             # points, 29-09). Sniper keeps its square SL on a body close.
             history = self.premium_history.get((strike, side), [prem])
