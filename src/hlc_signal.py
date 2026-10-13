@@ -88,8 +88,10 @@ def hlc_levels(index_close: float, atm: float, ce_close: float, pe_close: float)
     both = ce_close + pe_close
     r2, s2 = atm + both, atm - both
     return HlcLevels(close=index_close, atm=atm, ce_close=ce_close, pe_close=pe_close,
-                     r1=round(atm + ce_close, 2), r2=round(r2, 2), r3=round(r2 + both, 2),
-                     s1=round(atm - pe_close, 2), s2=round(s2, 2), s3=round(s2 - both, 2))  # owner, 07-10: R3/S3 = R2/S2 +- (CE+PE)
+                     r1=round(atm + ce_close, 2), r2=round(r2, 2), r3=round(r2 + ce_close, 2),
+                     s1=round(atm - pe_close, 2), s2=round(s2, 2), s3=round(s2 - pe_close, 2))
+    # owner, 2026-10-13: R3 = R2 + CE close, S3 = S2 - PE close (the 29-09 formula - matches the owner's chart:
+    # 12-10 SENSEX R3 74052 = 73556.4 + 496.5, S3 71183 = 71643.6 - 459.9). 07-10's R2/S2 +- (CE+PE) was wrong.
 
 
 def leg_label(high: float, low: float, close: float) -> str:

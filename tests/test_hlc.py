@@ -16,11 +16,11 @@ from hlc_signal import (HLC_MARKETS, Candle, bearish_pattern, bullish_pattern, c
 
 def test_levels_match_owners_sheet():
     n = hlc_levels(22780.25, 22800, 84.20, 71.45)
-    assert (n.r1, n.r2, n.r3) == (22884.20, 22955.65, 23111.30)  # owner 07-10: R3 = R2 + (CE+PE); sheet had 23039.85
-    assert (n.s1, n.s2, n.s3) == (22728.55, 22644.35, 22488.70)  # owner 07-10: S3 = S2 - (CE+PE); sheet had 22572.90
+    assert (n.r1, n.r2, n.r3) == (22884.20, 22955.65, 23039.85)  # owner 13-10: R3 = R2 + CE (the sheet)
+    assert (n.s1, n.s2, n.s3) == (22728.55, 22644.35, 22572.90)  # S3 = S2 - PE
     s = hlc_levels(72771.72, 72900, 444.20, 402.10)
-    assert (s.r1, s.r2, s.r3) == (73344.20, 73746.30, 74592.60)  # sheet (R2 + CE) had 74190.50
-    assert (s.s1, s.s2, s.s3) == (72497.90, 72053.70, 71207.40)  # sheet (S2 - PE) had 71651.60
+    assert (s.r1, s.r2, s.r3) == (73344.20, 73746.30, 74190.50)
+    assert (s.s1, s.s2, s.s3) == (72497.90, 72053.70, 71651.60)
 
 
 def test_atm_is_the_strike_with_ce_and_pe_nearest():
