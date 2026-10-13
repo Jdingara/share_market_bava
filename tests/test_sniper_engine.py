@@ -431,3 +431,22 @@ def test_12_10_sensex_529_tsl_only_after_two_squares():
     assert trade.trail_stop == 576 and trade.exit_reason == ""
     day.on_candle(at("10:45"), {**other, "otm_pe": Bar(640, 600, 632, 600)})             # later candle CLOSES above 625
     assert trade.trail_stop == 625  # owner 13-10: 2 squares locked
+
+
+@pytest.mark.ride
+def test_no_reentry_in_the_same_half_on_the_same_signal_13_10():
+    """Owner, 13-10: after an exit, the same morning signal must not buy again in that half."""
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
+    row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
+    day = SniperDay(date(2026, 10, 13), row)
+    day.buyers_day = True
+    at = lambda hm: datetime(2026, 10, 13, int(hm[:2]), int(hm[3:]))
+    other = {"atm_ce": Bar(126, 118, 120, 125), "atm_pe": Bar(155, 145, 150, 148), "otm_ce": Bar(85, 80, 82, 85)}
+    day.on_candle(at("09:30"), {**other, "atm_ce": Bar(130, 120, 125, 128), "otm_pe": Bar(150, 120, 149, 125)})
+    day.on_candle(at("09:35"), {**other, "otm_pe": Bar(150, 143, 148, 149)})            # bought 144
+    day.on_candle(at("09:40"), {**other, "otm_pe": Bar(149, 110, 112, 148)})            # closes below SL 121 -> out
+    assert day.trades[0].exit_reason == "STOPLOSS"
+    events = day.on_candle(at("09:45"), {**other, "otm_pe": Bar(160, 112, 158, 112)})   # back above the trigger
+    assert not [e for e in events if e.kind in ("ORDER", "ENTRY")]

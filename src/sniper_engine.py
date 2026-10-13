@@ -416,8 +416,10 @@ class SniperDay:
         # Owner, 2026-10-12: an unfilled body-entry limit doesn't block the half - the normal signal can still come
         # and replaces it (12-10 SENSEX: body limit 441 never filled; the normal 72500 PE 529 trade was missed).
         body_waiting = [p for p in self.pending if p.limit_only and p.setup.half == half]
-        # Owner, 2026-10-12: a buyer's day allows up to 4 trades - once flat, the same half can trade again.
-        reopen = self.ride_normal_days and self.buyers_day and not self.open_trades and not self.pending
+        # Owner, 2026-10-13: no re-entry without a fresh reason - the 12-10 "same half can trade again once flat"
+        # re-bought on the same morning signal (13-10: three losing re-entries). A half trades once; the buyer's-day
+        # cap of 4 still counts the other entries (second half, continuation after a target).
+        reopen = False
         if half is None or not self._next_trade_allowed() or (half in self.halves_used and not body_waiting and not reopen):
             return events
 

@@ -227,6 +227,8 @@ class HlcDay:
             # points, 29-09). Sniper keeps its square SL on a body close.
             history = self.premium_history.get((strike, side), [prem])
             before = history[-2] if len(history) >= 2 else history[-1]
+            if before.low >= prem.close:  # a limit fill below the previous candle (13-10 TREND: SL came out above entry)
+                before = Candle(before.open, before.high, min(before.low, prem.low), before.close)
             sl, sl_rule = round(before.low - 1, 2), "previous candle low - 1"
             if prem.close - before.low > self.market.far_sl_points:
                 # owner, 2026-10-13: a far SL (SENSEX > 100 / NIFTY > 40 points) -> Fib 0.618 up from that low, 1 below
