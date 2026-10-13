@@ -467,14 +467,14 @@ def test_reentry_at_the_0618_pullback_of_the_previous_move():
     day.on_candle(at("09:40"), {**other, "otm_pe": Bar(240, 147, 230, 148)})            # runs to 240
     day.on_candle(at("09:45"), {**other, "otm_pe": Bar(231, 160, 165, 230)})            # trail exit on the close
     assert day.trades[0].exit_reason in ("TRAIL_STOP", "STOPLOSS")
-    level = 240 - 0.618 * (240 - 140)  # 178.2
-    events = day.on_candle(at("09:50"), {**other, "otm_pe": Bar(195, 175, 180, 192)})   # tests 0.618, red - no entry
+    level = 140 + 0.618 * (240 - 140)  # 201.8 - owner 13-10: 0.618 measured up from the low
+    events = day.on_candle(at("09:50"), {**other, "otm_pe": Bar(219, 199, 204, 216)})   # tests 0.618, red - no entry
     assert not [e for e in events if e.kind == "ENTRY"]
-    events = day.on_candle(at("09:55"), {**other, "otm_pe": Bar(196, 176, 194, 181)})   # green without a reversal first
+    events = day.on_candle(at("09:55"), {**other, "otm_pe": Bar(220, 200, 218, 205)})   # green without a reversal first
     assert not [e for e in events if e.kind == "ENTRY"]
-    events = day.on_candle(at("10:00"), {**other, "otm_pe": Bar(186.5, 170, 185.5, 185)})  # Hammer = reversal
+    events = day.on_candle(at("10:00"), {**other, "otm_pe": Bar(210.5, 194, 209.5, 209)})  # Hammer = reversal
     assert not [e for e in events if e.kind == "ENTRY"]
-    events = day.on_candle(at("10:05"), {**other, "otm_pe": Bar(195, 184, 192, 186)})   # confirmation, closes green
+    events = day.on_candle(at("10:05"), {**other, "otm_pe": Bar(219, 208, 216, 210)})   # confirmation, closes green above 201.8
     entries = [e for e in events if e.kind == "ENTRY"]
-    assert entries and entries[0].trade.entry_fill == 192
-    assert entries[0].trade.stop_loss == 167  # owner 13-10: re-entry SL = buy - 25
+    assert entries and entries[0].trade.entry_fill == 216
+    assert entries[0].trade.stop_loss == 191  # owner 13-10: re-entry SL = buy - 25

@@ -615,7 +615,7 @@ class SniperDay:
             self.reentry = None
             return None
         bar = bars[_key(r["setup"])]
-        level = r["high"] - REENTRY_FIB * (r["high"] - r["low"])
+        level = r["low"] + REENTRY_FIB * (r["high"] - r["low"])  # owner 13-10 chart: 0 = low, 1 = high, 0.618 up from the low
         if bar.close < r["low"]:  # the move failed - no re-entry
             self.reentry = None
             return None
