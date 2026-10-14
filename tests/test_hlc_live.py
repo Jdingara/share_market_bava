@@ -51,7 +51,7 @@ def test_feed_processes_closed_candles_once_and_updates_state_and_history(tmp_pa
 
     record_hlc_day(date(2026, 9, 30), "NIFTY", LEVELS, YESTERDAY, engine.big_gap, engine.trades, 325, "finished", folder=tmp_path)
     md = (tmp_path / "HLC_HISTORY.md").read_text(encoding="utf-8")
-    assert "All days: 1 trade(s), -19.00 points, ₹-6,175" in md and "PANIC / PROFIT BOOKING | yes" in md
+    assert "All days: 1 trade(s), -19.00 points, ₹-2,470" in md and "PANIC / PROFIT BOOKING | yes" in md
 
 
 def test_info_lines_flag_a_buyers_day():

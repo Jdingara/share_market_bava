@@ -37,7 +37,7 @@ DAY_FIELDS = [
 TRADE_FIELDS = [
     "date", "market", "half", "direction", "symbol", "qty", "entry_time", "entry_fill", "entry_square",
     "stop_loss", "trail_stop", "target", "exit_time", "exit_premium", "exit_reason", "pnl_points",
-    "pnl_rupees", "confidence", "note",
+    "pnl_rupees", "confidence", "note", "entry_reason", "exit_detail",
 ]
 
 
@@ -122,8 +122,8 @@ def _record_day(
         "plan": "yes" if plan.final else f"no plan: {plan.reason}",
         "trades": len(trades),
         "pnl_points": pnl,
-        "pnl_rupees": round(pnl * qty),
-        "qty": qty,
+        "pnl_rupees": round(sum(t.pnl_points * (getattr(t, "qty", 0) or qty) for t in closed)),
+        "qty": qty if not any(getattr(t, "qty", 0) for t in trades) else "per trade",
         "status": status,
         "last_update": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "note": note,
@@ -140,7 +140,7 @@ def _record_day(
             "half": t.half,
             "direction": t.direction,
             "symbol": symbols.get(t.buy_type, f"{t.buy_strike:g} {t.buy_type}"),
-            "qty": qty,
+            "qty": getattr(t, "qty", 0) or qty,
             "entry_time": t.entry_time[11:16],
             "entry_fill": t.entry_fill,
             "entry_square": t.entry_square,
@@ -151,9 +151,11 @@ def _record_day(
             "exit_premium": t.exit_premium if t.exit_reason else "",
             "exit_reason": t.exit_reason or "OPEN",
             "pnl_points": t.pnl_points if t.exit_reason else "",
-            "pnl_rupees": round(t.pnl_points * qty) if t.exit_reason else "",
+            "pnl_rupees": round(t.pnl_points * (getattr(t, "qty", 0) or qty)) if t.exit_reason else "",
             "confidence": "HIGH (ATM below Sniper)" if getattr(t, "atm_below_sniper", False) else "normal",
             "note": getattr(t, "note", ""),
+            "entry_reason": getattr(t, "entry_reason", ""),
+            "exit_detail": getattr(t, "exit_detail", ""),
         }
         for t in trades
     ]
@@ -232,6 +234,12 @@ def write_markdown(folder: Optional[Path] = None) -> Path:
                         f"| {t['half']} | {t['qty']} × {t['symbol']} | {t['entry_time']}{note} | {t['entry_fill']} | "
                         f"{t['entry_square']} | {sl} | {t['target']} | {exit_cell} | {t['exit_reason']} | {pts} | {rs} |"
                     )
+                reasons = [t for t in day_trades if t.get("entry_reason") or t.get("exit_detail")]
+                if reasons:
+                    lines += ["", "Why (owner 13-10: every entry and exit needs a reason):"]
+                    for t in reasons:
+                        lines.append(f"- {t['entry_time']} {t['symbol']}: entry - {t.get('entry_reason') or '–'}; "
+                                     f"exit - {t.get('exit_detail') or ('open' if t['exit_reason'] == 'OPEN' else t['exit_reason'])}")
             elif d["plan"] == "yes" and d["status"] == "watching":
                 lines.append("- No trade yet.")
             elif d["plan"] == "yes":

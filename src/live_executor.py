@@ -198,13 +198,18 @@ class LiveExecutor:
                     self._buy_now(want)
 
     def _follow(self, want: Want) -> None:
-        """We hold what the engine holds: take over its stop (only ever up) and target."""
+        """We hold what the engine holds: take over its stop and target. The engine's stop only ever moves up; a
+        stop it judges on a candle close comes as None - then no SL order rests and the engine's exit sells."""
         pos = self.position
         if not self._tried(want.symbol, want.entry):
             self._mark_tried(want.symbol, want.entry)
-        if want.stop is not None and (pos.stop is None or want.stop > pos.stop):
+        if want.stop is None and pos.sl_order:
+            self._drop_stop()
+        elif want.stop is not None and want.stop != pos.stop:
             self._move_stop(want.stop)
         if self.position:
+            if not (want.stop is None and self.position.sl_order):  # an SL order not yet confirmed gone keeps its level
+                self.position.stop = want.stop
             self.position.target = want.target
         self.triggers = []
         self._save()
@@ -388,6 +393,20 @@ class LiveExecutor:
             if pos.sl_order and (state is None or state.done):
                 pos.sl_order = None
         self._save()
+
+    def _drop_stop(self) -> None:
+        """Cancels the resting SL order (the engine now judges the stop on candle closes)."""
+        pos = self.position
+        try:
+            self.broker.cancel(pos.sl_order)
+        except Exception:
+            pass
+        state = self._state(pos.sl_order)
+        if state is None or not state.done:
+            return  # not confirmed gone - keep it and try again at the next sync
+        pos.sl_order = None
+        if state.filled:
+            self._book(state.filled, state.average, f"STOPLOSS {pos.stop:g} (Zerodha SL order)")
 
     def _exit(self, why: str) -> None:
         pos = self.position

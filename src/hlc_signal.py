@@ -6,7 +6,7 @@ Morning:
   - ATM = the strike near yesterday's index close whose CE and PE closes are
     nearest each other (choose_atm).
   - Levels from that ATM's CE/PE closes: R1 = ATM + CE, R2 = ATM + (CE+PE),
-    R3 = R2 + CE; S1 = ATM - PE, S2 = ATM - (CE+PE), S3 = S2 - PE; plus
+    R3 = R2 + (CE+PE) (owner, 07-10; was R2 + CE); S1 = ATM - PE, S2 = ATM - (CE+PE), S3 = S2 - (CE+PE) (owner, 07-10; was S2 - PE); plus
     Close = yesterday's index close.
   - Each leg's label: close nearer its high = PANIC, nearer its low =
     PROFIT BOOKING (information only).
@@ -28,12 +28,24 @@ class HlcMarket:
     level_tolerance: float  # how close to a level a pattern must form (index points)
     quantity: int
     sl_points: float  # stop loss = entry premium - this (owner, 2026-09-29)
-    big_gap: float  # |open - yesterday's close| at least this = big gap day (owner: NIFTY 150-200, SENSEX 300-500)
+    big_gap: float  # no longer used: since 2026-10-05 a big gap day = open above R2 / below S2
+    allocation: float = 0  # owner, 2026-10-12: money per trade (0 = fixed quantity)
+    max_loss: float = 0  # owner, 2026-10-12: daily loss limit; also caps each trade's SL risk
+    lot: int = 1
+    profit_lock_step: float = 0  # owner, 2026-10-13: lock +step profit after a confirming close (0 = old trailing)
+    profit_lock_add: float = 0  # ... then every further +add (owner, 13-10: +100, then +50 steps)
+    far_sl_points: float = 1e9  # owner, 2026-10-13: SL further than this -> SL at Fib 0.618 up from the low, 1 below
+    big_gap_trail: float = 100  # big-gap trade: once this many points up, trailing SL this far below the premium high
 
 
 HLC_MARKETS = {
-    "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=325, sl_points=25, big_gap=150),
-    "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=300, sl_points=50, big_gap=300),
+    "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=260,  # owner 12-10 (was 325)
+                         sl_points=25, big_gap=150,
+                       big_gap_trail=50, allocation=100_000, max_loss=7_500, lot=65, far_sl_points=40,
+                       profit_lock_step=50, profit_lock_add=25),  # owner 13-10: +50 confirmed, then +25 steps
+    "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=200,  # owner 12-10 (was 160, 300 before 09-10)
+                          sl_points=50, big_gap=300,
+                        big_gap_trail=100, allocation=175_000, max_loss=10_000, lot=20, far_sl_points=100, profit_lock_step=100, profit_lock_add=50),
 }
 
 
@@ -82,6 +94,8 @@ def hlc_levels(index_close: float, atm: float, ce_close: float, pe_close: float)
     return HlcLevels(close=index_close, atm=atm, ce_close=ce_close, pe_close=pe_close,
                      r1=round(atm + ce_close, 2), r2=round(r2, 2), r3=round(r2 + ce_close, 2),
                      s1=round(atm - pe_close, 2), s2=round(s2, 2), s3=round(s2 - pe_close, 2))
+    # owner, 2026-10-13: R3 = R2 + CE close, S3 = S2 - PE close (the 29-09 formula - matches the owner's chart:
+    # 12-10 SENSEX R3 74052 = 73556.4 + 496.5, S3 71183 = 71643.6 - 459.9). 07-10's R2/S2 +- (CE+PE) was wrong.
 
 
 def leg_label(high: float, low: float, close: float) -> str:

@@ -327,7 +327,7 @@ def test_zerodha_funds_cap_the_lots(setup):
     assert ex.position.qty == 40
 
 
-def test_trailing_stop_moves_the_order_up_only(setup):
+def test_stop_order_follows_the_engine(setup):
     make, broker, clock, messages, prices = setup
     ex = make()
     _allocated(ex, clock)
@@ -335,10 +335,27 @@ def test_trailing_stop_moves_the_order_up_only(setup):
     ex.sync(Want(PE, _at(9, 30), 81, 144), [], _at(9, 30))
     sl = ex.position.sl_order
     prices[PE] = 130
-    ex.sync(Want(PE, _at(9, 30), 100, 144), [], _at(9, 35))
+    ex.sync(Want(PE, _at(9, 30), 100, 144), [], _at(9, 35))  # the engine trailed it up
     assert broker.orders[sl]["trigger"] == 100
-    ex.sync(Want(PE, _at(9, 30), 81, 144), [], _at(9, 40))  # never down
-    assert broker.orders[sl]["trigger"] == 100
+    ex.sync(Want(PE, _at(9, 30), None, 144), [], _at(9, 40))  # the engine now judges the stop on candle closes
+    assert broker.orders[sl]["status"] == "CANCELLED"
+    assert ex.position.sl_order is None and ex.position.stop is None
+    prices[PE] = 90
+    ex.tick()  # far below the old stop, but no touch exit - the engine's close decides
+    assert ex.position is not None
+    ex.sync(None, [], _at(9, 45))  # the engine exits at the candle close
+    assert ex.position is None
+
+
+def test_a_trigger_without_a_stop_buys_without_an_sl_order(setup):
+    make, broker, clock, messages, prices = setup
+    ex = make()
+    _allocated(ex, clock)
+    clock.when = _at(9, 31)
+    ex.sync(None, [Trigger(PE, "limit", 112, None, 144)], _at(9, 25))
+    ex.tick()
+    assert ex.position is not None and ex.position.sl_order is None and ex.position.target == 144
+    assert not any(o[1] == "SL" for o in broker.log if len(o) > 1)
 
 
 def test_stop_that_filled_while_being_moved_is_booked(setup):
@@ -406,20 +423,42 @@ def test_everything_sold_at_1501(setup):
 def test_hlc_wants_premium_stop_index_stop_and_low_premium_order():
     import hlc_live
 
+    from hlc_signal import HLC_MARKETS
+
     chain = SimpleNamespace(by_key={(22450.0, s): {"tradingsymbol": f"NIFTY26O2722450{s}"} for s in ("CE", "PE")})
-    trade = SimpleNamespace(strike=22450, side="PE", entry_time="2026-10-26T10:20:00", sl_premium=150.0, index_sl=None)
-    engine = SimpleNamespace(open_trade=trade, pending=None)
-    want, triggers = hlc_live.hlc_wants(engine, chain, _at(9, 0))
+
+    def trade(**fields):
+        base = dict(strike=22450, side="PE", entry_time="2026-10-26T10:20:00", entry_fill=175.0, sl_premium=150.0,
+                    index_sl=None, uv=None, lock_level=0.0, premium_high=175.0, pb_target=None)
+        return SimpleNamespace(**{**base, **fields})
+
+    def engine(open_trade=None, pending=None, trend_order=None):
+        return SimpleNamespace(open_trade=open_trade, pending=pending, trend_order=trend_order, market=HLC_MARKETS["NIFTY"])
+
+    want, triggers = hlc_live.hlc_wants(engine(trade()), chain, _at(9, 0))
     assert (want.symbol, want.stop, want.target, want.late, triggers) == ("NIFTY26O2722450PE", 150.0, None, False, [])
 
-    fib = SimpleNamespace(strike=22450, side="CE", entry_time="2026-10-26T09:30:00", sl_premium=0.0, index_sl=22400.0)
-    want, _ = hlc_live.hlc_wants(SimpleNamespace(open_trade=fib, pending=None), chain, _at(10, 0))
+    want, _ = hlc_live.hlc_wants(engine(trade(lock_level=225.0)), chain, _at(9, 0))
+    assert want.stop == 225.0  # profit lock (touch) - the SL order moves up to it
+
+    want, _ = hlc_live.hlc_wants(engine(trade(uv={"first": 196, "target": 225, "touched_at": None})), chain, _at(9, 0))
+    assert (want.stop, want.target) == (None, 225.0)  # U/V: SL on a close (engine), target on a touch
+
+    want, _ = hlc_live.hlc_wants(engine(trade(pb_target=240.5)), chain, _at(9, 0))
+    assert want.target == 240.5  # PROFIT BOOKING side: Fib 0.786 target
+
+    fib = trade(side="CE", entry_time="2026-10-26T09:30:00", sl_premium=0.0, index_sl=22400.0)
+    want, _ = hlc_live.hlc_wants(engine(fib), chain, _at(10, 0))
     assert want.stop is None  # index stop: the engine exits at a candle close
     assert want.late  # entered before this restart - never bought
 
     order = dict(strike=22450.0, side="CE", stop=12.5, sl=9.8)
-    want, triggers = hlc_live.hlc_wants(SimpleNamespace(open_trade=None, pending=order), chain, _at(9, 0))
+    want, triggers = hlc_live.hlc_wants(engine(pending=order), chain, _at(9, 0))
     assert want is None and triggers == [Trigger("NIFTY26O2722450CE", "stop", 12.5, 9.8, None)]
+
+    trend = dict(side="PE", strike=22450.0, limit=161.4)
+    _, triggers = hlc_live.hlc_wants(engine(trend_order=trend), chain, _at(9, 0))
+    assert triggers == [Trigger("NIFTY26O2722450PE", "limit", 161.4, None, None)]
 
 
 def test_real_mode_needs_the_env_switch(monkeypatch):

@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import time as time_module
 import urllib.parse
@@ -41,10 +42,14 @@ from dotenv import load_dotenv
 from dashboard import DashboardState, start_dashboard
 from history import record_day
 
+from keep_awake import keep_awake
+from sizing import CapitalLedger
 from kite_auth import PROJECT_ROOT, connected_client
 from live_executor import Trigger, Want, confirm_real_mode, make_executor
 from live_money import lot_cost
+import sniper_engine
 from sniper_engine import CONTRACT_KEYS, Bar, Event, SniperDay, TradeResult
+from sniper_engine import _key as engine_key
 from sniper_signal import (
     CANDLE_MINUTES,
     EXIT_BY,
@@ -189,6 +194,8 @@ def completed_bars(
     a contract had no trades in some candle, its last close carries forward
     (yesterday's close if it has not traded yet today)."""
     by_key = {key: {_naive(c["date"]): c for c in candles.get(key, [])} for key in CONTRACT_KEYS}
+    by_index = {_naive(c["date"]): c for c in candles.get("index", [])}
+    last_index: Optional[Bar] = None
     closed_times = sorted(
         t for times in by_key.values() for t in times if t + timedelta(minutes=CANDLE_MINUTES) <= now
     )
@@ -209,6 +216,12 @@ def completed_bars(
                 bars[key] = Bar(float(candle["high"]), float(candle["low"]), float(candle["close"]),
                                float(candle["open"]) if candle.get("open") is not None else None)
                 last_close[key] = bars[key].close
+        index = by_index.get(when)
+        if index is not None:  # the index feeds the first-half ATM-close trigger's "near" form (owner, 06-10)
+            last_index = Bar(float(index["high"]), float(index["low"]), float(index["close"]),
+                             float(index["open"]) if index.get("open") is not None else None)
+        if last_index is not None:
+            bars["index"] = last_index
         if when not in processed:
             result.append((when, bars))
     return result
@@ -256,7 +269,7 @@ def describe_plan(plan: DailyPlan, expiry: date, previous_day: date) -> str:
         lines.append(f"NO PLAN TODAY: {plan.reason}")
         return "\n".join(lines)
     lines.append(f"FINAL: {plan.reason}, Sniper {plan.final.sniper:.2f}")
-    for s in trade_setups(plan.final):
+    for s in trade_setups(plan.final, plan.buy_atm):
         lines.append(
             f"  {s.half:<6} half, market {s.direction:<4}: buy {s.buy_strike:g} {s.buy_type} "
             f"when a candle closes above {s.levels.entry} (trigger {s.levels.trigger:.2f}) - "
@@ -265,49 +278,96 @@ def describe_plan(plan: DailyPlan, expiry: date, previous_day: date) -> str:
     return "\n".join(lines)
 
 
+def _symbol(contracts: dict[str, dict], buy_type: str, strike: float) -> str:
+    """The bought contract's symbol - normally the OTM, the ATM for the U/V trade (08-10)."""
+    side = buy_type.lower()
+    for key in (f"otm_{side}", f"atm_{side}"):
+        contract = contracts.get(key)
+        if contract and float(contract.get("strike", strike)) == float(strike):
+            return contract["tradingsymbol"]
+    return contracts[f"otm_{side}"]["tradingsymbol"]
+
+
 def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: int = MARKETS["NIFTY"].quantity) -> str:
     note = "  (catch-up: this candle closed before the bot started)" if late else ""
     if event.kind in ("ORDER", "CANCEL"):
-        symbol = contracts["otm_ce" if event.setup.buy_type == "CE" else "otm_pe"]["tradingsymbol"]
-        trigger = event.setup.levels.trigger
+        symbol = _symbol(contracts, event.setup.buy_type, event.setup.buy_strike)
+        trigger = event.atm_close_trigger or event.setup.levels.trigger
+        if event.kind == "ORDER" and event.atm_close_trigger:
+            how = (f"within {event.atm_close_trigger - event.signal_close:.2f} of" if event.near else "above")
+            return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} ({how} the ATM "
+                    f"{event.setup.buy_type} close {trigger:.2f}"
+                    f"{', index below yesterday' if event.near else ''}) - WOULD BUY at "
+                    + (f"{event.square} if it comes back, or at {event.next_square} if it runs up" if event.square
+                       else f"{event.next_square} when it rises there") + note)
         note = (" - HIGH confidence: ATM already below Sniper" if event.atm_below_sniper else "") + note
+        if event.kind == "ORDER" and event.setup.contract:
+            return (f"SIGNAL {symbol}: sideways day, ATM {event.setup.buy_type} U/V - reversal then retest, "
+                    f"candle {event.when:%H:%M} closed {event.signal_close:.2f} - WOULD BUY at the Fib 0.618 "
+                    f"of that candle (limit), SL {(int(event.square ** 0.5) - 1) ** 2}, "
+                    f"target {(int(event.square ** 0.5) + 2) ** 2}{note}")
+        if event.kind == "ORDER" and event.body_entry:
+            return (f"SIGNAL {symbol}: ATM {event.setup.buy_type} candle {event.when:%H:%M} body closed above the Sniper - "
+                    f"WOULD BUY at {event.square} (limit), fixed SL {(int(event.square ** 0.5) - 1) ** 2}, "
+                    f"target {(int(event.square ** 0.5) + 2) ** 2}{note}")
         if event.kind == "ORDER" and event.square:
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
-                    f"WOULD BUY {qty} at {event.square} if it comes back, or at {event.next_square} if it runs up{note}")
+                    f"WOULD BUY at {event.square} if it comes back, or at {event.next_square} if it runs up{note}")
         if event.kind == "ORDER":
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
-                    f"WOULD BUY {qty} at {event.next_square} when it rises there{note}")
+                    f"WOULD BUY at {event.next_square} when it rises there{note}")
         levels = f"{event.square}/{event.next_square}" if event.square else f"{event.next_square}"
-        return f"Order for {symbol} at {levels} cancelled - window ended without a fill{note}"
+        return f"Order for {symbol} at {levels} cancelled - window ended without a fill, or replaced by a newer signal{note}"
     t = event.trade
-    symbol = contracts["otm_ce" if t.buy_type == "CE" else "otm_pe"]["tradingsymbol"]
+    symbol = _symbol(contracts, t.buy_type, t.buy_strike)
     if event.kind == "ENTRY":
         conf = " - HIGH confidence: ATM below Sniper" if t.atm_below_sniper else ""
+        qty = t.qty or qty
         return (f"WOULD BUY {qty} x {symbol} at {t.entry_fill:.2f} ({t.half} half, candle {t.entry_time[11:16]}) - "
-                f"SL {t.stop_loss} (trails up), target {t.target}{conf}{note}")
+                f"SL {t.stop_loss} ({'fixed' if event.body_entry else 'trails up'}), target {t.target}{conf}"
+                + (f" | REASON: {t.entry_reason}" if t.entry_reason else "") + note)
+    qty = t.qty or qty
     return (f"WOULD EXIT {qty} x {symbol} at {t.exit_premium:.2f} - {t.exit_reason} "
-            f"(bought {t.entry_fill:.2f}, P&L {t.pnl_points:+.2f} points = Rs {t.pnl_points * qty:+,.0f}){note}")
+            f"(bought {t.entry_fill:.2f}, P&L {t.pnl_points:+.2f} points = Rs {t.pnl_points * qty:+,.0f})"
+            + (f" | REASON: {t.exit_detail}" if t.exit_detail else "") + note)
 
 
 def sniper_wants(engine: SniperDay, contracts: dict[str, dict]) -> tuple[Optional[Want], list[Trigger]]:
-    """--real: what the engine holds and the buys it is waiting for, for live_executor."""
-    def symbol(option_type: str) -> str:
-        return contracts["otm_ce" if option_type == "CE" else "otm_pe"]["tradingsymbol"]
+    """--real: what the engine holds and the buys it is waiting for, for live_executor.
 
-    def target(k: int) -> Optional[float]:  # §3: bought at k^2 -> target (k+2)^2
-        return float((k + 2) ** 2) if engine.keep_target else None
+    Only exits that happen on a TOUCH are handed over (they can be done in real time): the target, and a stop
+    that counts on a touch. Stops that count only on a candle CLOSE (owner, 06-10/12-10: every Sniper SL/TSL)
+    stay with the engine - the executor sells when the engine exits at the candle close."""
+    ride = engine.ride_normal_days and engine.buyers_day  # owner 12-10: buyer's day - no target exit
+
+    def symbol(setup) -> str:
+        return contracts[engine_key(setup)]["tradingsymbol"]
+
+    def touch_stop(stop: float, trailed: bool) -> Optional[float]:
+        return None if engine.sl_on_close and (sniper_engine.ALL_STOPS_ON_CLOSE or not trailed) else stop
+
+    def target(square: float, uv: bool) -> Optional[float]:
+        return float(square) if uv or (engine.keep_target and not ride) else None
 
     want = None
     if engine.open_trades:
-        _, trade = engine.open_trades[-1]
-        want = Want(symbol(trade.buy_type), datetime.fromisoformat(trade.entry_time), trade.trail_stop,
-                    float(trade.target) if engine.keep_target else None, late=trade.note == "catch-up")
+        setup, trade = engine.open_trades[-1]
+        uv = id(trade) in engine.uv_trades
+        want = Want(symbol(setup), datetime.fromisoformat(trade.entry_time),
+                    touch_stop(trade.trail_stop, trade.trail_stop > trade.stop_loss), target(trade.target, uv),
+                    late=trade.note == "catch-up")
     triggers = []
-    for pending in engine.pending:  # §2: buy at k^2 if it comes back, or at (k+1)^2 if it runs up
-        s, k = symbol(pending.setup.buy_type), pending.k
-        if pending.has_limit:
-            triggers.append(Trigger(s, "limit", k * k, (k - 1) ** 2, target(k)))
-        triggers.append(Trigger(s, "stop", (k + 1) ** 2, k * k, target(k + 1)))
+    for pending in engine.pending:
+        s, k = symbol(pending.setup), pending.k
+        if pending.limit_price is not None:  # U/V trade: a plain limit at the Fib 0.618 level
+            low = math.isqrt(int(pending.limit_price))
+            triggers.append(Trigger(s, "limit", pending.limit_price, touch_stop(low * low, False),
+                                    target((low + 2) ** 2, True)))
+            continue
+        if pending.has_limit:  # §2: buy at k^2 if it comes back ...
+            triggers.append(Trigger(s, "limit", k * k, touch_stop((k - 1) ** 2, False), target((k + 2) ** 2, False)))
+        if not pending.limit_only:  # ... or at (k+1)^2 if it runs up (the body entry never chases)
+            triggers.append(Trigger(s, "stop", (k + 1) ** 2, touch_stop(k * k, False), target((k + 3) ** 2, False)))
     return want, triggers
 
 
@@ -346,6 +406,7 @@ def _feed(engine: SniperDay, when: datetime, bars: dict[str, Bar], contracts: di
     if state:
         state.add_candle(when, bars)
     events = engine.on_candle(when, bars)
+    engine.sync_capital()
     for event in events:
         if late and event.kind == "ENTRY":
             event.trade.note = "catch-up"
@@ -359,7 +420,7 @@ def _feed(engine: SniperDay, when: datetime, bars: dict[str, Bar], contracts: di
 
 def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
           state: Optional[DashboardState] = None, qty: int = MARKETS["NIFTY"].quantity,
-          recorder: Optional[Callable[[str], None]] = None,
+          recorder: Optional[Callable[[str], None]] = None, index_token: Optional[int] = None,
           on_batch: Optional[Callable[[datetime], None]] = None) -> None:
     """`on_batch(last candle start)` runs after each batch of new candles (--real: live_executor.sync)."""
     today, row = engine.day, engine.row
@@ -383,6 +444,8 @@ def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
                 key: _historical(kite, c["instrument_token"], session_start, now, f"{CANDLE_MINUTES}minute")
                 for key, c in contracts.items()
             }
+            if index_token is not None:
+                candles["index"] = _historical(kite, index_token, session_start, now, f"{CANDLE_MINUTES}minute")
         except Exception as error:  # network hiccup / Kite error: never let it end the day - retry next candle
             notify.send(f"Zerodha data fetch failed ({type(error).__name__}: {error}) - retrying at the next candle.",
                         phone=False)
@@ -408,7 +471,7 @@ def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
 
 
 def replay(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier, state: DashboardState,
-           seconds_per_candle: float, qty: int = MARKETS["NIFTY"].quantity) -> None:
+           seconds_per_candle: float, qty: int = MARKETS["NIFTY"].quantity, index_token: Optional[int] = None) -> None:
     """Re-runs a past day on its real 5-minute option candles, paced so the
     dashboard can be watched filling in."""
     day = engine.day
@@ -416,6 +479,8 @@ def replay(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier
     candles = {
         key: _historical(kite, c["instrument_token"], start, end, f"{CANDLE_MINUTES}minute") for key, c in contracts.items()
     }
+    if index_token is not None:
+        candles["index"] = _historical(kite, index_token, start, end, f"{CANDLE_MINUTES}minute")
     bars_list = completed_bars(candles, set(), end + timedelta(minutes=CANDLE_MINUTES), engine.row)
     if not bars_list:
         notify.send(f"No option candles for {day} - not a trading day, or the contracts are no longer listed.")
@@ -457,6 +522,7 @@ def main() -> None:
         if args.replay or args.plan_only:
             raise SystemExit("--real can't be combined with --replay or --plan-only")
         confirm_real_mode()
+    keep_awake()  # don't let Windows sleep while the bot runs (07-10 laptop slept mid-day)
     day = date.fromisoformat(args.replay) if args.replay else date.today()
     if not args.replay and day.weekday() >= 5:
         raise SystemExit("Today is a weekend - no market. To see the bot work, replay a recent day:\n"
@@ -474,10 +540,13 @@ def main() -> None:
 
     prefix = ("replay_" if args.replay else "") + ("" if market.name == "NIFTY" else f"{market.name}_")
     notify = Notifier(day, state, prefix=f"{prefix}log", phone=not args.replay)
-    notify.send(("REPLAY of " + day.isoformat() if args.replay else f"Sniper bot started ({market.name}, {qty} qty)")
-                + (" - REAL MONEY MODE: real Zerodha orders, lots sized from the morning money." if args.real
-                   else " - PAPER MODE, no real orders."),
-                phone=args.real)
+    if args.real:
+        notify.send(f"Sniper bot started ({market.name}) - REAL MONEY MODE: real Zerodha orders, lots sized from the "
+                    "morning money.", phone=True)
+    else:
+        notify.send(("REPLAY of " + day.isoformat() if args.replay else f"Sniper bot started ({market.name}, qty per trade: up to Rs {market.allocation:,.0f}, loss limit Rs {market.max_loss:,.0f})")
+                    + " - PAPER MODE, no real orders.",
+                    phone=False)
 
     if not args.replay:
         wait_for_closing_prices(market.name, state.set_status)
@@ -514,7 +583,23 @@ def main() -> None:
         return
 
     notify.send("Watching " + ", ".join(c["tradingsymbol"] for c in contracts.values()) + " until 15:00.", phone=False)
-    engine = SniperDay(day, plan.final)
+    engine = SniperDay(day, plan.final, index_close=plan.index_close, near_points=market.near_atm_close,
+                       buy_atm=plan.buy_atm, lot=market.lot_size, allocation=market.allocation, max_loss=market.max_loss)
+    if not args.replay:  # owner 12-10: shared Rs 5 lakh pool across the 4 bots, SENSEX first
+        engine.capital = CapitalLedger(OUT_DIR / f"capital_{day.isoformat()}.json", f"sniper_{market.name}")
+        engine.capital.release()  # a restart starts clean; the catch-up re-holds what is still open
+    try:  # owner, 2026-10-08: the OTMs' yesterday highs, for the "ATM below the Sniper early" entry
+        for key in ("otm_ce", "otm_pe", "atm_ce", "atm_pe"):
+            start = datetime.combine(day - timedelta(days=14), time(0, 0))
+            rows = [c for c in _historical(kite, contracts[key]["instrument_token"], start,
+                                           datetime.combine(day - timedelta(days=1), time(23, 59)), "day")
+                    if _naive(c["date"]).date() < day]
+            if rows:
+                engine.otm_yesterday_high[key] = float(rows[-1]["high"])
+        notify.send("OTM yesterday highs: " + ", ".join(f"{k} {v:g}" for k, v in engine.otm_yesterday_high.items()),
+                    phone=False)
+    except Exception as error:
+        print(f"  (yesterday highs failed: {error})", flush=True)
     try:
         engine.buyers_day = is_buyers_day(kite, contracts, day)
     except Exception as error:
@@ -533,9 +618,9 @@ def main() -> None:
     status = "finished"
     try:
         if args.replay:
-            replay(kite, engine, contracts, notify, state, args.speed, qty)
+            replay(kite, engine, contracts, notify, state, args.speed, qty, market.index_token)
         else:
-            watch(kite, engine, contracts, notify, state, qty, record,
+            watch(kite, engine, contracts, notify, state, qty, record, market.index_token,
                   on_batch=(lambda through: executor.sync(*sniper_wants(engine, contracts), through)) if executor else None)
     except KeyboardInterrupt:
         status = "stopped early (Ctrl+C)"
@@ -545,9 +630,10 @@ def main() -> None:
     record(status)
     path = save_trades(engine.trades, day, prefix=f"{prefix}trades")
     total = sum(t.pnl_points for t in engine.trades if t.exit_reason)
+    rupees = sum(t.pnl_points * (t.qty or qty) for t in engine.trades if t.exit_reason)
     state.set_trades(engine.trades)
-    state.set_status(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {total * qty:+,.0f}")
-    notify.send(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {total * qty:+,.0f}."
+    state.set_status(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {rupees:+,.0f}")
+    notify.send(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {rupees:+,.0f}."
                 + (f" Saved to {path}" if path else ""))
     _keep_dashboard_open(url)
 

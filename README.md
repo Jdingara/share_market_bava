@@ -14,7 +14,15 @@ The bot is in **paper mode**: it uses real Zerodha market data but only reports 
 3. Zerodha **Kite Connect** app (developers.kite.trade): type **Connect**, redirect URL `https://127.0.0.1`, Zerodha Client ID = your Kite login ID.
 4. Copy `.env.example` to `.env` and fill in `KITE_API_KEY` and `KITE_API_SECRET`. Optional: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` for phone alerts.
 
-## Run the paper bot (every trading day, before 09:15)
+## Automatic daily start (set up 2026-10-08)
+
+Two Windows scheduled tasks (Mon–Fri) do the daily routine:
+- **SniperBot Daily Start, 08:40** → `daily_start.ps1`: `git pull`, opens the Zerodha login page — **you log in (password + TOTP); no copy-paste** — `src\auto_login.py` catches the redirect and saves the session, then the 4 bots start hidden in the background and the dashboard opens. Log: `data\paper_trades\daily_start_<date>.txt`.
+- **SniperBot Daily Push, 15:10** → `daily_push.ps1`: commits `history\` and pushes it to GitHub. Log: `data\paper_trades\daily_push_<date>.txt`.
+
+One-time: on developers.kite.trade set the app's **Redirect URL to `http://127.0.0.1:5000/callback`**. The PC must be on (lid open, plugged in) at 08:40; if you don't log in within 30 minutes, the bots don't start that day. Zerodha requires the daily login to be manual, so it can't be automated further. Manage the tasks in Task Scheduler (or `schtasks /Query /TN "SniperBot Daily Start"`).
+
+## Run the paper bot by hand (every trading day, before 09:15)
 
 Double-click **`start_bot.bat`**. It:
 1. opens Zerodha login — log in, then copy the address the browser lands on (`https://127.0.0.1/?...request_token=...`; the page itself shows an error, that's normal) and paste it into the window;
@@ -29,13 +37,15 @@ py src\sniper_live.py --market NIFTY
 py src\sniper_live.py --market SENSEX      (in a second window)
 ```
 
+Some days have **no Sniper plan** (the gap check fails even at the relaxed gap) — that's intended: the bot only trades the owner's setups. The window says "NO PLAN TODAY" and keeps the dashboard open.
+
 ### `sniper_live.py` options
 
 | Flag | Meaning |
 |---|---|
 | `--market NIFTY` / `--market SENSEX` | Which index (default NIFTY) |
 | `--plan-only` | Show today's morning plan, don't watch the market |
-| `--replay YYYY-MM-DD` | Re-run a recent day on its real candles (contracts must still be listed — about the current and previous expiry week) |
+| `--replay YYYY-MM-DD` | Re-run a recent day on its real candles (contracts must still be listed; once a day's weekly expiry has passed the replay uses the current expiry's contracts, so old SENSEX replays aren't reliable) |
 | `--speed N` | Replay speed, seconds per candle (default 0.5) |
 | `--no-browser` | Don't open the dashboard automatically |
 
@@ -60,10 +70,10 @@ It shows the morning plan, the 4 possible trades, premium charts with entry/SL/t
 
 1. Add `LIVE_TRADING=YES` to `.env` (without it `--real` refuses to start).
 2. Put the day's money in the Zerodha account before 09:20. At 09:20 the bots split it (Sniper SENSEX → Sniper NIFTY → HLC SENSEX → HLC NIFTY; 4, 3, 2 or 1 equal parts) and buy as many lots as each share allows (max NIFTY 5 lots / SENSEX 15 lots). Not enough for 1 lot → that bot says so and doesn't trade.
-3. Double-click **`start_live.bat`** before 09:15 and log in as usual.
+3. Double-click **`start_live.bat`** before 09:15 and log in (password + TOTP) - `auto_login.py` catches the redirect, no copy-paste. The real-money Kite app needs the Redirect URL `http://127.0.0.1:5000/callback` too.
 4. **Emergency stop:** double-click **`stop_all.bat`** - every bot sells what it holds and stops for the day. The same happens automatically when all bots together have lost 50% of the morning money.
 
-Every order is intraday (MIS), and the stop-loss sits at Zerodha as an SL order, so a position stays protected if the laptop sleeps. Real trades are recorded in `history\live\trades.csv` and sent to Telegram if configured. One bot by hand: `py src\sniper_live.py --market NIFTY --real` (same for `hlc_live.py`).
+Every order is intraday (MIS): if the laptop dies, Zerodha squares positions off itself near the close. Stops that count on a touch (HLC premium SL, profit lock, trailing SL) rest at Zerodha as SL orders; stops that count only on a candle close (every Sniper SL/TSL, HLC index SL, U/V SLs) can't, so the bot sells at the close as in paper - keep the laptop awake. Real trades are recorded in `history\live\trades.csv` and sent to Telegram if configured. One bot by hand: `py src\sniper_live.py --market NIFTY --real` (same for `hlc_live.py`).
 
 ## HLC bot
 

@@ -216,9 +216,9 @@ def test_full_day_watch_loop_with_fake_clock(monkeypatch, tmp_path):
     assert seen_future  # the fake did serve forming candles, and they were skipped
     assert clock.now.time() < sniper_live.time(15, 5)
     log = (tmp_path / "log_2026-09-29.txt").read_text(encoding="utf-8")
-    assert "WOULD BUY 325 x NIFTY26092923100PE at 103.00" in log
-    assert "WOULD EXIT 325 x NIFTY26092923100PE at 144.00 - TARGET" in log
-    assert "Rs +13,325" in log  # 41 points x 325 qty
+    assert "WOULD BUY 260 x NIFTY26092923100PE at 103.00" in log
+    assert "WOULD EXIT 260 x NIFTY26092923100PE at 144.00 - TARGET" in log
+    assert "Rs +10,660" in log  # 41 points x 260 qty (owner 12-10)
     assert "catch-up" not in log
 
 
@@ -261,11 +261,42 @@ def test_real_mode_gets_the_engine_orders_and_trade(monkeypatch, tmp_path):
     pe = "NIFTY26092923100PE"
     want, triggers = seen["09:25"]
     assert want is None
+    # Sniper SLs count only on a candle close (owner 06-10/12-10) -> no stop for the executor, the engine exits
     assert [(t.symbol, t.kind, t.level, t.stop, t.target) for t in triggers] == [
-        (pe, "limit", 100, 81, 144), (pe, "stop", 121, 100, 169)]
+        (pe, "limit", 100, None, 144), (pe, "stop", 121, None, 169)]
     want, triggers = seen["09:30"]
-    assert (want.symbol, want.entry.strftime("%H:%M"), want.stop, want.target, want.late) == (pe, "09:30", 81, 144, False)
+    assert (want.symbol, want.entry.strftime("%H:%M"), want.stop, want.target, want.late) == (pe, "09:30", None, 144, False)
     assert triggers == []
+
+
+@pytest.mark.ride
+def test_sniper_wants_entry_types_and_buyers_day():
+    """Body entry: limit only (never chases); U/V: a plain limit at its Fib level, target 2 squares up from the
+    price's square; buyer's day: no target (the engine rides with the TSL); wick stops (sl_on_close=False) are
+    handed over as stops."""
+    from sniper_engine import _Pending
+    from sniper_signal import TradeSetup, square_levels
+
+    row = _row()
+    contracts = sniper_live.plan_contracts(row, FakeKite_options())
+    engine = SniperDay(TODAY, row)
+    setup = next(s for s in engine.setups if s.half == "first" and s.buy_type == "PE")
+    uv_setup = TradeSetup("first", "down", "CE", row.atm_strike, "PE", square_levels(131.11), contract="atm_pe")
+    engine.pending = [_Pending(setup, 10, 101.9, limit_only=True), _Pending(uv_setup, 11, 140, limit_price=131.11)]
+    _, triggers = sniper_live.sniper_wants(engine, contracts)
+    atm_pe = contracts["atm_pe"]["tradingsymbol"]
+    assert [(t.symbol, t.kind, t.level, t.target) for t in triggers] == [
+        ("NIFTY26092923100PE", "limit", 100, 144), (atm_pe, "limit", 131.11, 169)]
+
+    engine.buyers_day = True
+    engine.pending = [_Pending(setup, 10, 101.9)]
+    _, triggers = sniper_live.sniper_wants(engine, contracts)
+    assert [t.target for t in triggers] == [None, None]
+
+    wick = SniperDay(TODAY, row, sl_on_close=False)
+    wick.pending = [_Pending(setup, 10, 101.9)]
+    _, triggers = sniper_live.sniper_wants(wick, contracts)
+    assert [t.stop for t in triggers] == [81, 100]
 
 
 def test_watch_survives_a_data_fetch_error(monkeypatch, tmp_path):

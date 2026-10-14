@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>All 4 Bots</title>
+<style>
+  :root { --bg: #f4f5f7; --card: #ffffff; --text: #1f2328; --muted: #6b7280; --line: #d9dde3; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111418; --card: #1a1f25; --text: #e6e8eb; --muted: #9aa3ad; --line: #2c333b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+  header { padding: 10px 16px; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  h1 { font-size: 18px; margin: 0; }
+  .note { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 10px 10px; height: calc(100vh - 52px); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; }
+  .card a { padding: 6px 10px; font-weight: 600; font-size: 14px; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--line); }
+  .card a span { color: var(--muted); font-weight: 400; }
+  iframe { flex: 1; width: 100%; border: 0; border-radius: 0 0 8px 8px; min-height: 0; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; height: auto; } iframe { height: 80vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Paper bots — all 4</h1>
+  <span class="note">PAPER MODE · no real orders · each panel refreshes itself · click a title to open it full size</span>
+</header>
+<div class="grid">
+  <div class="card"><a href="http://127.0.0.1:8050" target="_blank">Sniper NIFTY <span>:8050</span></a><iframe src="http://127.0.0.1:8050" title="Sniper NIFTY"></iframe></div>
+  <div class="card"><a href="http://127.0.0.1:8051" target="_blank">Sniper SENSEX <span>:8051</span></a><iframe src="http://127.0.0.1:8051" title="Sniper SENSEX"></iframe></div>
+  <div class="card"><a href="http://127.0.0.1:8052" target="_blank">HLC NIFTY <span>:8052</span></a><iframe src="http://127.0.0.1:8052" title="HLC NIFTY"></iframe></div>
+  <div class="card"><a href="http://127.0.0.1:8053" target="_blank">HLC SENSEX <span>:8053</span></a><iframe src="http://127.0.0.1:8053" title="HLC SENSEX"></iframe></div>
+</div>
+</body>
+</html>

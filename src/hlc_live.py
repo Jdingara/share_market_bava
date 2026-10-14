@@ -27,10 +27,12 @@ from dashboard import start_dashboard
 from hlc_engine import HlcDay, HlcTrade
 from hlc_history import HLC_HISTORY_DIR, record_hlc_day
 from hlc_signal import HLC_MARKETS, Candle, HlcLevels, choose_atm, hlc_levels, leg_label
+from keep_awake import keep_awake
+from sizing import CapitalLedger
 from kite_auth import PROJECT_ROOT, connected_client
 from live_executor import Trigger, Want, confirm_real_mode, make_executor
 from live_money import lot_cost
-from sniper_live import (CANDLE_MINUTES, MARKET_OPEN, Notifier, OptionChain, _historical, _keep_dashboard_open,
+from sniper_live import (CANDLE_MINUTES, MARKET_OPEN, OUT_DIR, Notifier, OptionChain, _historical, _keep_dashboard_open,
                          _naive, _next_poll, _sleep_until, wait_for_closing_prices)
 from sniper_signal import MARKETS
 
@@ -141,10 +143,13 @@ def _series(rows: list[dict]) -> dict[datetime, Candle]:
     return {_naive(r["date"]): Candle(r["open"], r["high"], r["low"], r["close"]) for r in rows}
 
 
-def _strikes_to_watch(levels: HlcLevels, step: int, index_price: float) -> set[float]:
-    """The morning ATM, plus the round strikes around the market (needed on a big-gap day)."""
-    nearest = round(index_price / step) * step
-    return {float(levels.atm)} | {float(nearest + i * step) for i in (-1, 0, 1)}
+def _strikes_to_watch(levels: HlcLevels, step: int, index_rows: list[dict]) -> set[float]:
+    """The morning ATM plus every round strike the index has been near today (a big-gap day trades the strike
+    nearest the market, and an open trade's strike must keep being fetched after the index moves away -
+    05-10 SENSEX: 72600 PE bought at 09:50 stopped being fetched, so its Close target at 12:00 was missed)."""
+    lo = int(min(r["low"] for r in index_rows) // step - 1) * step
+    hi = int(max(r["high"] for r in index_rows) // step + 2) * step
+    return {float(levels.atm)} | {float(s) for s in range(lo, hi + step, step)}
 
 
 def feed(engine: HlcDay, index_rows: list[dict], premiums: dict[tuple[float, str], dict[datetime, Candle]],
@@ -160,6 +165,13 @@ def feed(engine: HlcDay, index_rows: list[dict], premiums: dict[tuple[float, str
         index = Candle(row["open"], row["high"], row["low"], row["close"])
         chain_now = {key: series[when] for key, series in premiums.items() if when in series}
         events = engine.on_candle(when, index, chain_now)
+        stop = OUT_DIR / f"close_hlc_{engine.market.name}_{engine.day.isoformat()}.flag"
+        if not engine.done and stop.exists() and when + timedelta(minutes=CANDLE_MINUTES) >= datetime.fromtimestamp(stop.stat().st_mtime):
+            # Owner's own call (13-10 "today close the trade"): close at this candle's close, no more trades today
+            events += engine.close_now(when, chain_now, "closed on the owner's call - no more trades today")
+            events.append("Closed for the day on the owner's call")
+            engine.done = True
+        engine.sync_capital()
         if state:
             state.add_candle(when, index, chain_now.get((engine.levels.atm, "CE")), chain_now.get((engine.levels.atm, "PE")))
         late = late_before is not None and when + timedelta(minutes=CANDLE_MINUTES) < late_before
@@ -179,7 +191,7 @@ def _fetch(kite, chain: OptionChain, market_name: str, levels: HlcLevels, start:
         return index_rows, {}
     step = HLC_MARKETS[market_name].strike_step
     premiums = {}
-    for strike in _strikes_to_watch(levels, step, index_rows[-1]["close"]):
+    for strike in _strikes_to_watch(levels, step, index_rows):
         for option_type in ("CE", "PE"):
             contract = chain.by_key.get((strike, option_type))
             if contract:
@@ -214,8 +226,11 @@ def first_swing(kite, market_name: str, day: date) -> Optional[str]:
 
 
 def hlc_wants(engine: HlcDay, chain: OptionChain, started: datetime) -> tuple[Optional[Want], list[Trigger]]:
-    """--real: what the engine holds and the buy it is waiting for, for live_executor. HLC exits at candle
-    closes (levels, premium highs, index SL), so only a premium SL rests at Zerodha and no target is watched."""
+    """--real: what the engine holds and the buys it is waiting for, for live_executor.
+
+    Exits on a TOUCH are handed over: the premium SL, the profit-lock level and the trailing SL (resting SL order
+    at Zerodha), and the U/V / PROFIT BOOKING targets (sold in real time). Everything judged on a candle close
+    (index SL, levels, premium highs, the U/V SL, reversal exits) stays with the engine."""
     def symbol(strike: float, side: str) -> Optional[str]:
         contract = chain.by_key.get((float(strike), side))
         return contract["tradingsymbol"] if contract else None
@@ -224,12 +239,25 @@ def hlc_wants(engine: HlcDay, chain: OptionChain, started: datetime) -> tuple[Op
     trade = engine.open_trade
     if trade is not None and symbol(trade.strike, trade.side):
         entry = datetime.fromisoformat(trade.entry_time)
-        want = Want(symbol(trade.strike, trade.side), entry, trade.sl_premium if trade.index_sl is None else None, None,
+        stops = []
+        if trade.uv is None and trade.index_sl is None:
+            stops.append(trade.sl_premium)
+        if trade.lock_level:
+            stops.append(trade.lock_level)
+        trail = engine.market.big_gap_trail
+        if not engine.market.profit_lock_step and trade.premium_high >= trade.entry_fill + trail:
+            stops.append(trade.premium_high - trail)
+        target = trade.uv["target"] if trade.uv else trade.pb_target
+        want = Want(symbol(trade.strike, trade.side), entry, max(stops) if stops else None,
+                    float(target) if target is not None else None,
                     late=entry + timedelta(minutes=CANDLE_MINUTES) < started)
     triggers = []
     order = engine.pending  # low premium: buy only above the confirmation candle's high, on the next candle
     if order is not None and symbol(order["strike"], order["side"]):
         triggers.append(Trigger(symbol(order["strike"], order["side"]), "stop", order["stop"], order["sl"], None))
+    order = engine.trend_order  # TREND: limit at the confirmation candle's Fib 0.618 (SL set by the engine on the fill)
+    if order is not None and symbol(order["strike"], order["side"]):
+        triggers.append(Trigger(symbol(order["strike"], order["side"]), "limit", order["limit"], None, None))
     return want, triggers
 
 
@@ -248,9 +276,12 @@ def live(market_name: str, open_browser: bool, real: bool = False) -> None:
     if open_browser:
         webbrowser.open(url)
     notify = Notifier(day, state, prefix=f"HLC_{market_name}_log")
-    notify.send(f"HLC bot started ({market_name}, {market.quantity} qty)"
-                + (" - REAL MONEY MODE: real Zerodha orders, lots sized from the morning money." if real
-                   else " - PAPER MODE, no real orders."), phone=real)
+    if real:
+        notify.send(f"HLC bot started ({market_name}) - REAL MONEY MODE: real Zerodha orders, lots sized from the "
+                    "morning money.", phone=True)
+    else:
+        notify.send(f"HLC bot started ({market_name}, qty per trade: up to Rs {market.allocation:,.0f}, loss limit "
+                    f"Rs {market.max_loss:,.0f}) - PAPER MODE, no real orders.", phone=False)
 
     wait_for_closing_prices(market_name, state.set_status)
     state.set_status("Building the morning plan from yesterday's closing prices...")
@@ -262,6 +293,9 @@ def live(market_name: str, open_browser: bool, real: bool = False) -> None:
                 + "  ".join(f"{n} {v:g}" for n, v in reversed(levels.ladder())) + "\n  " + "\n  ".join(info_lines(levels, yesterday)))
 
     engine = HlcDay(day, levels, market, yesterday)
+    engine.expiry_day = chain.expiry == day  # owner 13-10: expiry-day PANIC-side U/V trade
+    engine.capital = CapitalLedger(OUT_DIR / f"capital_{day.isoformat()}.json", f"hlc_{market_name}")  # owner 12-10
+    engine.capital.release()
     for side in ("CE", "PE"):
         try:
             engine.daily_highs[side] = daily_highs(kite, chain, levels.atm, side, day)
@@ -328,8 +362,9 @@ def live(market_name: str, open_browser: bool, real: bool = False) -> None:
     record(status)
     total = sum(t.pnl_points for t in engine.trades if t.exit_reason)
     state.set_engine(engine)
-    state.set_status(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {total * market.quantity:+,.0f}")
-    notify.send(f"HLC day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {total * market.quantity:+,.0f}")
+    rupees = sum(t.pnl_points * (t.qty or market.quantity) for t in engine.trades if t.exit_reason)
+    state.set_status(f"Day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {rupees:+,.0f}")
+    notify.send(f"HLC day finished: {len(engine.trades)} paper trade(s), P&L {total:+.2f} points = Rs {rupees:+,.0f}")
     _keep_dashboard_open(url)
 
 
@@ -363,6 +398,7 @@ def replay(day: date, market_name: str, record: bool = False, dashboard: bool = 
                 premiums[(strike, option_type)] = _series(_historical(kite, contract["instrument_token"], start, end, "5minute"))
 
     engine = HlcDay(day, lv, market, yesterday)
+    engine.expiry_day = chain.expiry == day
     for side in ("CE", "PE"):
         engine.daily_highs[side] = daily_highs(kite, chain, lv.atm, side, day)
     engine.first_swing = first_swing(kite, market_name, day)
@@ -377,8 +413,9 @@ def replay(day: date, market_name: str, record: bool = False, dashboard: bool = 
         if state:
             state.log(event)
     total = sum(t.pnl_points for t in engine.trades if t.exit_reason)
-    summary = (f"{len(engine.trades)} trade(s), {total:+.2f} points = Rs {total * market.quantity:+,.0f} "
-               f"({market.quantity} qty, paper, before charges)")
+    rupees = sum(t.pnl_points * (t.qty or market.quantity) for t in engine.trades if t.exit_reason)
+    summary = (f"{len(engine.trades)} trade(s), {total:+.2f} points = Rs {rupees:+,.0f} "
+               f"(qty per trade: {', '.join(str(t.qty or market.quantity) for t in engine.trades) or '-'}; paper, before charges)")
     print("\n" + summary)
     if record:
         record_hlc_day(day, market_name, lv, yesterday, engine.big_gap, engine.trades, market.quantity, "replayed",
@@ -408,6 +445,7 @@ def main() -> None:
         if args.replay:
             raise SystemExit("--real can't be combined with --replay")
         confirm_real_mode()
+    keep_awake()  # don't let Windows sleep while the bot runs (07-10 laptop slept mid-day)
     if args.replay:
         replay(date.fromisoformat(args.replay), args.market, args.record, args.dashboard)
     else:

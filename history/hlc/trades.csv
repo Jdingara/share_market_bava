@@ -11,3 +11,27 @@ date,market,kind,side,strike,pattern,qty,entry_time,entry_fill,sl,sl_rule,exit_t
 2026-10-01,SENSEX,CONFIRM,PE,72500,"index in Fib 0.75-0.786 zone 72384.66-72394.12, PE Doji",300,10:35,200.8,150.8,50 points,12:10,337.25,TARGET premium high 358,136.45,40935
 2026-10-01,SENSEX,FIB,PE,72500,first candle 0.75 at 72253.30,300,12:10,337.25,0.0,index above first high 72450.3,12:40,573.25,TARGET S2 71988.4,236.0,70800
 2026-10-01,SENSEX,BREAKOUT,PE,72500,index closed beyond S2 71988.4,300,12:40,573.25,523.25,50 points,12:50,807.05,TARGET S3 71709.4,233.8,70140
+2026-10-05,NIFTY,REVERSAL,PE,22450,"index Hanging Man at R1, PE Inverted Hammer",325,09:35,41.55,16.55,25 points,12:00,86.6,TARGET Close 22422,45.05,14641
+2026-10-05,SENSEX,REVERSAL,PE,72100,"index Bearish Harami at R1, PE Bullish Harami",300,09:50,259.5,209.5,50 points,12:00,471.85,TARGET Close 71909.7,212.35,63705
+2026-10-06,NIFTY,FIB,CE,22550,first candle 0.75 at 22611.47,325,09:30,99.9,0.0,index below first low 22561.6,10:05,107,closed back across R1 22632.6,7.1,2308
+2026-10-06,NIFTY,REVERSAL,PE,22550,"index Spinning Top at R2, PE Bullish Harami",325,13:20,6.15,5.35,2-candle low,13:35,5.35,SL (2-candle low),-0.8,-260
+2026-10-06,SENSEX,FIB,CE,72300,first candle 0.75 at 72541.87,300,09:30,569.1,0.0,index below first low 72384.8,12:10,697.05,closed back across R1 72779.9,127.95,38385
+2026-10-07,NIFTY,REVERSAL,CE,22750,"index Spinning Top at S1, CE Bullish Engulfing",325,09:25,97.95,72.95,25 points,13:10,72.95,SL (25 points),-25.0,-8125
+2026-10-07,NIFTY,REVERSAL,CE,22750,"index Bullish Harami at S1, CE Bullish Harami",325,14:40,85.65,60.65,25 points,14:55,74.7,15:00 exit,-10.95,-3559
+2026-10-07,SENSEX,REVERSAL,CE,73000,"index Bullish Engulfing at S1, CE Bullish Engulfing",300,10:15,201.6,151.6,50 points,12:55,151.6,SL (50 points),-50.0,-15000
+2026-10-07,SENSEX,REVERSAL,CE,73000,"index Doji at S1, CE Doji",300,13:35,111.05,61.05,50 points,14:55,83.9,15:00 exit,-27.15,-8145
+2026-10-08,NIFTY,TREND,PE,22600,PE retest of its first 15-min close 193.05,325,09:40,193.05,168.05,25 points,09:45,208.95,TARGET S1 22458.3,15.9,5168
+2026-10-08,NIFTY,TREND,PE,22600,"PE Inverted Hammer, retest 200.2, Fib 0.618 205.41",325,09:55,205.41,180.41,25 points,10:25,209.6,closed back across S1 22458.3,4.19,1362
+2026-10-08,NIFTY,TREND,PE,22600,"PE Inverted Hammer, retest 208.5, Fib 0.618 217.97",325,10:35,217.97,192.97,25 points,13:35,334.8,trailing SL 334.80 (50 below the high 384.8),116.83,37970
+2026-10-08,SENSEX,TREND,PE,72500,PE retest of its first 15-min close 307.2,300,09:35,307.2,257.2,50 points,10:00,317.2,closed back across S1 72285.2,10.0,3000
+2026-10-08,SENSEX,TREND,PE,72500,"PE Inverted Hammer, retest 317.6, Fib 0.618 334.16",300,10:00,332.45,282.45,50 points,10:10,282.45,SL (50 points),-50.0,-15000
+2026-10-08,SENSEX,TREND,PE,72500,PE retest of its first 15-min close 307.2,300,10:10,307.2,257.2,50 points,10:45,344,trailing SL 344.00 (100 below the high 444),36.8,11040
+2026-10-08,SENSEX,TREND,PE,72500,"PE Bullish Engulfing, retest 335.85, Fib 0.618 350.94",300,11:00,350.94,300.94,50 points,11:30,569.15,trailing SL 569.15 (100 below the high 669.15),218.21,65463
+2026-10-09,NIFTY,BREAK,CE,22250,CE closed 223 above its first 5-min high 221.4,325,09:25,223,198,25 points,11:15,333.95,TARGET R2 22529.5,110.95,36059
+2026-10-09,NIFTY,TREND,CE,22250,"CE Bullish Engulfing, retest 299.05, Fib 0.618 303.52",325,11:40,303.52,278.52,25 points,11:50,278.52,SL (25 points),-25.0,-8125
+2026-10-09,SENSEX,BREAK,CE,71600,CE closed 882.45 above its first 5-min high 859,160,09:25,882.45,832.45,50 points,11:30,1138.25,trailing SL 1138.25 (100 below the high 1238.25),255.8,40928
+2026-10-12,NIFTY,RETEST,PE,22550,index retested the close 22520.5 and closed below it again,325,09:50,134.2,95.65,previous candle low - 1,14:10,227.9,TARGET S2 22345.5,93.7,30452
+2026-10-12,SENSEX,RETEST,PE,72600,index retested the close 72472.3 and closed below it again,160,09:30,529.3,427.4,previous candle low - 1,11:10,884.42,TARGET Fib 0.786 of yesterday's close-high 884.42,355.12,56819
+2026-10-13,NIFTY,LEVEL,CE,22350,"opened above the close, 15-min close 22471.4 beyond R1",390,09:25,157.1,138.85,Fib 0.618 of the previous low - 1,09:35,191.7,TARGET R2 22501.4,34.6,13494
+2026-10-13,SENSEX,LEVEL,CE,71800,"opened above the close, 15-min close 72301.1 beyond R1",140,09:25,788,720.95,Fib 0.618 of the previous low - 1,10:10,988.0,"profit lock +200 - a later candle had closed above 988, so the SL was locked there; candle 10:10 came back to it",200.0,28000
+2026-10-13,SENSEX,PM REVERSAL,CE,71800,"12:30+ entry: Bullish Engulfing reversal, green confirmation closed 934.2",100,12:30,934.2,846.5,reversal low 847.5 - 1,14:55,1350,15:00 exit,415.8,41580

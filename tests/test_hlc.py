@@ -1,7 +1,8 @@
 """HLC strategy: the owner's 29-09 sheet, ATM choice, labels, patterns, and the engine's trade flow."""
 
+import dataclasses
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 
 import pytest
@@ -15,8 +16,8 @@ from hlc_signal import (HLC_MARKETS, Candle, bearish_pattern, bullish_pattern, c
 
 def test_levels_match_owners_sheet():
     n = hlc_levels(22780.25, 22800, 84.20, 71.45)
-    assert (n.r1, n.r2, n.r3) == (22884.20, 22955.65, 23039.85)
-    assert (n.s1, n.s2, n.s3) == (22728.55, 22644.35, 22572.90)
+    assert (n.r1, n.r2, n.r3) == (22884.20, 22955.65, 23039.85)  # owner 13-10: R3 = R2 + CE (the sheet)
+    assert (n.s1, n.s2, n.s3) == (22728.55, 22644.35, 22572.90)  # S3 = S2 - PE
     s = hlc_levels(72771.72, 72900, 444.20, 402.10)
     assert (s.r1, s.r2, s.r3) == (73344.20, 73746.30, 74190.50)
     assert (s.s1, s.s2, s.s3) == (72497.90, 72053.70, 71651.60)
@@ -85,6 +86,7 @@ def test_fib_level_follows_the_swing_not_the_side_01_10_sensex():
     # CE: a plain red candle - no CE pattern (the real day had CE blocked by the PE PANIC anyway)
     chain = {(72500.0, "CE"): Candle(250, 251, 240, 241), (72500.0, "PE"): Candle(320, 325, 315, 320)}
     day = HlcDay(date(2026, 10, 1), levels, HLC_MARKETS["SENSEX"])
+    day.close_retest_done = True  # keep the 12-10 RETEST entry out of this test
     day.first_swing = "CE"
     candles = [("09:15", (72192.89, 72450.34, 72187.62, 72349.74)), ("09:20", (72342.87, 72374.04, 72223.99, 72239.26)),
                ("09:25", (72227.62, 72323.65, 72224.33, 72316.99)), ("09:30", (72317.48, 72437.65, 72310.38, 72310.38)),
@@ -132,16 +134,17 @@ def test_pe_fib_trade_trails_through_s1():
 
 def test_big_gap_uses_the_strike_near_the_market_and_exits_when_the_pattern_turns():
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, R2 22955.65
+    day.level_break_done = True  # keep the 13-10 15-min R1/S1 break out of this test
     chain = lambda ce: {(22950.0, "CE"): Candle(*ce), (22950.0, "PE"): Candle(40, 42, 38, 40),
                         (22800.0, "CE"): Candle(150, 155, 148, 150), (22800.0, "PE"): Candle(5, 6, 4, 5)}
-    day.first_swing = "CE"  # up swing -> level 22941.46
-    day.on_candle(_at("09:15"), Candle(22950, 22960, 22930, 22940), chain((60, 62, 55, 58)))  # opens 170 above
+    day.first_swing = "CE"  # up swing -> level 22947.5
+    day.on_candle(_at("09:15"), Candle(22960, 22970, 22940, 22950), chain((60, 62, 55, 58)))  # opens above R2
     day.on_candle(_at("09:20"), Candle(22940, 22945, 22935, 22944), chain((58, 60, 57, 59)))
     day.on_candle(_at("09:25"), Candle(22944, 22946, 22943, 22945), chain((59, 61, 57, 60)))
-    events = day.on_candle(_at("09:30"), Candle(22944, 22946, 22936, 22942), chain((59, 61, 57, 60)))  # dips below 22941.46
+    events = day.on_candle(_at("09:30"), Candle(22944, 22946, 22936, 22942), chain((59, 61, 57, 60)))  # dips below 22947.5
     assert day.big_gap and events[0].startswith("BUY CE 22950 at 60.00 (FIB")
     day.on_candle(_at("09:35"), Candle(22942, 22950, 22941, 22949), chain((60, 66, 59, 65)))
-    events = day.on_candle(_at("09:40"), Candle(22950, 22951, 22935, 22938), chain((65, 66, 58, 59)))  # bearish engulfing
+    events = day.on_candle(_at("09:40"), Candle(22950, 22951, 22941, 22941.5), chain((65, 66, 58, 59)))  # bearish engulfing, above the first low
     assert "pattern turned: index Bearish Engulfing" in events[0]
 
 
@@ -152,7 +155,8 @@ def test_small_gap_keeps_the_morning_atm():
 
 
 def _low_premium_day():
-    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    # The 29-09 S3 reversal happened at the sheet's S3 22572.90 (S2 - PE, before the owner's 07-10 change).
+    day = HlcDay(date(2026, 9, 29), dataclasses.replace(LEVELS, s3=22572.90), HLC_MARKETS["NIFTY"])
     day.gap_done = True  # only the reversal is under test
     day.day_open = 22780.25
     return day
@@ -162,8 +166,12 @@ def _ce_chain(ce):
     return {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(200, 210, 195, 205)}
 
 
-def test_low_premium_before_1330_buys_above_the_confirmation_high():
+def test_low_premium_before_1330_buys_above_the_confirmation_high(monkeypatch):
     """29-09 10:15: CE 22800 at 10.00 (10 - 25 < 0) -> buy only if the next candle breaks 10.80; SL under 2 candles."""
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "R3_S3_FULL_PROFIT", False)  # tests other rules at the 29-09 S3
+    import hlc_engine
+    monkeypatch.setattr(hlc_engine, "SWING_LOW_SL", False)  # the 29-09 points SL (replaced 12-10)
     day = _low_premium_day()
     day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
     events = day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
@@ -174,7 +182,11 @@ def test_low_premium_before_1330_buys_above_the_confirmation_high():
     assert (t.entry_fill, t.sl_premium, t.sl_rule) == (10.8, 9.65, "2-candle low")
 
 
-def test_low_premium_order_not_triggered_is_cancelled():
+def test_low_premium_order_not_triggered_is_cancelled(monkeypatch):
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "R3_S3_FULL_PROFIT", False)  # tests other rules at the 29-09 S3
+    import hlc_engine
+    monkeypatch.setattr(hlc_engine, "SWING_LOW_SL", False)  # the 29-09 points SL (replaced 12-10)
     day = _low_premium_day()
     day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
     day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
@@ -182,7 +194,11 @@ def test_low_premium_order_not_triggered_is_cancelled():
     assert "cancelled - not triggered" in events[0] and day.trades == []
 
 
-def test_low_premium_from_1330_uses_the_day_low_minus_one():
+def test_low_premium_from_1330_uses_the_day_low_minus_one(monkeypatch):
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "R3_S3_FULL_PROFIT", False)  # tests other rules at the 29-09 S3
+    import hlc_engine
+    monkeypatch.setattr(hlc_engine, "SWING_LOW_SL", False)  # the 29-09 points SL (replaced 12-10)
     day = _low_premium_day()
     day.on_candle(_at("13:20"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
     events = day.on_candle(_at("13:25"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
@@ -190,21 +206,45 @@ def test_low_premium_from_1330_uses_the_day_low_minus_one():
     assert (day.open_trade.sl_premium, day.open_trade.sl_rule) == (8.65, "day low - 1")
 
 
-def test_panic_pe_above_yesterdays_high_blocks_ce_trades():
-    """29-09: 22800 PE was PANIC (H 94, L 8.4, C 71.45) and hit 133.90 at 09:15 -> no CE trade all day."""
+def test_every_trade_trails_50_below_the_premium_high_once_50_up(monkeypatch):
+    """Owner, 07-10: NIFTY 50 / SENSEX 100 points up -> trailing SL that far below the premium's high (not only on
+    big-gap days). CE bought 10.00 at 13:30 (SL 8.65); premium runs to 70 -> SL 20; comes back to 19.5 -> out at 20."""
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "R3_S3_FULL_PROFIT", False)  # tests other rules at the 29-09 S3
+    from dataclasses import replace
+    day = _low_premium_day()
+    day.market = replace(day.market, profit_lock_step=0)  # the 07-10 trailing (NIFTY uses the +50/+25 lock since 13-10)
+    day.on_candle(_at("13:20"), Candle(22583.8, 22586.8, 22571.5, 22578.8), _ce_chain((10.4, 10.9, 9.9, 10.3)))
+    day.on_candle(_at("13:25"), Candle(22578.5, 22591.5, 22575.1, 22585.6), _ce_chain((10.3, 10.8, 9.65, 10.0)))
+    flat = Candle(22585, 22590, 22580, 22586)  # index stays below S2 22644.35 - no level target
+    assert day.on_candle(_at("13:30"), flat, _ce_chain((10, 70, 10, 60))) == []
+    events = day.on_candle(_at("13:35"), flat, _ce_chain((60, 62, 19.5, 25)))
+    assert "trailing SL 20.00 (50 below the high 70)" in events[0]
+    assert (day.trades[0].exit_premium, day.trades[0].pnl_points) == (20, 10)
+
+
+def test_panic_pe_above_yesterdays_high_blocks_ce_trades(monkeypatch):
+    """29-09: 22800 PE was PANIC (H 94, L 8.4, C 71.45) and hit 133.90 at 09:15 -> no CE trade all day.
+    Switched off 12-10 (owner: both sides can trade); kept behind PANIC_BLOCK."""
+    import hlc_engine
+    monkeypatch.setattr(hlc_engine, "PANIC_BLOCK", True)
     yday = {"CE": (298.5, 77.05, 84.20), "PE": (94.0, 8.4, 71.45)}
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"], yday)
+    day.break_done = True  # keep the BREAK entry (owner 09-10) out of this test
     chain = lambda ce, pe: {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(*pe)}
     events = day.on_candle(_at("09:15"), Candle(22732.45, 22753, 22680, 22684), chain((26, 44, 25, 26.6), (77, 133.9, 76.5, 132)))
-    assert events == ["No CE trades today - PE PANIC yesterday and above its high 94 today"]
+    assert events == ["No CE trades today - PE PANIC yesterday and closed above its high 94 today"]
     day.gap_done = True
     day.on_candle(_at("10:10"), Candle(22583.8, 22586.8, 22571.5, 22578.8), chain((10.4, 10.9, 9.9, 10.3), (210, 215, 205, 212)))
     day.on_candle(_at("10:15"), Candle(22578.5, 22591.5, 22575.1, 22585.6), chain((10.3, 10.8, 9.65, 10.0), (212, 214, 208, 209)))
     assert day.trades == []  # the S3 Bullish Engulfing CE reversal is blocked
 
 
-def test_hlc_no_second_trade_after_a_winning_first_trade():
+def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit(monkeypatch):
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "SECOND_ENTRY_PM_REVERSAL", False)  # the older 4-a-day rule
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
+    day.level_break_done = True  # keep the 13-10 15-min R1/S1 break out of this test
     day.on_candle(_at("09:15"), Candle(22760, 22770, 22740, 22745), _chain((60, 62, 55, 58)))
     day.on_candle(_at("09:20"), Candle(22745, 22750, 22738, 22742), _chain((58, 60, 57, 59)))
     day.on_candle(_at("09:25"), Candle(22742, 22743, 22734, 22735), _chain((59, 60, 58, 59)))  # plain down candle
@@ -212,10 +252,20 @@ def test_hlc_no_second_trade_after_a_winning_first_trade():
     day.on_candle(_at("09:35"), Candle(22748, 22749, 22700, 22705), _chain((60, 75, 59, 74)))  # S1 broken -> trail
     day.on_candle(_at("09:40"), Candle(22705, 22706, 22640, 22650), _chain((74, 95, 73, 90)))  # S2 touched: final target
     assert day.trades[0].exit_reason.startswith("TARGET S2")
-    # A textbook S-level reversal afterwards must not open a second trade.
+    # Owner, 05-10: a second trade is allowed after a target (not a buyer's day) - owner 13-10: in the 12:30-15:00
+    # window (one entry in the morning, one in the afternoon)
+    calls = []
+    day._confirm_entry = lambda *a: calls.append(1)  # reaching the entry checks = the gate let it through
     day.on_candle(_at("09:45"), Candle(22650, 22655, 22640, 22642), _chain((90, 91, 85, 86)))
-    day.on_candle(_at("09:50"), Candle(22641, 22660, 22640, 22658), _chain((86, 92, 85, 91)))
-    assert len(day.trades) == 1
+    assert not calls  # the morning already had its entry
+    day.on_candle(_at("12:30"), Candle(22650, 22655, 22640, 22642), _chain((90, 91, 85, 86)))
+    assert calls
+    # ... up to the day's limit (owner 09-10: 2 on a normal day, 4 on a buyer's day), then no more
+    from hlc_engine import NORMAL_DAY_MAX_TRADES
+    day.trades.extend([day.trades[0]] * (NORMAL_DAY_MAX_TRADES - len(day.trades)))
+    calls.clear()
+    day.on_candle(_at("12:35"), Candle(22641, 22660, 22640, 22658), _chain((86, 92, 85, 91)))
+    assert not calls
 
 
 def test_confirm_trade_index_back_in_the_fib_zone_plus_premium_pattern():
@@ -223,6 +273,7 @@ def test_confirm_trade_index_back_in_the_fib_zone_plus_premium_pattern():
     0.75-0.786 zone (72384.66-72394.12) and the PE premium shows a bullish pattern -> buy, SL -50, S1 -> S2."""
     levels = hlc_levels(72480.3, 72500, 232.55, 279.0)
     day = HlcDay(date(2026, 10, 1), levels, HLC_MARKETS["SENSEX"])
+    day.close_retest_done = True  # keep the 12-10 RETEST entry out of this test
     day.first_swing = "CE"
     ce = Candle(250, 255, 245, 250)
     seq = [("09:15", (72192.89, 72450.34, 72187.62, 72349.74), (300, 305, 295, 300)),
@@ -235,7 +286,7 @@ def test_confirm_trade_index_back_in_the_fib_zone_plus_premium_pattern():
         events = day.on_candle(_at(t), Candle(*idx), {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(*pe)})
     assert events and events[-1].startswith("BUY PE 72500 at 248.00 (CONFIRM")
     t = day.open_trade
-    assert t.sl_premium == 198 and [n for n, _ in t.targets] == ["S1", "S2"]
+    assert t.sl_premium == 224 and [n for n, _ in t.targets] == ["S1", "S2"]  # owner 12-10: previous candle low 225 - 1
 
 
 def test_panic_side_premium_targets_staircase_of_earlier_daily_highs():
@@ -259,3 +310,245 @@ def test_reversal_patterns_include_inverted_hammer_piercing_shooting_star_dark_c
     assert bearish_pattern([Candle(100, 111, 99, 110), Candle(111, 112, 102, 103)])[0] == "Dark Cloud Cover"
     assert bullish_pattern([Candle(110, 111, 99, 100), Candle(99, 113, 98, 112)])[0] == "Bullish Engulfing"
     assert bearish_pattern([Candle(100, 111, 99, 110), Candle(111, 112, 97, 98)])[0] == "Bearish Engulfing"
+
+
+def test_reversal_at_r1_targets_beyond_r1_not_r1_itself():
+    """05-10 NIFTY: a PE reversal at R1 with the index a touch above R1 must target Close, not R1."""
+    from hlc_live import _strikes_to_watch
+    levels = hlc_levels(22422, 22450, 160.5, 120.3)  # R1 22582.5
+    day = HlcDay(date(2026, 10, 5), levels, HLC_MARKETS["NIFTY"])
+    assert [n for n, _ in day._targets("PE", 22582.5 - 0.01, "Close")] == ["Close"]
+    # every strike the index has been near today stays watched
+    rows = [{"low": 72100, "high": 72650}, {"low": 72200, "high": 72300}]
+    assert {72000.0, 72600.0, 72700.0} <= _strikes_to_watch(levels, 100, rows)
+
+
+def test_big_gap_only_when_opening_beyond_r2_or_s2():
+    """Owner, 05-10: 431 points up (SENSEX 72341 vs close 71910) is NOT a big gap - it opened below R2 73221.6."""
+    levels = hlc_levels(71909.7, 72100, 553.65, 568.0)
+    day = HlcDay(date(2026, 10, 5), levels, HLC_MARKETS["SENSEX"])
+    day.on_candle(_at("09:15"), Candle(72340.95, 72402.27, 72171.93, 72359.79), {})
+    assert not day.big_gap
+    day = HlcDay(date(2026, 10, 5), levels, HLC_MARKETS["SENSEX"])
+    day.on_candle(_at("09:15"), Candle(73300, 73350, 73250, 73320), {})
+    assert day.big_gap
+
+
+def test_big_gap_trade_trails_100_below_the_high_once_100_up():
+    """Owner, 05-10: big-gap day - no level targets; once the premium is 100 up (SENSEX), SL = high - 100."""
+    from hlc_engine import HlcTrade
+    levels = hlc_levels(71909.7, 72100, 553.65, 568.0)
+    from dataclasses import replace
+    day = HlcDay(date(2026, 10, 5), levels, replace(HLC_MARKETS["SENSEX"], profit_lock_step=0))  # old 100-below-high trailing
+    for t in ("09:15", "09:20", "09:25"):
+        day.index_history.append(Candle(73300, 73310, 73290, 73300))
+    trade = HlcTrade(date="2026-10-05", kind="FIB", side="CE", strike=73300, pattern="", entry_time="x",
+                     entry_fill=300, entry_index=73300, sl_premium=250, big_gap=True)
+    day.index_history.append(Candle(73290, 73300, 73289, 73299))
+    assert day._manage(trade, _at("09:30"), day.index_history[-1], Candle(300, 380, 299, 370), time(9, 35)) == []
+    assert day._manage(trade, _at("09:35"), Candle(73299, 73320, 73298, 73318), Candle(370, 450, 365, 440), time(9, 40)) == []
+    events = day._manage(trade, _at("09:40"), Candle(73318, 73330, 73317, 73329), Candle(440, 445, 340, 345), time(9, 45))
+    assert "trailing SL 350.00" in events[0] and trade.pnl_points == 50
+
+
+def test_no_ce_reversal_when_index_and_ce_are_both_below_their_closes():
+    """Owner, 08-10: SENSEX CE 72500 at 87.45 (close 262.90) with the index below 72638.7 -> PE day, no CE."""
+    levels = hlc_levels(72638.7, 72500, 262.9, 214.8)
+    day = HlcDay(date(2026, 10, 8), levels, HLC_MARKETS["SENSEX"], {"CE": (622.6, 232.6, 262.9), "PE": (335, 113.3, 214.8)})
+    assert day._against_the_day("CE", Candle(72280, 72290, 72270, 72279.9), Candle(80, 90, 79, 87.45))
+    assert not day._against_the_day("CE", Candle(72700, 72710, 72690, 72700), Candle(80, 90, 79, 87.45))
+    assert not day._against_the_day("CE", Candle(72280, 72290, 72270, 72279.9), Candle(270, 280, 265, 275))
+
+
+def test_trend_trade_retest_of_the_first_15_minute_close():
+    """Owner, 08-10: PE day - the PE's first 15-minute close (09:30) is 307.20; it closes above (349.55), then comes
+    back to 307.20 -> buy there."""
+    levels = hlc_levels(72638.7, 72500, 262.9, 214.8)
+    day = HlcDay(date(2026, 10, 8), levels, HLC_MARKETS["SENSEX"], {"CE": (622.6, 232.6, 262.9), "PE": (335, 113.3, 214.8)})
+    day.gap_done = True  # keep the FIB morning trade out of this test
+    day.break_done = True  # and the BREAK entry (owner 09-10)
+    day.level_break_done = True  # and the 15-min R1/S1 break (owner 13-10)
+    idx = Candle(72250, 72260, 72240, 72245)  # below the close
+    ce = Candle(90, 95, 85, 88)  # below its close 262.9 -> PE day
+    seq = [("09:15", Candle(216.95, 310.95, 216.9, 267.1)), ("09:20", Candle(267.1, 277.05, 225.5, 275.5)),
+           ("09:25", Candle(275.5, 347.9, 271.35, 307.2)), ("09:30", Candle(307.2, 322.7, 310, 315)),
+           ("09:35", Candle(315, 318.2, 310, 312.75)), ("09:40", Candle(312.75, 375.6, 310, 349.55)),
+           ("09:45", Candle(349.55, 398, 341.25, 344.1))]
+    for t, pe in seq:
+        assert not any(e.startswith("BUY") for e in day.on_candle(_at(t), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): pe})), t
+    assert day.first15_close["PE"] == 307.2 and "PE" in day.went_above
+    events = day.on_candle(_at("09:50"), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(344.25, 355, 277.8, 302.25)})
+    assert events[-1].startswith("BUY PE 72500 at 307.20 (TREND")
+
+
+def test_trend_trade_pattern_retest_fib_limit_fills_next_candle():
+    """Owner, 08-10: PE day - PE Bullish Engulfing, green retest of its low -> limit at the retest candle's Fib 0.618,
+    filled from the next candle only."""
+    levels = hlc_levels(72638.7, 72500, 262.9, 214.8)
+    day = HlcDay(date(2026, 10, 8), levels, HLC_MARKETS["SENSEX"], {"CE": (622.6, 232.6, 262.9), "PE": (335, 113.3, 214.8)})
+    day.gap_done = True  # keep the FIB morning trade out of this test
+    day.break_done = True  # and the BREAK entry (owner 09-10)
+    day.level_break_done = True  # and the 15-min R1/S1 break (owner 13-10)
+    idx = Candle(72250, 72260, 72240, 72245)  # below the close
+    ce = Candle(90, 95, 85, 88)  # below its close 262.9 -> PE day
+    seq = [("10:25", Candle(347.55, 351.4, 316.2, 331.85)), ("10:30", Candle(331.85, 414, 331.85, 368.95)),
+           ("10:35", Candle(368.95, 424.8, 350.3, 424.8)), ("10:40", Candle(428.35, 444, 371.2, 395.9)),
+           ("10:45", Candle(398, 402.2, 342.8, 346.65)), ("10:50", Candle(346.65, 375.35, 335.85, 359.75))]
+    for t, pe in seq:
+        assert not any(e.startswith("BUY") for e in day.on_candle(_at(t), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): pe}))
+    assert day.trend_order["limit"] == 350.94
+    events = day.on_candle(_at("10:55"), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(359.75, 397.5, 355, 387.7)})
+    assert not any(e.startswith("BUY") for e in events)  # low 355 > 350.94
+    events = day.on_candle(_at("11:00"), idx, {(72500.0, "CE"): ce, (72500.0, "PE"): Candle(387.7, 422.4, 347.55, 366.4)})
+    assert events[-1].startswith("BUY PE 72500 at 350.94 (TREND")
+
+
+def test_buyers_day_touch_of_a_level_is_not_an_exit():
+    """Owner, 12-10 (09-10 had it on normal days): a BUYER'S day rides - no target exit; a broken level moves the SL,
+    a touch doesn't exit."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    day.buyers_day = lambda: True
+    day.index_history = [Candle(22760, 22770, 22740, 22745)] * 3
+    trade = HlcTrade(date="2026-09-29", kind="TREND", side="PE", strike=22800, pattern="", entry_time="x",
+                     entry_fill=60, entry_index=22745, sl_premium=35, targets=[("S1", 22728.55), ("S2", 22644.35)])
+    assert day._manage(trade, _at("09:40"), Candle(22745, 22746, 22725, 22735), Candle(60, 70, 59, 66), time(9, 45)) == []
+    events = day._manage(trade, _at("09:45"), Candle(22735, 22736, 22700, 22705), Candle(66, 80, 65, 78), time(9, 50))
+    assert "S1 22728.5 broken" in events[0] and trade.exit_reason == ""
+
+
+def test_break_entry_first_close_above_the_first_5_minute_high_09_10_sensex():
+    """Owner, 09-10: CE day, 71600 CE first candle high 859; the 09:25 candle closes 882.45 -> buy 882.45."""
+    levels = hlc_levels(71593.2, 71600, 597.95, 599.95)
+    day = HlcDay(date(2026, 10, 9), levels, HLC_MARKETS["SENSEX"], {"CE": (1061.45, 575.15, 597.95), "PE": (641, 225.4, 599.95)})
+    day.gap_done = True
+    seq = [("09:15", Candle(71776.67, 72036.03, 71739.49, 71843.81), Candle(633.75, 859, 633.75, 780.7), Candle(420, 430, 400, 405.35)),
+           ("09:20", Candle(71853.62, 71941.08, 71821.24, 71824.92), Candle(780.7, 822, 774, 776.55), Candle(405, 415, 400, 411)),
+           ("09:25", Candle(71824.25, 72022.61, 71806.97, 72017.8), Candle(776.55, 882.45, 762.9, 882.45), Candle(411, 412, 335, 339.55))]
+    events = []
+    for t, idx, ce, pe in seq:
+        events = day.on_candle(_at(t), idx, {(71600.0, "CE"): ce, (71600.0, "PE"): pe})
+    assert events[-1].startswith("BUY CE 71600 at 882.45 (BREAK")
+
+
+def test_close_retest_entry_12_10_sensex():
+    """Owner, 12-10: index closed below the close (72472.3) at 09:20, the 09:25 candle retested it, the 09:30 candle
+    closed below again -> buy PE at that close."""
+    levels = hlc_levels(72472.3, 72600, 496.5, 459.9)
+    day = HlcDay(date(2026, 10, 12), levels, HLC_MARKETS["SENSEX"], {"CE": (611.25, 220.05, 496.5), "PE": (1000, 412.7, 459.9)})
+    day.gap_done = day.break_done = True
+    seq = [("09:15", Candle(72771.32, 72884.25, 72624.57, 72643.78), Candle(530, 696.15, 520, 567), Candle(400, 420, 370, 377.1)),
+           ("09:20", Candle(72639.34, 72667.13, 72392.22, 72423.04), Candle(567, 585, 455, 462.8), Candle(377, 510, 375, 507.75)),
+           ("09:25", Candle(72424.25, 72589.21, 72407.59, 72589.21), Candle(462.8, 512.05, 460, 510.45), Candle(507, 510, 425, 428.4)),
+           ("09:30", Candle(72590.31, 72609.71, 72447.31, 72447.31), Candle(510.45, 516.3, 418, 420), Candle(428.4, 532, 425, 529.3))]
+    events = []
+    for t, idx, ce, pe in seq:
+        events = day.on_candle(_at(t), idx, {(72600.0, "CE"): ce, (72600.0, "PE"): pe})
+    assert "PE" not in day.blocked  # the 09:15 CE spike to 696 closed 567, below 611.25 - no block
+    assert events[-1].startswith("BUY PE 72600 at 529.30 (RETEST")
+
+
+def test_profit_booking_side_exits_at_fib_0786_of_yesterdays_close_to_high():
+    """Owner, 12-10: NIFTY 22550 PE was PROFIT BOOKING (H 272.9, C 95.95) -> target 95.95 + 0.786 x 176.95 = 235.04."""
+    from hlc_engine import HlcTrade
+    levels = hlc_levels(22520.5, 22550, 108.5, 95.95)
+    day = HlcDay(date(2026, 10, 12), levels, HLC_MARKETS["NIFTY"], {"CE": (146.85, 44.35, 108.5), "PE": (272.9, 82.35, 95.95)})
+    trade = HlcTrade(date="2026-10-12", kind="RETEST", side="PE", strike=22550, pattern="", entry_time="x",
+                     entry_fill=101.5, entry_index=22535, sl_premium=76.5)
+    day._profit_booking_exits(trade)
+    assert trade.pb_target == pytest.approx(235.04, abs=0.01) and trade.pb_index[0] == "S2"
+    day.index_history = [Candle(22500, 22510, 22490, 22500)] * 3
+    events = day._manage(trade, _at("14:25"), Candle(22340, 22350, 22346, 22347), Candle(220, 243, 219, 240), time(14, 30))
+    assert "TARGET Fib 0.786" in events[0] and trade.exit_premium == pytest.approx(235.04, abs=0.01)
+
+
+def test_level_break_opened_above_close_15_min_close_above_r1():
+    """Owner, 13-10: index opened above yesterday's close and a 15-minute candle closed above R1 -> CE."""
+    levels = hlc_levels(22363.3, 22350, 65.80, 85.60)  # R1 22415.8
+    day = HlcDay(date(2026, 10, 13), levels, HLC_MARKETS["NIFTY"], {"CE": (330, 59, 65.8), "PE": (97.45, 15.1, 85.6)})
+    day.gap_done = day.break_done = day.close_retest_done = True
+    chain = {(22350.0, "CE"): Candle(150, 160, 145, 158), (22350.0, "PE"): Candle(60, 62, 55, 56)}
+    events = []
+    for t, idx in (("09:15", Candle(22380, 22400, 22375, 22398)), ("09:20", Candle(22398, 22410, 22395, 22405)),
+                   ("09:25", Candle(22405, 22425, 22400, 22420))):
+        events = day.on_candle(_at(t), idx, chain)
+    assert events[-1].startswith("BUY CE 22350 at 158.00 (LEVEL")
+
+
+def test_far_sl_moves_to_fib_0618_up_from_the_low():
+    """Owner, 13-10: SENSEX entry 788, previous low 614.10 (174 points > 100) -> SL 614.10 + 0.618 x 173.9 - 1."""
+    levels = hlc_levels(71924.7, 71800, 443.95, 429.9)
+    day = HlcDay(date(2026, 10, 13), levels, HLC_MARKETS["SENSEX"])
+    day.premium_history[(71800.0, "CE")] = [Candle(700, 720, 614.10, 700), Candle(700, 790, 690, 788)]
+    day.index_history = [Candle(72300, 72310, 72290, 72301)] * 3
+    day._enter("LEVEL", "CE", 71800.0, _at("09:25"), Candle(700, 790, 690, 788), Candle(72300, 72310, 72290, 72301), "x", "R3")
+    assert day.open_trade.sl_premium == pytest.approx(614.10 + 0.618 * 173.9 - 1, abs=0.01)
+
+
+def test_sensex_profit_lock_after_a_confirming_close():
+    """Owner, 13-10: SENSEX HLC rides to the target; +100 reached, a later candle closes above +100 -> SL entry + 100."""
+    from hlc_engine import HlcTrade
+    levels = hlc_levels(71924.7, 71800, 443.95, 429.9)
+    day = HlcDay(date(2026, 10, 13), levels, HLC_MARKETS["SENSEX"])
+    day.index_history = [Candle(72300, 72310, 72290, 72301)] * 3
+    trade = HlcTrade(date="2026-10-13", kind="LEVEL", side="CE", strike=71800, pattern="", entry_time="x",
+                     entry_fill=788, entry_index=72301, sl_premium=720.95, targets=[("R2", 72673.9)])
+    idx = Candle(72350, 72360, 72340, 72355)
+    day.index_history.append(idx)
+    assert day._manage(trade, _at("09:40"), idx, Candle(790, 905, 785, 880), time(9, 45)) == []  # +117 touched
+    assert trade.lock_level == 0
+    day.index_history.append(idx)
+    assert day._manage(trade, _at("09:45"), idx, Candle(880, 900, 870, 895), time(9, 50)) == []  # closes above 888
+    assert trade.lock_level == 888
+    day.index_history.append(idx)
+    events = day._manage(trade, _at("09:50"), idx, Candle(895, 896, 880, 885), time(9, 55))
+    assert "profit lock +100" in events[0] and trade.pnl_points == 100
+
+
+def test_expiry_day_panic_side_u_v_reversal_then_confirmation():
+    """Owner, 13-10: expiry day, CE PROFIT BOOKING / PE PANIC yesterday - the PE falls to a new low, a reversal candle
+    there, then a green confirmation candle -> buy the ATM PE; SL the square below, TSL the first square, exit 2 squares."""
+    yesterday = {"CE": (120.0, 60.0, 62.0), "PE": (100.0, 40.0, 98.0)}  # CE PROFIT BOOKING, PE PANIC
+    day = HlcDay(date(2026, 10, 13), LEVELS, HLC_MARKETS["NIFTY"], yesterday)
+    day.expiry_day = True
+    day.gap_done = True  # (no FIB first trade in this test)
+    index = Candle(22760, 22762, 22758, 22760)
+    pe = [(95, 96, 80, 82), (82, 83, 70, 72), (72, 73, 60, 61), (61, 62, 50, 61.5),  # falls, Hammer at the new low
+          (61.5, 70, 61, 69),                                                       # green confirmation -> buy 69
+          (69, 82, 68, 80), (80, 90, 79, 85), (85, 101, 84, 95)]
+    events = []
+    for i, p in enumerate(pe):
+        chain = {(22800.0, "CE"): Candle(20, 22, 18, 21), (22800.0, "PE"): Candle(*p)}
+        events += day.on_candle(_at(f"09:{15 + 5 * i:02d}"), index, chain)
+    t = day.trades[0]
+    assert t.kind == "EXPIRY U/V" and t.side == "PE" and t.entry_fill == 69 and "reversal" in t.pattern
+    assert t.exit_premium == 100 and t.exit_reason.startswith("2 square numbers reached")
+    assert any("TSL moves to 81" in e for e in events)
+
+
+def test_r3_touch_is_full_profit_no_more_trades():
+    """Owner, 13-10: NIFTY touched R3 -> full profit, no trade after that (SENSEX too)."""
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    assert not day.on_candle(_at("09:15"), Candle(22790, 22800, 22785, 22795), _chain((70, 72, 68, 71)))
+    events = day.on_candle(_at("09:20"), Candle(22795, LEVELS.r3 + 1, 22790, 23000), _chain((70, 72, 68, 71)))
+    assert day.done and events[0].startswith(f"index touched R3 {LEVELS.r3:g}")
+    assert day.on_candle(_at("09:25"), Candle(23000, 23010, 22990, 23005), _chain((70, 72, 68, 71))) == []
+
+
+def test_hlc_second_entry_only_from_1230_on_a_reversal():
+    """Owner, 13-10: after the morning trade, one more - from 12:30, reversal + green confirmation, SL reversal low - 1."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    day.trades.append(HlcTrade(date="2026-09-29", kind="LEVEL", side="PE", strike=22800, pattern="", entry_time="2026-09-29T09:30:00",
+                               entry_fill=60, entry_index=22770, sl_premium=50, exit_reason="TARGET", exit_premium=80))
+    index = Candle(22770, 22772, 22768, 22770)
+    seq = [("11:00", (60, 61, 50, 50.5)), ("11:05", (50.5, 51, 40, 50.8)),   # Hammer at 11:05
+           ("11:10", (50.8, 58, 50, 57)),                                   # green confirmation, but before 12:30
+           ("12:15", (57, 57.5, 45, 47)), ("12:20", (47, 47.5, 38, 47.2)),  # Hammer at 12:20, low 38
+           ("12:25", (47.2, 55, 46, 54))]                                   # green, closes 12:30 -> buy 54
+    events = []
+    for hhmm, pe in seq:
+        events += day.on_candle(_at(hhmm), index, _chain(pe))
+    assert len(day.trades) == 2
+    t = day.trades[1]
+    assert t.kind == "PM REVERSAL" and t.entry_fill == 54 and t.sl_premium == 37

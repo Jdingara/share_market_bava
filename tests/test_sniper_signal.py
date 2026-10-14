@@ -1,6 +1,7 @@
 """Unit tests for sniper_signal.py, anchored on PROJECT_STATUS.md §5's worked example."""
 
 import sys
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -103,8 +104,9 @@ def test_ce_fail_shifts_down():
 
 def test_both_fail_is_no_plan():
     plan = build_daily_plan(23100, NIFTY, _flat_premiums(10, 10, 23100))
-    assert plan.final is None
-    assert len(plan.attempts) == 1
+    assert not plan.attempts[0].ce_ok and not plan.attempts[0].pe_ok
+    # owner 12-10: no gap -> trade the nearest ATM itself (not the OTM)
+    assert plan.buy_atm and plan.final.atm_strike == 23100
 
 
 def test_gap_exactly_min_passes():
@@ -112,14 +114,30 @@ def test_gap_exactly_min_passes():
     assert plan.final is not None
 
 
-def test_sensex_keeps_the_nearest_atm_and_widens_the_otms_until_both_gaps_reach_40():
-    """Owner, 29-09: SENSEX ATM = nearest round strike; move the OTMs out until both gaps >= 40.
+def test_sensex_shifts_the_atm_with_otm_100_like_nifty():
+    """Owner, 07-10: SENSEX keeps OTM +-100 and shifts the ATM like NIFTY; no gap -> no plan. 29-09 closes:
+    ATM 72800 PE gap -22.62 -> shift up to 72900 (CE 444.20, PE 402.10; OTM 73000 CE 394.35 / 72800 PE 357.85
+    -> Sniper 376.10, gaps 68.10 / 26.00 - 26 < 40 and < 32) -> PE fails again -> 73000 ... until no plan."""
+    closes = {(72800, "CE"): 500.40, (72800, "PE"): 357.85, (72900, "CE"): 444.20, (72700, "PE"): 316.75,
+              (72900, "PE"): 402.10, (73000, "CE"): 394.35, (73000, "PE"): 449.95, (73100, "CE"): 345.95,
+              (73100, "PE"): 500.00, (73200, "CE"): 300.00, (73200, "PE"): 550.00, (73300, "CE"): 260.00}
+    plan = build_daily_plan(72771.72, replace(MARKETS["SENSEX"], widen_both_fallback=False),
+                            lambda k, t: closes.get((k, t), 1.0))
+    assert all(a.otm_ce_strike - a.atm_strike == 100 and a.atm_strike - a.otm_pe_strike == 100 for a in plan.attempts)
+    assert [a.atm_strike for a in plan.attempts][:2] == [72800, 72900]
+    # owner 08-10: with the widening fallback on, the +-100 shifts still come first
+    plan = build_daily_plan(72771.72, MARKETS["SENSEX"], lambda k, t: closes.get((k, t), 1.0))
+    assert [a.atm_strike for a in plan.attempts][:2] == [72800, 72900]
+
+
+def test_sensex_widening_kept_for_comparison():
+    """Owner, 29-09 (switched off 07-10): SENSEX ATM = nearest round strike; move the OTMs out until both gaps >= 40.
     29-09 closes (72771.72 -> ATM 72800): at +-100 the PE gap is -22.62; further strikes are cheaper."""
     closes = {(72800, "CE"): 500.40, (72800, "PE"): 357.85,
               (72900, "CE"): 444.20, (72700, "PE"): 316.75,  # +-100: Sniper 380.48 -> PE gap -22.62
               (73000, "CE"): 394.35, (72600, "PE"): 280.00,  # +-200: Sniper 337.18 -> PE gap 20.67
               (73100, "CE"): 345.95, (72500, "PE"): 247.00}  # +-300: Sniper 296.48 -> gaps 203.92 / 61.37
-    plan = build_daily_plan(72771.72, MARKETS["SENSEX"], _lookup(closes))
+    plan = build_daily_plan(72771.72, replace(MARKETS["SENSEX"], widen_otm=True), _lookup(closes))
     assert [a.otm_ce_strike - a.atm_strike for a in plan.attempts] == [100, 200, 300]
     assert all(a.atm_strike == 72800 for a in plan.attempts)
     assert (plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (73100, 72500)
@@ -127,7 +145,7 @@ def test_sensex_keeps_the_nearest_atm_and_widens_the_otms_until_both_gaps_reach_
 
 
 def test_nifty_still_shifts_the_atm():
-    assert not MARKETS["NIFTY"].widen_otm and MARKETS["SENSEX"].min_gap == 40
+    assert not MARKETS["NIFTY"].widen_otm and MARKETS["SENSEX"].min_gap == 27  # owner 12-10: 30, slightly less ok
 
 
 def test_nifty_moves_one_otm_out_when_the_shifts_oscillate():
@@ -135,8 +153,12 @@ def test_nifty_moves_one_otm_out_when_the_shifts_oscillate():
     then keep ATM 22600 and move the CE up or the PE down - both pass, the bigger smaller-gap wins."""
     closes = {(22600, "CE"): 164.50, (22600, "PE"): 114.65, (22700, "CE"): 113.15, (22500, "PE"): 77.50,
               (22700, "PE"): 163.35, (22800, "CE"): 74.55, (22400, "PE"): 52.10}
-    plan = build_daily_plan(22620.5, NIFTY, _lookup(closes))
-    assert [a.atm_strike for a in plan.attempts[:4]] == [22600, 22700, 22600, 22700]
+    # Owner, 05-10: the fallback was dropped for NIFTY ("only our trades") - 01-10 is now a no-plan day ...
+    plan = build_daily_plan(22620.5, NIFTY, lambda k, t: closes.get((k, t), 1.0))
+    assert plan.buy_atm and [a.atm_strike for a in plan.attempts[:3]] == [22600, 22700, 22500]  # owner 12-10: outward
+    # ... the fallback itself still works if switched back on
+    from dataclasses import replace
+    plan = build_daily_plan(22620.5, replace(NIFTY, widen_otm_fallback=True), lambda k, t: closes.get((k, t), 1.0))
     assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (22600, 22800, 22500)
     assert plan.final.sniper == pytest.approx(76.025)
     assert (plan.final.ce_gap, plan.final.pe_gap) == (pytest.approx(88.475), pytest.approx(38.625))
@@ -150,9 +172,8 @@ def test_max_three_shifts_then_no_plan():
         return 50.0
 
     plan = build_daily_plan(23100, NIFTY, lookup)
-    assert plan.final is None
-    assert [a.atm_strike for a in plan.attempts[:4]] == [23100, 23200, 23300, 23400]
-    assert len(plan.attempts) > 4
+    assert plan.buy_atm  # owner 12-10: shifts fail -> ATM trade
+    assert [a.atm_strike for a in plan.attempts[:4]] == [23100, 23200, 23000, 23300]  # owner 12-10: outward search
 
 
 @pytest.mark.parametrize(
@@ -184,8 +205,8 @@ def test_square_levels_rejects_non_positive():
         ("09:25", "first"),  # closes 09:30 - counts (owner, 2026-09-29)
         ("09:30", "first"),
         ("11:55", "first"),  # closes 12:00
-        ("12:00", "second"),  # closes 12:05 - second half starts right after 12:00 (owner)
-        ("12:20", "second"),
+        ("12:00", None),  # closes 12:05 - owner 13-10: the second half is 12:30-15:00 (was 12:05)
+        ("12:20", None),
         ("12:25", "second"),  # closes 12:30
         ("12:30", "second"),
         ("14:55", "second"),  # closes 15:00
@@ -207,3 +228,22 @@ def test_expiry_day_uses_same_day():
     assert next_weekly_expiry(tuesday, 1) == tuesday
     assert next_weekly_expiry(date(2026, 9, 28), 1) == tuesday
     assert next_weekly_expiry(date(2026, 9, 30), 1) == date(2026, 10, 6)
+
+
+def test_relaxed_gap_20_before_the_otm_fallback_05_10_nifty():
+    """Owner, 05-10: 25 first, then 20, then the OTM fallback. 01-10 closes: ATM 22500 passes at 20."""
+    closes = {(22400, "CE"): 161.50, (22400, "PE"): 99.30, (22500, "CE"): 106.90, (22300, "PE"): 66.00,
+              (22500, "PE"): 144.10, (22600, "CE"): 67.30}
+    plan = build_daily_plan(22422, NIFTY, _lookup(closes))
+    assert (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (22500, 22600, 22400)
+    assert plan.final.sniper == pytest.approx(83.30)  # owner 08-10: NIFTY minimum is simply 20
+
+
+def test_sensex_otm_stays_100_and_trades_the_atm_when_the_gap_fails():
+    """Owner, 12-10: no OTM widening - SENSEX shifts flip 72600 <-> 72500 (gaps 20.62 / 22.28 < 30) -> trade the
+    nearest ATM 72600 itself, Sniper from OTM +-100 (was: widen to +-200, 08-10)."""
+    closes = {(72600, "CE"): 211.30, (72600, "PE"): 262.05, (72700, "CE"): 166.55, (72500, "PE"): 214.80,
+              (72500, "CE"): 262.90, (72400, "PE"): 173.75, (72800, "CE"): 129.90}
+    plan = build_daily_plan(72638.7, MARKETS["SENSEX"], lambda k, t: closes.get((k, t), 1.0))
+    assert plan.buy_atm and (plan.final.atm_strike, plan.final.otm_ce_strike, plan.final.otm_pe_strike) == (72600, 72700, 72500)
+    assert plan.final.sniper == pytest.approx(190.675)

@@ -5,7 +5,7 @@ rem Emergency stop: double-click stop_all.bat (sells everything, no more trades 
 rem Dashboards: Sniper NIFTY :8050, Sniper SENSEX :8051, HLC NIFTY :8052, HLC SENSEX :8053
 cd /d "%~dp0"
 if exist STOP del STOP
-py src\kite_auth.py
+py src\auto_login.py
 if errorlevel 1 goto end
 start "Sniper SENSEX (REAL)" cmd /k py src\sniper_live.py --market SENSEX --no-browser --real
 start "HLC NIFTY (REAL)" cmd /k py src\hlc_live.py --market NIFTY --real

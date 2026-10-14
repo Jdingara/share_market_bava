@@ -3,12 +3,24 @@
 **Paper trades — no real orders.** Written automatically by the bot (`src/history.py`) after every entry/exit;
 don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. ₹ = points × qty, before brokerage and charges.
 
-**All days: 14 trade(s), +222.75 points, ₹+70,269**
+**All days: 34 trade(s), +1397.25 points, ₹+300,530**
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
-| 2026-10-05 | SENSEX | 71900 | 435.1 | 1 | +0.00 | ₹+0 | watching |
-| 2026-10-05 | NIFTY | 22400 | 66.65 | 0 | +0.00 | ₹+0 | watching |
+| 2026-10-13 | SENSEX | 71800 | 390.15 | 2 | +535.40 | ₹+77,770 | finished |
+| 2026-10-13 | NIFTY | 22300 | 37.85 | 1 | +44.15 | ₹+14,349 | finished |
+| 2026-10-12 | SENSEX | 72600 | 430.5 | 2 | +324.95 | ₹+51,992 | finished |
+| 2026-10-12 | NIFTY | 22600 | 60.2 | 2 | +86.75 | ₹+28,194 | finished |
+| 2026-10-09 | SENSEX | 71600 | 544.73 | 1 | +0.00 | ₹+0 | finished |
+| 2026-10-09 | NIFTY | 22200 | 98.55 | 2 | +60.00 | ₹+19,500 | finished |
+| 2026-10-08 | SENSEX | 72600 | 151.82 | 1 | +64.00 | ₹+19,200 | finished |
+| 2026-10-08 | NIFTY | 22600 | 92.88 | 2 | +116.00 | ₹+37,700 | finished |
+| 2026-10-07 | SENSEX | 73100 | 206.03 | 1 | +0.00 | ₹+0 | finished |
+| 2026-10-07 | NIFTY | 22700 | 110.33 | 3 | -20.75 | ₹-6,744 | finished |
+| 2026-10-06 | SENSEX | 72400 | 360.23 | 1 | +0.00 | ₹+0 | finished |
+| 2026-10-06 | NIFTY | no plan | – | 0 | +0.00 | ₹+0 | no plan |
+| 2026-10-05 | SENSEX | 71900 | 435.1 | 1 | +0.00 | ₹+0 | finished |
+| 2026-10-05 | NIFTY | 22400 | 66.65 | 2 | -36.00 | ₹-11,700 | finished |
 | 2026-10-01 | SENSEX | 72500 | 170.45 | 2 | +27.00 | ₹+8,100 | finished |
 | 2026-10-01 | NIFTY | 22600 | 76.03 | 3 | +71.00 | ₹+23,075 | finished |
 | 2026-09-30 | SENSEX | 72500 | 173.72 | 2 | +29.00 | ₹+8,700 | finished |
@@ -17,22 +29,156 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 | 2026-09-29 | NIFTY | 22800 | 39.58 | 2 | +29.00 | ₹+9,425 | finished |
 | 2026-09-28 | NIFTY | 23200 | 54.0 | 1 | +58.75 | ₹+19,094 | stopped early |
 
+## 2026-10-13 (Tue)
+
+### NIFTY — finished (last update 2026-10-13 15:00)
+
+- NIFTY close 22363.35 on 2026-10-12, expiry 2026-10-13, qty per trade.
+- Plan: ATM 22300 after 1 shift(s), Sniper 37.85.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O1322400CE | 09:30 (catch-up) ★ HIGH | 121.0 | 121 | 100 → 169 | 169 | 165.15 (10:15) | TRAIL_STOP | +44.15 | ₹+14,349 |
+
+Why (owner 13-10: every entry and exit needs a reason):
+- 09:30 NIFTY26O1322400CE: entry - ATM PE travelled from its close 61.5 toward the Sniper 37.85 (now 13.85, below the Sniper), so OTM CE closed 118.35 above the trigger 61.5 (candle 09:25) -> entry at the square 100 or the upcoming square 121; exit - candle 10:15 closed 165.15, below the trailing SL 169 (a later candle closed 180 above the target 169 - SL to the target)
+
+### SENSEX — finished (last update 2026-10-13 15:00)
+
+- SENSEX close 71924.68 on 2026-10-12, expiry 2026-10-15, qty per trade.
+- Plan: ATM 71800 after 1 shift(s), Sniper 390.15.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 160 × SENSEX26O1571900CE | 09:30 (catch-up) ★ HIGH | 729.0 | 729 | 676 → 900 | 841 | 869.7 (10:15) | TRAIL_STOP | +140.70 | ₹+22,512 |
+| second | 140 × SENSEX26O1571900CE | 13:10 | 865.3 | 841 | 794.95 → 1225 | 961 | 1260 (14:55) | TIME_EXIT_1500 | +394.70 | ₹+55,258 |
+
+Why (owner 13-10: every entry and exit needs a reason):
+- 09:30 SENSEX26O1571900CE: entry - ATM PE travelled from its close 429.9 toward the Sniper 390.15 (now 183.15, below the Sniper), so OTM CE closed 715 above the trigger 429.9 (candle 09:25) -> entry at the square 676 or the upcoming square 729; exit - candle 10:15 closed 869.7, below the trailing SL 900 (square 961 touched - SL one square below it)
+- 13:10 SENSEX26O1571900CE: entry - re-entry: Fib 686.8 -> 964.3, 0.618 = 858.29 tested at 10:25; reversal Bullish Engulfing at 13:05; green confirmation candle 13:10 closed 865.3 above 0.618; SL = reversal low 795.95 - 1; exit - 15:00 - the day's trading ends, closed at the candle close
+
+## 2026-10-12 (Mon)
+
+### NIFTY — finished (last update 2026-10-12 15:00)
+
+- NIFTY close 22520.45 on 2026-10-09, expiry 2026-10-13, qty 325.
+- Plan: ATM 22600 after 1 shift(s), Sniper 60.2.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O1322500PE | 09:50 (catch-up) | 100.0 | 100 | 81 → 144 | 144 | 141.45 (13:05) | TRAIL_STOP | +41.45 | ₹+13,471 |
+| second | 325 × NIFTY26O1322500PE | 13:10 ★ HIGH | 144.0 | 144 | 121 → 169 | 196 | 189.3 (14:55) | TIME_EXIT_1500 | +45.30 | ₹+14,722 |
+
+### SENSEX — finished (last update 2026-10-12 15:00)
+
+- SENSEX close 72472.33 on 2026-10-09, expiry 2026-10-15, qty 160.
+- Plan: ATM 72600 after 1 shift(s), Sniper 430.5.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 160 × SENSEX26O1572500PE | 09:40 (catch-up) ★ HIGH | 529.0 | 529 | 484 → 784 | 625 | 747.75 (12:30) | TRAIL_STOP | +218.75 | ₹+35,000 |
+| second | 160 × SENSEX26O1572500PE | 12:35 ★ HIGH | 729.0 | 729 | 676 → 841 | 841 | 835.2 (14:50) | TRAIL_STOP | +106.20 | ₹+16,992 |
+
+## 2026-10-09 (Fri)
+
+### NIFTY — finished (last update 2026-10-09 15:00)
+
+- NIFTY close 22231.8 on 2026-10-08, expiry 2026-10-13, qty 325.
+- Plan: ATM 22200 after 0 shift(s), Sniper 98.55.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O1322300CE | 09:30 (catch-up) ★ HIGH | 196.0 | 196 | 169 → 196 | 256 | 256 (09:50) | TARGET | +60.00 | ₹+19,500 |
+| first | 325 × NIFTY26O1322300CE | 10:10 (catch-up) | 256.0 | 256 | 225 → 256 | 324 | 256 (11:40) | TRAIL_STOP | +0.00 | ₹+0 |
+
+### SENSEX — finished (last update 2026-10-09 15:00)
+
+- SENSEX close 71593.24 on 2026-10-08, expiry 2026-10-15, qty 160.
+- Plan: ATM 71600 after 0 shift(s), Sniper 544.73.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 160 × SENSEX26O1571700CE | 09:30 (catch-up) ★ HIGH | 841.0 | 841 | 784 → 841 | 961 | 841 (09:35) | TRAIL_STOP | +0.00 | ₹+0 |
+
+## 2026-10-08 (Thu)
+
+### NIFTY — finished (last update 2026-10-08 15:00)
+
+- NIFTY close 22603.05 on 2026-10-07, expiry 2026-10-13, qty 325.
+- Plan: ATM 22600 after 0 shift(s), Sniper 92.88.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O1322500PE | 09:40 (catch-up) ★ HIGH | 144.0 | 144 | 121 → 144 | 196 | 196 (11:25) | TARGET | +52.00 | ₹+16,900 |
+| first | 325 × NIFTY26O1322500PE | 11:30 | 225.0 | 225 | 196 → 225 | 289 | 289 (12:55) | TARGET | +64.00 | ₹+20,800 |
+
+### SENSEX — finished (last update 2026-10-08 15:00)
+
+- SENSEX close 72638.7 on 2026-10-07, expiry 2026-10-08, qty 300.
+- Plan: ATM 72600 after 5 shift(s), Sniper 151.82.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 300 × SENSEX26O0872400PE | 09:30 (catch-up) ★ HIGH | 225.0 | 225 | 196 → 225 | 289 | 289 (09:40) | TARGET | +64.00 | ₹+19,200 |
+
+## 2026-10-07 (Wed)
+
+### NIFTY — finished (last update 2026-10-07 15:00)
+
+- NIFTY close 22776.1 on 2026-10-06, expiry 2026-10-13, qty 325.
+- Plan: ATM 22700 after 5 shift(s), Sniper 110.33.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O1322600PE | 09:40 ★ HIGH | 169.0 | 169 | 144 | 225 | 125.5 (10:15) | STOPLOSS | -43.50 | ₹-14,138 |
+| second | 325 × NIFTY26O1322600PE | 12:25 | 121.0 | 121 | 100 | 169 | 169 (13:05) | TARGET | +48.00 | ₹+15,600 |
+| second | 325 × NIFTY26O1322600PE | 13:10 | 169.0 | 169 | 144 | 225 | 143.75 (13:40) | STOPLOSS | -25.25 | ₹-8,206 |
+
+### SENSEX — finished (last update 2026-10-07 15:00)
+
+- SENSEX close 73067.81 on 2026-10-06, expiry 2026-10-08, qty 300.
+- Plan: ATM 73100 after 2 shift(s), Sniper 206.03.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 300 × SENSEX26O0872800PE | 09:30 ★ HIGH | 441.0 | 441 | 400 → 441 | 529 | 441 (09:40) | TRAIL_STOP | +0.00 | ₹+0 |
+
+## 2026-10-06 (Tue)
+
+### NIFTY — no plan (last update 2026-10-06 11:29)
+
+- NIFTY close 22555.75 on 2026-10-05, expiry 2026-10-06, qty 325.
+- No plan: still failing after 3 shifts — no trading that day.
+
+### SENSEX — finished (last update 2026-10-06 15:17)
+
+- SENSEX close 72382.47 on 2026-10-05, expiry 2026-10-08, qty 300.
+- Plan: ATM 72400 after 1 shift(s), Sniper 360.23.
+
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 300 × SENSEX26O0872600CE | 10:40 (catch-up) ★ HIGH | 484.0 | 484 | 441 → 484 | 576 | 484 (12:10) | TRAIL_STOP | +0.00 | ₹+0 |
+
 ## 2026-10-05 (Mon)
 
-### NIFTY — watching (last update 2026-10-05 09:35)
+### NIFTY — finished (last update 2026-10-05 15:00)
 
 - NIFTY close 22421.95 on 2026-10-01, expiry 2026-10-06, qty 325.
 - Plan: ATM 22400 after 5 shift(s), Sniper 66.65.
-- No trade yet.
 
-### SENSEX — watching (last update 2026-10-05 09:35)
+| Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first | 325 × NIFTY26O0622600CE | 09:35 ★ HIGH | 100.0 | 100 | 81 | 144 | 81 (10:00) | STOPLOSS | -19.00 | ₹-6,175 |
+| second | 325 × NIFTY26O0622600CE | 13:45 ★ HIGH | 81.0 | 81 | 64 | 121 | 64 (14:00) | STOPLOSS | -17.00 | ₹-5,525 |
+
+### SENSEX — finished (last update 2026-10-05 15:00)
 
 - SENSEX close 71909.7 on 2026-10-01, expiry 2026-10-08, qty 300.
 - Plan: ATM 71900 after 2 shift(s), Sniper 435.1.
 
 | Half | Buy | Entry | Fill | Square | SL → trailed | Target | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|---|---|---|
-| first | 300 × SENSEX26O0872200CE | 09:30 ★ HIGH | 676.0 | 676 | 625 | 784 | open | OPEN | – | – |
+| first | 300 × SENSEX26O0872200CE | 09:30 ★ HIGH | 676.0 | 676 | 625 → 676 | 784 | 676 (09:55) | TRAIL_STOP | +0.00 | ₹+0 |
 
 ## 2026-10-01 (Thu)
 

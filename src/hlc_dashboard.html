@@ -80,7 +80,8 @@ const num = v => Number(v) || 0;
 const fmt = (v, d = 2) => (v === null || v === undefined || v === "") ? "–" : Number(v).toFixed(d);
 const signed = v => (v >= 0 ? "+" : "") + Number(v).toFixed(2);
 let QTY = 325;
-const rupees = pts => (pts >= 0 ? "+₹" : "−₹") + Math.abs(pts * QTY).toLocaleString("en-IN", {maximumFractionDigits: 0});
+const rupees = (pts, q) => (pts >= 0 ? "+₹" : "−₹") + Math.abs(pts * (q || QTY)).toLocaleString("en-IN", {maximumFractionDigits: 0});
+const rupeesSum = trades => { const r = trades.reduce((a, t) => a + t.pnl_points * (t.qty || QTY), 0); return (r >= 0 ? "+₹" : "−₹") + Math.abs(r).toLocaleString("en-IN", {maximumFractionDigits: 0}); };
 const mins = hhmm => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
 const LEVEL_COLOR = n => n.startsWith("R") ? "var(--down)" : n.startsWith("S") ? "var(--up)" : "var(--text)";
 
@@ -143,8 +144,8 @@ function renderTrades(st) {
       return `<tr><td>${t.kind}</td><td>${Number(t.strike)} ${t.side}</td><td>${esc(t.pattern)}</td><td>${t.entry_time.slice(11, 16)}</td>
         <td>${fmt(t.entry_fill)}</td><td>${fmt(t.sl_premium)} <span class="muted">(${esc(t.sl_rule)})</span></td><td>${next}</td>
         <td>${t.exit_reason ? fmt(t.exit_premium) : "open"}</td><td>${esc(t.exit_reason || "–")}</td>
-        <td class="${cls}">${t.exit_reason ? signed(t.pnl_points) : "–"}</td><td class="${cls}">${t.exit_reason ? rupees(t.pnl_points) : "–"}</td></tr>`;
-    }).join("") + `</table><p class="muted" style="font-size:12px;margin:8px 0 0">₹ for ${QTY} qty per trade, before charges.</p>`;
+        <td class="${cls}">${t.exit_reason ? signed(t.pnl_points) : "–"}</td><td class="${cls}">${t.exit_reason ? rupees(t.pnl_points, t.qty) : "–"}</td></tr>`;
+    }).join("") + `</table><p class="muted" style="font-size:12px;margin:8px 0 0">₹ uses each trade's own quantity, before charges.</p>`;
 }
 
 async function refreshHistory() {
@@ -171,7 +172,7 @@ async function refresh() {
   $("status").textContent = st.status;
   $("index-title").textContent = `${st.market} with HLC levels`;
   const closed = st.trades.filter(t => t.exit_reason), pnl = closed.reduce((a, t) => a + t.pnl_points, 0);
-  $("pnl").innerHTML = st.trades.length ? `P&amp;L <span class="${pnl >= 0 ? "up" : "down"}">${signed(pnl)} pts · ${rupees(pnl)}</span>` : "Paper P&amp;L: no trades yet";
+  $("pnl").innerHTML = st.trades.length ? `P&amp;L <span class="${pnl >= 0 ? "up" : "down"}">${signed(pnl)} pts · ${rupeesSum(closed)}</span>` : "Paper P&amp;L: no trades yet";
   renderPlan(st); renderCharts(st); renderTrades(st);
   $("log").innerHTML = st.log.slice().reverse().map(l => `<div><span class="t">${l.time}</span>${esc(l.text)}</div>`).join("");
   $("updated").textContent = st.updated;
