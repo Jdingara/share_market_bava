@@ -2,10 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 36 trade(s), +2626.45 points, ₹+600,776**
+**All days: 39 trade(s), +2565.55 points, ₹+589,057**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
+| 2026-10-14 | SENSEX | 73200 | PANIC / PROFIT BOOKING | yes | 1 | -52.90 | ₹-9,522 | finished |
+| 2026-10-14 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 2 | -8.00 | ₹-2,197 | finished |
 | 2026-10-13 | SENSEX | 71800 | PROFIT BOOKING / PANIC | yes | 2 | +615.80 | ₹+69,580 | finished |
 | 2026-10-13 | NIFTY | 22350 | PROFIT BOOKING / PANIC | yes | 1 | +34.60 | ₹+13,494 | finished |
 | 2026-10-12 | SENSEX | 72600 | PANIC / PROFIT BOOKING | yes | 1 | +355.12 | ₹+56,819 | finished |
@@ -26,6 +28,27 @@
 | 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | -42.10 | ₹-13,682 | finished |
 | 2026-09-29 | SENSEX | 72900 | PROFIT BOOKING / PANIC | yes | 1 | -50.00 | ₹-15,000 | replayed |
 | 2026-09-29 | NIFTY | 22800 | PROFIT BOOKING / PANIC | yes | 1 | +45.60 | ₹+14,820 | replayed |
+
+## 2026-10-14 (Wed)
+
+### NIFTY — finished (last update 2026-10-14 15:00)
+
+- Close 22721.95, ATM 22800. R3 23243.6 · R2 23092.8 · R1 22950.8 · S1 22658 · S2 22507.2 · S3 22365.2.
+- CE PANIC, PE PROFIT BOOKING — buyer’s day.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| FIB | 130 × 22800 PE | first candle 0.75 at 22685.92 | 09:30 | 206.05 | 0.0 (index above first high 22752.3) | 180.25 (09:45) | SL (index above first high 22752.3) - index reached the SL 22752.3 in candle 09:45 | -25.80 | ₹-3,354 |
+| PM REVERSAL | 65 × 22800 PE | 12:30+ entry: Morning Star reversal, green confirmation closed 247.2 | 14:05 | 247.2 | 214.65 (reversal low 215.65 - 1) | 265 (14:55) | 15:00 exit | +17.80 | ₹+1,157 |
+
+### SENSEX — finished (last update 2026-10-14 15:00)
+
+- Close 73033.78, ATM 73200. R3 74194.85 · R2 73856.25 · R1 73538.6 · S1 72882.35 · S2 72543.75 · S3 72226.1.
+- CE PANIC, PE PROFIT BOOKING — buyer’s day.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| RETEST | 180 × 73200 PE | index retested the close 73033.8 and closed below it again | 09:30 | 471.75 | 418.85 (previous candle low - 1) | 418.85 (09:35) | SL (previous candle low - 1) - premium low 403.95 touched the SL 418.85 in candle 09:35 | -52.90 | ₹-9,522 |
 
 ## 2026-10-13 (Tue)
 
