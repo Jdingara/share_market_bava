@@ -272,12 +272,16 @@ def live(market_name: str, open_browser: bool) -> None:
     session_start = datetime.combine(day, MARKET_OPEN)
     status = "finished"
     try:
+        tried_after_close = False
         while not engine.done:
             if datetime.now().time() >= EXIT_AFTER:
-                break
-            next_poll = _next_poll(datetime.now())
-            state.set_status(f"Waiting for the next candle - checking at {next_poll:%H:%M:%S}")
-            _sleep_until(next_poll)
+                if processed or tried_after_close:
+                    break
+                tried_after_close = True  # 15-10: started after the close - replay the whole day once, don't record 0 trades
+            else:
+                next_poll = _next_poll(datetime.now())
+                state.set_status(f"Waiting for the next candle - checking at {next_poll:%H:%M:%S}")
+                _sleep_until(next_poll)
             now = datetime.now()
             try:
                 index_rows, premiums = _fetch(kite, chain, market_name, levels, session_start, now)

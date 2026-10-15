@@ -384,14 +384,21 @@ def watch(kite, engine: SniperDay, contracts: dict[str, dict], notify: Notifier,
     session_start = datetime.combine(today, MARKET_OPEN)
     last_bars: Optional[tuple[datetime, dict[str, Bar]]] = None
 
+    tried_after_close = False
     while not engine.done:
         now = datetime.now()
-        if now.time() >= (datetime.combine(today, EXIT_BY) + timedelta(minutes=5)).time():
+        after_close = now.time() >= (datetime.combine(today, EXIT_BY) + timedelta(minutes=5)).time()
+        if after_close and (processed or tried_after_close):
             break
-        next_poll = _next_poll(now)
-        if state:
-            state.set_status(f"Waiting for the next candle - checking at {next_poll:%H:%M:%S}")
-        _sleep_until(next_poll)
+        if after_close:
+            # 15-10: a restart after the close went straight to "0 trades" and overwrote the day's history - replay
+            # the whole day once instead
+            tried_after_close = True
+        else:
+            next_poll = _next_poll(now)
+            if state:
+                state.set_status(f"Waiting for the next candle - checking at {next_poll:%H:%M:%S}")
+            _sleep_until(next_poll)
         now = datetime.now()
 
         try:
