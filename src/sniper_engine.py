@@ -85,7 +85,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Literal, Optional
 
 from hlc_signal import DIRECTIONLESS, bullish_pattern
@@ -121,8 +121,9 @@ RETEST_ONLY = True
 # for us - no entry. A close above its high starts the market for CE (up) setups; a close below its low for PE (down).
 FIRST_CANDLE_BREAK = True
 # Owner, 2026-10-15: the retest is one way in; the other is MOMENTUM - once the market has started (index beyond its
-# first candle), after 09:30, with the falling ATM below the Sniper: the OTM CLOSING above the upcoming square (529)
-# -> buy at the next square (576) when it trades there; SL one square down (529), target two up (676).
+# first candle), with the falling ATM below its yesterday close and the Sniper: the OTM having CLOSED above a square
+# (signal 527.80 > 484) -> buy at the next square (529) when it trades there, from 09:30; SL one square down (484),
+# target two up (625). A later close above 529 moves it up to 576, and so on.
 MOMENTUM_ENTRY = True
 MOMENTUM_FROM = time(9, 30)  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
 UV_TRADE = True  # owner, 2026-10-09: sideways days - no OTM trade, but the ATM U/V trade (own SL/TSL/target)
@@ -274,6 +275,8 @@ class SniperDay:
         self.reentry: Optional[dict] = None  # owner 13-10: after an exit, re-enter at the Fib 0.618 of low -> high  # owner, 2026-10-12: gap-failed day - the setups buy the ATM, not the OTM
         self.setups = trade_setups(row, buy_atm)
         self.first_index: Optional[Bar] = None  # the index's first 5-minute candle (owner 15-10)
+        self._cur_bars: Optional[dict] = None
+        self._prev_bars: Optional[dict] = None  # the previous candle's bars (momentum is armed on a CLOSE)
         self.started: set[str] = set()  # "up" / "down": the index has closed beyond that candle on that side
         self.prev = previous_closes(row)
         self.open_trades: list[tuple[TradeSetup, TradeResult]] = []
@@ -438,6 +441,7 @@ class SniperDay:
                 # (re-entering after stops too was tried on 01-10 SENSEX: 11 trades, -Rs 23,700 - dropped)
                 self.continuation = (setup, trade.target)
 
+        self._prev_bars, self._cur_bars = self._cur_bars, bars
         idx = bars.get("index")
         if idx is not None:
             if self.first_index is None:
@@ -683,24 +687,32 @@ class SniperDay:
         return None
 
     def _momentum_fill(self, pending: _Pending, bars: dict[str, Bar], when: datetime) -> Optional[tuple[int, float]]:
-        """Owner, 2026-10-15: momentum entry next to the retest - see MOMENTUM_ENTRY."""
+        """Owner, 2026-10-15: momentum entry next to the retest - see MOMENTUM_ENTRY. Armed on the previous candle's
+        close, filled when this candle trades at the square."""
         if not (RETEST_ONLY and MOMENTUM_ENTRY) or pending.limit_only or pending.limit_price is not None:
             return None
-        bar = bars[_key(pending.setup)]
+        if self._prev_bars is not None:
+            self._arm_momentum(pending, self._prev_bars, when - timedelta(minutes=5))
         m = pending.momentum_k
-        if m is not None and self.candle_no > pending.momentum_at and bar.high >= m * m:
+        bar = bars[_key(pending.setup)]
+        if m is not None and when.time() >= MOMENTUM_FROM and bar.high >= m * m:
             return m, max(float(m * m), bar.open) if bar.open is not None else float(m * m)
-        falling = bars["atm_ce" if pending.setup.falling_type == "CE" else "atm_pe"]
-        upcoming = (pending.k + 1) ** 2
-        if (when.time() >= MOMENTUM_FROM and bar.close > upcoming and falling.close < self.row.sniper
-                and (not FIRST_CANDLE_BREAK or self.first_index is None or pending.setup.direction in self.started)):
-            k = highest_square_below(bar.close) + 1
-            if m is None or k > m:
-                pending.momentum_k, pending.momentum_at = k, self.candle_no
-                pending.reason += (f"; momentum: candle {when:%H:%M} closed {bar.close:g} above {upcoming} with the ATM "
-                                   f"{pending.setup.falling_type} {falling.close:g} below the Sniper {self.row.sniper:g} "
-                                   f"-> entry at the next square {k * k}")
         return None
+
+    def _arm_momentum(self, pending: _Pending, bars: dict[str, Bar], when: datetime) -> None:
+        key = "atm_ce" if pending.setup.falling_type == "CE" else "atm_pe"
+        bar, falling = bars[_key(pending.setup)], bars[key]
+        if not (falling.close < self.row.sniper and falling.close < self.prev[key]):
+            return
+        if FIRST_CANDLE_BREAK and self.first_index is not None and pending.setup.direction not in self.started:
+            return
+        k = highest_square_below(bar.close) + 1
+        if k <= pending.k or (pending.momentum_k is not None and k <= pending.momentum_k):
+            return
+        pending.momentum_k, pending.momentum_at = k, self.candle_no
+        pending.reason += (f"; momentum: candle {when:%H:%M} closed {bar.close:g} above {(k - 1) ** 2} with the ATM "
+                           f"{pending.setup.falling_type} {falling.close:g} below its close {self.prev[key]:g} and the "
+                           f"Sniper {self.row.sniper:g} -> entry at the next square {k * k}")
 
     def _setups(self, half: Optional[str]) -> list[TradeSetup]:
         """This half's setups whose side has started - the index closed beyond its first 5-minute candle (owner 15-10)."""

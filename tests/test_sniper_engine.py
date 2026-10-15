@@ -537,7 +537,9 @@ def test_retest_only_buys_the_square_when_it_comes_back():
     assert (engine.trades[0].entry_fill, engine.trades[0].entry_square) == (100, 100)
 
 
-def test_retest_only_never_chases_the_next_square():
+def test_retest_only_never_chases_the_next_square(monkeypatch):
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "MOMENTUM_ENTRY", False)  # the retest alone (momentum has its own test)
     engine, events = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105)),
                            ("09:35", (130, 119, 125, 124))])
     assert not engine.trades and [e.kind for e in events] == ["ORDER"]
@@ -554,11 +556,11 @@ def test_no_entry_until_the_index_closes_beyond_its_first_5_minute_candle():
     assert [e.kind for e in events] == ["ORDER"]
 
 
-def test_momentum_close_above_the_upcoming_square_buys_the_next_one():
-    """Owner, 15-10: no retest but momentum - after 09:30, ATM below the Sniper, the OTM closes above the upcoming
-    square (121) -> buy at the next square (144) when it trades there; SL 121, target 196."""
-    engine, events = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105)),
-                           ("09:35", (146, 120, 140, 124))])
+def test_momentum_signal_above_the_square_buys_the_next_one():
+    """Owner, 15-10 (SENSEX 72800 CE: 09:25 closed 527.80 above 484, the 09:30 candle ran through 529): momentum - the
+    market has started, the ATM is below its close and the Sniper -> buy at the next square (121) when it trades
+    there from 09:30; SL 100, target 169."""
+    engine, events = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105))])
     [t] = engine.trades
-    assert (t.entry_fill, t.stop_loss, t.target) == (144, 121, 196)
+    assert (t.entry_fill, t.stop_loss, t.target) == (121, 100, 169)
     assert "momentum" in t.entry_reason
