@@ -116,7 +116,10 @@ SECOND_ENTRY_PM_REVERSAL = True
 # Owner, 2026-10-15: entries on a RETEST only - no buy stop at the next square (14-10 SENSEX 73100 PE bought 441 on a
 # touch, the candle closed 416.40). Signal above the square -> buy when it comes back to it; signal below the plan
 # square -> a candle must CLOSE above that square first, then a later candle coming back to it fills.
-RETEST_ONLY = True  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
+RETEST_ONLY = True
+# Owner, 2026-10-15: until an index candle CLOSES beyond the first 5-minute candle (09:15-09:20) the market is sideways
+# for us - no entry. A close above its high starts the market for CE (up) setups; a close below its low for PE (down).
+FIRST_CANDLE_BREAK = True  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
 UV_TRADE = True  # owner, 2026-10-09: sideways days - no OTM trade, but the ATM U/V trade (own SL/TSL/target)
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
@@ -263,6 +266,8 @@ class SniperDay:
         self.trade_range: dict[int, list[float]] = {}  # id(trade) -> [low, high] of its contract since entry
         self.reentry: Optional[dict] = None  # owner 13-10: after an exit, re-enter at the Fib 0.618 of low -> high  # owner, 2026-10-12: gap-failed day - the setups buy the ATM, not the OTM
         self.setups = trade_setups(row, buy_atm)
+        self.first_index: Optional[Bar] = None  # the index's first 5-minute candle (owner 15-10)
+        self.started: set[str] = set()  # "up" / "down": the index has closed beyond that candle on that side
         self.prev = previous_closes(row)
         self.open_trades: list[tuple[TradeSetup, TradeResult]] = []
         self.trades: list[TradeResult] = []
@@ -426,6 +431,15 @@ class SniperDay:
                 # (re-entering after stops too was tried on 01-10 SENSEX: 11 trades, -Rs 23,700 - dropped)
                 self.continuation = (setup, trade.target)
 
+        idx = bars.get("index")
+        if idx is not None:
+            if self.first_index is None:
+                self.first_index = idx
+            else:
+                if idx.close > self.first_index.high:
+                    self.started.add("up")
+                if idx.close < self.first_index.low:
+                    self.started.add("down")
         half = entry_window_for(when)
         for pending in list(self.pending):
             self.pending.remove(pending)
@@ -489,7 +503,7 @@ class SniperDay:
         if event:
             return events + [event]
 
-        for setup in (s for s in self.setups if s.half == half):
+        for setup in self._setups(half):
             falling_key = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
             if current[falling_key] >= self.prev[falling_key]:
                 continue
@@ -614,7 +628,7 @@ class SniperDay:
         OTM closes above its yesterday's high, buy it at the upcoming square; SL one square down, target two up."""
         if half in self.halves_used:
             return None
-        for setup in (s for s in self.setups if s.half == half):
+        for setup in self._setups(half):
             falling = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
             otm_key = _key(setup)
             high = self.otm_yesterday_high.get(otm_key)
@@ -644,7 +658,7 @@ class SniperDay:
             bar = bars[atm_key]
             if bar.open is None or not (bar.open < sniper < bar.close):
                 continue
-            setup = next((s for s in self.setups if s.half == half and s.buy_type == buy_type), None)
+            setup = next((s for s in self._setups(half) if s.buy_type == buy_type), None)
             if setup is None:  # (point 4's OTM-below-close filter doesn't apply here - 05-10 owner's trade)
                 continue
             otm_close = bars[_key(setup)].close
@@ -658,6 +672,11 @@ class SniperDay:
             self.pending.append(pending)
             return self._order_event("ORDER", pending, when)
         return None
+
+    def _setups(self, half: Optional[str]) -> list[TradeSetup]:
+        """This half's setups whose side has started - the index closed beyond its first 5-minute candle (owner 15-10)."""
+        return [s for s in self.setups if s.half == half
+                and (not FIRST_CANDLE_BREAK or self.first_index is None or s.direction in self.started)]
 
     def _arm_reentry(self, setup: TradeSetup, trade: TradeResult) -> None:
         """Owner, 2026-10-13: the reason for a re-entry - draw the Fib from the move's low to its high; a pull-back to

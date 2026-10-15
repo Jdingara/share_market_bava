@@ -236,6 +236,7 @@ def test_06_10_sensex_72500ce_near_the_atm_ce_close_with_the_index_below(monkeyp
     """Real 72500 CE candles: 09:25 closes 417.20 (11.60 under 428.80), index below 72382.47 -> buy stop 441;
     09:30 high 458 -> bought 441 (low 408.9 stays above SL 400); 09:55 high 559.5 -> target 529."""
     import sniper_engine as _se
+    monkeypatch.setattr(_se, "FIRST_CANDLE_BREAK", False)  # tests the trigger, not the 15-10 first-candle rule
     monkeypatch.setattr(_se, "RETEST_ONLY", False)  # the older buy-stop-at-the-next-square rule
     engine, events = _run_sensex([
         ("09:25", (431.4, 410.6, 417.2, 424.05)),
@@ -260,13 +261,17 @@ def test_near_is_within_30_points_for_sensex():
     assert events == []
 
 
-def test_close_above_the_atm_close_signals_without_the_index():
+def test_close_above_the_atm_close_signals_without_the_index(monkeypatch):
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "FIRST_CANDLE_BREAK", False)  # tests the trigger, not the 15-10 first-candle rule
     engine, events = _run_sensex([("09:25", (435, 420, 432.0, 425))], index_close=72450)
     assert [e.kind for e in events] == ["ORDER"]
     assert (events[0].atm_close_trigger, events[0].near, events[0].next_square) == (428.80, False, 441)
 
 
-def test_atm_close_trigger_does_not_need_the_atm_below_the_sniper():
+def test_atm_close_trigger_does_not_need_the_atm_below_the_sniper(monkeypatch):
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "FIRST_CANDLE_BREAK", False)  # tests the trigger, not the 15-10 first-candle rule
     # Owner, 07-10: below the Sniper is good (HIGH tag), not required. ATM PE 420 > Sniper 404.70, still falling.
     engine, events = _run_sensex([("09:25", (435, 420, 432.0, 425))], atm_pe_close=420)
     assert [e.kind for e in events] == ["ORDER"]
@@ -536,3 +541,14 @@ def test_retest_only_never_chases_the_next_square():
     engine, events = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105)),
                            ("09:35", (130, 119, 125, 124))])
     assert not engine.trades and [e.kind for e in events] == ["ORDER"]
+
+
+def test_no_entry_until_the_index_closes_beyond_its_first_5_minute_candle():
+    """Owner, 15-10: until an index candle closes above the first 5-minute candle's high, the market is sideways for
+    a CE (up) setup - no signal; after that close the market has started."""
+    engine = SniperDay(date(2026, 10, 6), SENSEX_ROW, index_close=72382.47, near_points=30)
+    feed = lambda hhmm, ce, ix: engine.on_candle(_at(hhmm), {**_sensex_bars(ce), "index": Bar(*ix)})
+    assert feed("09:15", (400, 390, 395, 392), (72500, 72400, 72450, 72420)) == []      # the first candle
+    assert feed("09:20", (435, 420, 432, 425), (72495, 72440, 72480, 72450)) == []      # inside it - sideways
+    events = feed("09:25", (435, 420, 432, 425), (72530, 72470, 72520, 72480))          # closes above 72500
+    assert [e.kind for e in events] == ["ORDER"]
