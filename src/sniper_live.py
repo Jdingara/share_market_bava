@@ -45,6 +45,7 @@ from keep_awake import keep_awake
 from sizing import CapitalLedger
 from kite_auth import PROJECT_ROOT, connected_client
 from sniper_engine import CONTRACT_KEYS, Bar, Event, SniperDay, TradeResult
+from sniper_engine import RETEST_ONLY
 from sniper_signal import (
     CANDLE_MINUTES,
     EXIT_BY,
@@ -293,8 +294,8 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} ({how} the ATM "
                     f"{event.setup.buy_type} close {trigger:.2f}"
                     f"{', index below yesterday' if event.near else ''}) - WOULD BUY at "
-                    + (f"{event.square} if it comes back, or at {event.next_square} if it runs up" if event.square
-                       else f"{event.next_square} when it rises there") + note)
+                    + ((f"{event.square} on a retest (no chase)" if RETEST_ONLY else f"{event.square} if it comes back, or at {event.next_square} if it runs up") if event.square
+                       else (f"{event.next_square} after a candle closes above it and comes back (retest)" if RETEST_ONLY else f"{event.next_square} when it rises there")) + note)
         note = (" - HIGH confidence: ATM already below Sniper" if event.atm_below_sniper else "") + note
         if event.kind == "ORDER" and event.setup.contract:
             return (f"SIGNAL {symbol}: sideways day, ATM {event.setup.buy_type} U/V - reversal then retest, "
@@ -307,10 +308,10 @@ def describe_event(event: Event, contracts: dict[str, dict], late: bool, qty: in
                     f"target {(int(event.square ** 0.5) + 2) ** 2}{note}")
         if event.kind == "ORDER" and event.square:
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
-                    f"WOULD BUY at {event.square} if it comes back, or at {event.next_square} if it runs up{note}")
+                    f"WOULD BUY at " + (f"{event.square} on a retest (no chase)" if RETEST_ONLY else f"{event.square} if it comes back, or at {event.next_square} if it runs up") + note)
         if event.kind == "ORDER":
             return (f"SIGNAL {symbol}: candle {event.when:%H:%M} closed {event.signal_close:.2f} (above trigger {trigger:.2f}) - "
-                    f"WOULD BUY at {event.next_square} when it rises there{note}")
+                    f"WOULD BUY at " + (f"{event.next_square} after a candle closes above it and comes back (retest)" if RETEST_ONLY else f"{event.next_square} when it rises there") + note)
         levels = f"{event.square}/{event.next_square}" if event.square else f"{event.next_square}"
         return f"Order for {symbol} at {levels} cancelled - window ended without a fill, or replaced by a newer signal{note}"
     t = event.trade
@@ -547,8 +548,8 @@ def main() -> None:
     except Exception as error:
         print(f"  (buyer's day check failed: {error})", flush=True)
     if engine.buyers_day:
-        notify.send("Buyer's day (ATM CE / PE: one PROFIT BOOKING, one PANIC yesterday) - after a target the bot "
-                    "re-enters when the premium closes above it.", phone=False)
+        notify.send("Buyer's day (ATM CE / PE: one PROFIT BOOKING, one PANIC yesterday) - ride with the trailing SL; "
+                    "one more entry only from 12:30 on a reversal + green confirmation.", phone=False)
     record("watching")
     status = "finished"
     try:

@@ -57,8 +57,10 @@ def test_29_09_22700pe_signal_at_101_90_bought_back_at_100():
     assert (t.exit_reason, t.exit_premium, t.pnl_points) == ("TARGET", 144, 44)
 
 
-def test_close_above_trigger_is_the_signal_then_buys_when_it_rises_to_the_square():
+def test_close_above_trigger_is_the_signal_then_buys_when_it_rises_to_the_square(monkeypatch):
     """Trigger = ATM CE close 89.15. A close at 95 is the signal; bought at 100 when price rises there."""
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "RETEST_ONLY", False)  # the older buy-stop-at-the-next-square rule
     engine, events = _run([
         ("09:25", (96, 80, 95, 82)),  # above 89.15 -> signal; still below 100 -> buy stop at 100
         ("09:30", (99, 90, 97, 95)),  # not yet
@@ -75,7 +77,9 @@ def test_close_below_trigger_is_no_signal():
     assert events == [] and engine.pending == []
 
 
-def test_runs_up_without_coming_back_buys_the_next_square():
+def test_runs_up_without_coming_back_buys_the_next_square(monkeypatch):
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "RETEST_ONLY", False)  # the older buy-stop-at-the-next-square rule
     engine, events = _run([
         ("09:20", (78, 64, 72, 67)),
         ("09:25", (104, 71, 101.9, 72)),
@@ -85,12 +89,16 @@ def test_runs_up_without_coming_back_buys_the_next_square():
     assert (t.entry_fill, t.entry_square, t.stop_loss, t.target) == (121, 121, 100, 169)
 
 
-def test_opens_above_the_next_square_fills_at_the_open():
+def test_opens_above_the_next_square_fills_at_the_open(monkeypatch):
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "RETEST_ONLY", False)  # the older buy-stop-at-the-next-square rule
     engine, _ = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (135, 125, 130, 126))])
     assert (engine.trades[0].entry_fill, engine.trades[0].entry_square) == (126, 121)
 
 
-def test_touches_both_with_unknown_order_assumes_the_worse_price():
+def test_touches_both_with_unknown_order_assumes_the_worse_price(monkeypatch):
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "RETEST_ONLY", False)  # the older buy-stop-at-the-next-square rule
     engine, _ = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 95, 110, 105))])
     assert (engine.trades[0].entry_fill, engine.trades[0].entry_square) == (121, 121)
 
@@ -224,9 +232,11 @@ def _run_sensex(candles, **bar_options):
     return engine, events
 
 
-def test_06_10_sensex_72500ce_near_the_atm_ce_close_with_the_index_below():
+def test_06_10_sensex_72500ce_near_the_atm_ce_close_with_the_index_below(monkeypatch):
     """Real 72500 CE candles: 09:25 closes 417.20 (11.60 under 428.80), index below 72382.47 -> buy stop 441;
     09:30 high 458 -> bought 441 (low 408.9 stays above SL 400); 09:55 high 559.5 -> target 529."""
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "RETEST_ONLY", False)  # the older buy-stop-at-the-next-square rule
     engine, events = _run_sensex([
         ("09:25", (431.4, 410.6, 417.2, 424.05)),
         ("09:30", (458.0, 408.9, 448.0, 417.2)),
@@ -513,3 +523,16 @@ def test_second_entry_only_from_1230_with_reversal_sl_under_its_low():
     events = day.on_candle(at("12:25"), {**other, "otm_pe": Bar(219, 208, 216, 210)})
     entries = [e for e in events if e.kind == "ENTRY"]
     assert entries and entries[0].trade.entry_fill == 216 and entries[0].trade.stop_loss == 195
+
+
+def test_retest_only_buys_the_square_when_it_comes_back():
+    """Owner, 15-10 (14-10 SENSEX 73100 PE: bought 441 on a touch, the candle closed 416.40): retest only - the candle
+    touching both the square (100) and the next one (121) fills at the square."""
+    engine, _ = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 95, 110, 105))])
+    assert (engine.trades[0].entry_fill, engine.trades[0].entry_square) == (100, 100)
+
+
+def test_retest_only_never_chases_the_next_square():
+    engine, events = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105)),
+                           ("09:35", (130, 119, 125, 124))])
+    assert not engine.trades and [e.kind for e in events] == ["ORDER"]

@@ -112,7 +112,11 @@ REENTRY_SL_POINTS = 25  # owner, 2026-10-13: re-entry SL = buy price - 25 (NIFTY
 REENTRY_FIB = 0.618
 # Owner, 2026-10-13 (all bots): after the morning trade, ONE more entry, only from 12:30, only with a proper reversal
 # (reversal candle + green confirmation), SL = the reversal low - 1. Every day, buyer's day too.
-SECOND_ENTRY_PM_REVERSAL = True  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
+SECOND_ENTRY_PM_REVERSAL = True
+# Owner, 2026-10-15: entries on a RETEST only - no buy stop at the next square (14-10 SENSEX 73100 PE bought 441 on a
+# touch, the candle closed 416.40). Signal above the square -> buy when it comes back to it; signal below the plan
+# square -> a candle must CLOSE above that square first, then a later candle coming back to it fills.
+RETEST_ONLY = True  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
 UV_TRADE = True  # owner, 2026-10-09: sideways days - no OTM trade, but the ATM U/V trade (own SL/TSL/target)
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
@@ -191,6 +195,7 @@ class _Pending:
     near: bool = False
     limit_price: Optional[float] = None  # U/V trade (owner, 08-10): buy limit at the confirmation candle's Fib 0.618
     reason: str = ""  # owner 13-10: why this buy - becomes the trade's entry_reason
+    armed_at: Optional[int] = None  # RETEST_ONLY, no-limit order: candle no. that closed above (k+1)^2
 
 
 def _key(setup: TradeSetup) -> str:
@@ -758,6 +763,14 @@ class SniperDay:
                 return k, min(pending.limit_price, bar.open) if bar.open is not None else pending.limit_price
             return None
         limit, stop = k * k, (k + 1) ** 2
+        if RETEST_ONLY and not pending.limit_only:
+            if pending.has_limit:
+                return (k, min(float(limit), bar.open) if bar.open is not None else float(limit)) if bar.low <= limit else None
+            if pending.armed_at is None:
+                if bar.close > stop:
+                    pending.armed_at = 1  # closed above the square - the next candle(s) may retest it
+                return None
+            return (k + 1, min(float(stop), bar.open) if bar.open is not None else float(stop)) if bar.low <= stop else None
         back, up = pending.has_limit and bar.low <= limit, bar.high >= stop and not pending.limit_only
         if back and up:
             if bar.open is not None and bar.open <= limit:
