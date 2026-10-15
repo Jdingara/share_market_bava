@@ -106,6 +106,7 @@ from sniper_signal import (
 
 CONTRACT_KEYS = ("atm_ce", "atm_pe", "otm_ce", "otm_pe")
 RIDE_NORMAL_DAYS = True  # owner, 2026-10-12: buyer's day - no target exit, TSL ladder only (09-10 had it on normal days); normal days book the target, max 2 trades
+RIDE_EVERY_DAY = True  # owner, 2026-10-15: all Sniper trades, all days - no target exit; 2 squares locked, then the square TSL
 NORMAL_DAY_MAX_TRADES = 2
 BUYERS_DAY_MAX_TRADES = 4  # owner, 2026-10-09: buyer's-day re-entries stop at 4 trades a day
 REENTRY_SL_POINTS = 25  # owner, 2026-10-13: re-entry SL = buy price - 25 (NIFTY and SENSEX)
@@ -387,7 +388,9 @@ class SniperDay:
                 continue
             # Owner, 2026-10-09: on a normal (non-buyer's) day no target exit - ride with the trailing SL (fixed-SL
             # trades trail too then, or they'd never take profit). Buyer's day: targets as before.
-            ride = self.ride_normal_days and self.buyers_day  # owner 12-10: ride on a BUYER'S day; book the target otherwise
+            # owner 12-10: ride on a BUYER'S day; owner 15-10: EVERY day - 2 squares get locked by the ladder, then the
+            # square TSL rides it (no target exit)
+            ride = self.ride_normal_days and (self.buyers_day or RIDE_EVERY_DAY)
             trails = self.trailing and (id(trade) not in self.fixed_sl or ride)
             moved_now = False
             if (trails and self.first_tsl_on_touch and trade.trail_stop <= trade.stop_loss

@@ -564,3 +564,13 @@ def test_momentum_signal_above_the_square_buys_the_next_one():
     [t] = engine.trades
     assert (t.entry_fill, t.stop_loss, t.target) == (121, 100, 169)
     assert "momentum" in t.entry_reason
+
+
+@pytest.mark.ride
+def test_every_day_rides_past_the_target_with_the_square_tsl():
+    """Owner, 15-10: all Sniper trades, all days - no exit at 2 squares; the ladder locks profit and the TSL rides."""
+    engine, events = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105)),
+                           ("09:35", (170, 150, 165, 160))])
+    assert not engine.buyers_day
+    [t] = engine.trades
+    assert not t.exit_reason and t.trail_stop == 144  # 169 (2 squares) touched -> SL 144, still riding
