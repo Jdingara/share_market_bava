@@ -7,6 +7,8 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 
 | Date | Market | ATM | Sniper | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|
+| 2026-10-15 | SENSEX | 72700 | 215.78 | 0 | +0.00 | ₹+0 | finished |
+| 2026-10-15 | NIFTY | 22600 | 94.32 | 0 | +0.00 | ₹+0 | finished |
 | 2026-10-14 | SENSEX | 73200 | 281.17 | 1 | -98.20 | ₹-23,568 | finished |
 | 2026-10-14 | NIFTY | 22800 | 103.65 | 1 | -31.70 | ₹-8,242 | finished |
 | 2026-10-13 | SENSEX | 71800 | 390.15 | 2 | +535.40 | ₹+77,770 | finished |
@@ -30,6 +32,20 @@ don't edit by hand, change `history/days.csv` / `history/trades.csv` instead. �
 | 2026-09-29 | SENSEX | 72800 | 295.7 | 2 | +29.00 | ₹+8,700 | finished |
 | 2026-09-29 | NIFTY | 22800 | 39.58 | 2 | +29.00 | ₹+9,425 | finished |
 | 2026-09-28 | NIFTY | 23200 | 54.0 | 1 | +58.75 | ₹+19,094 | stopped early |
+
+## 2026-10-15 (Thu)
+
+### NIFTY — finished (last update 2026-10-15 15:08)
+
+- NIFTY close 22622.7 on 2026-10-14, expiry 2026-10-19, qty 260.
+- Plan: ATM 22600 after 0 shift(s), Sniper 94.32.
+- No trade (no square crossed in the entry windows).
+
+### SENSEX — finished (last update 2026-10-15 15:08)
+
+- SENSEX close 72781.89 on 2026-10-14, expiry 2026-10-15, qty 200.
+- Plan: ATM 72700 after 1 shift(s), Sniper 215.78.
+- No trade (no square crossed in the entry windows).
 
 ## 2026-10-14 (Wed)
 
