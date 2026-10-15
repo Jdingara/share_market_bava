@@ -552,3 +552,18 @@ def test_hlc_second_entry_only_from_1230_on_a_reversal():
     assert len(day.trades) == 2
     t = day.trades[1]
     assert t.kind == "PM REVERSAL" and t.entry_fill == 54 and t.sl_premium == 37
+
+
+def test_profit_booking_target_behind_the_entry_is_ignored():
+    """15-10 SENSEX: CE bought 610, PB Fib 0.786 target 589.61 - it exited at once as 'TARGET' (+0). A target behind
+    the entry is no target."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"], {"CE": (120.0, 30.0, 40.0), "PE": (100.0, 40.0, 98.0)})
+    behind = HlcTrade(date="x", kind="LEVEL", side="CE", strike=22800, pattern="", entry_time="2026-09-29T09:30:00",
+                      entry_fill=110, entry_index=LEVELS.r2 + 5, sl_premium=90)
+    day._profit_booking_exits(behind)
+    assert behind.pb_target is None and behind.pb_index is None  # 40 + 0.786 x 80 = 102.9 < 110; index past R2
+    ahead = HlcTrade(date="x", kind="LEVEL", side="CE", strike=22800, pattern="", entry_time="2026-09-29T09:30:00",
+                     entry_fill=60, entry_index=LEVELS.close, sl_premium=50)
+    day._profit_booking_exits(ahead)
+    assert ahead.pb_target == 102.88 and ahead.pb_index == ("R2", LEVELS.r2)

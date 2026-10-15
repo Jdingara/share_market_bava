@@ -899,9 +899,16 @@ class HlcDay:
         high, _, close = hlc
         if high <= close:
             return
-        trade.pb_target = round(close + PB_FIB * (high - close), 2)
+        target = round(close + PB_FIB * (high - close), 2)
         name = "S2" if trade.side == "PE" else "R2"
-        trade.pb_index = (name, dict(self.levels.ladder())[name])
+        level = dict(self.levels.ladder())[name]
+        # 15-10 SENSEX: CE bought 610 with the Fib target 589.61 below it -> "TARGET" exit at +0. A target already
+        # behind the entry is no target - keep only what is still ahead (else the trade's normal targets apply).
+        if target > trade.entry_fill:
+            trade.pb_target = target
+        index_ahead = trade.entry_index > level if trade.side == "PE" else trade.entry_index < level
+        if index_ahead:
+            trade.pb_index = (name, level)
 
     def premium_ladder(self, side: OptionType, strike: float, above: float) -> list[float]:
         """PANIC side, morning ATM only: the staircase of daily highs going back from yesterday, above `above`."""
@@ -951,14 +958,15 @@ class HlcDay:
             if reached and trade.entry_fill + reached > trade.lock_level and (
                     not trade.lock_seen or reached > trade.lock_seen[0]):
                 trade.lock_seen = (reached, now)
-        if trade.pb_target is not None:
+        if trade.pb_target is not None or trade.pb_index is not None:
             # Owner, 2026-10-12: PROFIT BOOKING side - exit only at the Fib 0.786 target or the index at S2 / R2
-            if prem.high >= trade.pb_target:
+            if trade.pb_target is not None and prem.high >= trade.pb_target:
                 return [self._exit(trade, when, max(trade.pb_target, prem.open) if prem.open > trade.pb_target else trade.pb_target,
                                    f"TARGET Fib {PB_FIB:g} of yesterday's close-high {trade.pb_target:g}")]
-            name, value = trade.pb_index
-            if (pe and index.low <= value) or (not pe and index.high >= value):
-                return [self._exit(trade, when, prem.close, f"TARGET {name} {value:g}")]
+            if trade.pb_index is not None:
+                name, value = trade.pb_index
+                if (pe and index.low <= value) or (not pe and index.high >= value):
+                    return [self._exit(trade, when, prem.close, f"TARGET {name} {value:g}")]
             if closes >= EXIT_CLOSE:
                 return [self._exit(trade, when, prem.close, "15:00 exit")]
             return []
