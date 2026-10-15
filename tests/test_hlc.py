@@ -132,7 +132,9 @@ def test_pe_fib_trade_trails_through_s1():
     assert "closed back across S1" in events[0] and t.pnl_points == 3
 
 
-def test_big_gap_uses_the_strike_near_the_market_and_exits_when_the_pattern_turns():
+def test_big_gap_uses_the_strike_near_the_market_and_exits_when_the_pattern_turns(monkeypatch):
+    import hlc_engine as _he
+    monkeypatch.setattr(_he, "MOMENTUM_RIDE", False)  # the 05-10 big-gap pattern exit (15-10 momentum ride replaces it)
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, R2 22955.65
     day.level_break_done = True  # keep the 13-10 15-min R1/S1 break out of this test
     chain = lambda ce: {(22950.0, "CE"): Candle(*ce), (22950.0, "PE"): Candle(40, 42, 38, 40),
@@ -531,8 +533,9 @@ def test_r3_touch_is_full_profit_no_more_trades():
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
     assert not day.on_candle(_at("09:15"), Candle(22790, 22800, 22785, 22795), _chain((70, 72, 68, 71)))
     events = day.on_candle(_at("09:20"), Candle(22795, LEVELS.r3 + 1, 22790, 23000), _chain((70, 72, 68, 71)))
-    assert day.done and events[0].startswith(f"index touched R3 {LEVELS.r3:g}")
+    assert day.full_profit and events[0].startswith(f"index touched R3 {LEVELS.r3:g}")
     assert day.on_candle(_at("09:25"), Candle(23000, 23010, 22990, 23005), _chain((70, 72, 68, 71))) == []
+    assert not day.trades  # no new trades after R3 (owner 15-10: an open trade would ride with the profit lock)
 
 
 def test_hlc_second_entry_only_from_1230_on_a_reversal():
@@ -567,3 +570,17 @@ def test_profit_booking_target_behind_the_entry_is_ignored():
                      entry_fill=60, entry_index=LEVELS.close, sl_premium=50)
     day._profit_booking_exits(ahead)
     assert ahead.pb_target == 102.88 and ahead.pb_index == ("R2", LEVELS.r2)
+
+
+def test_momentum_day_rides_with_the_profit_lock_not_the_level_target():
+    """Owner, 15-10: a day opening above R1 is a momentum day - a CE trade doesn't exit at R2; the profit lock rides it."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    day.day_open = LEVELS.r1 + 5
+    t = HlcTrade(date="x", kind="LEVEL", side="CE", strike=22800, pattern="", entry_time="2026-09-29T09:30:00",
+                 entry_fill=100, entry_index=LEVELS.r1 + 5, sl_premium=80, targets=[("R2", LEVELS.r2), ("R3", LEVELS.r3)])
+    day.trades.append(t); day.open_trade = t
+    day.index_history.append(Candle(1, 1, 1, 1))
+    events = day._manage(t, _at("09:40"), Candle(LEVELS.r2 - 5, LEVELS.r2 + 10, LEVELS.r2 - 6, LEVELS.r2 + 8),
+                         Candle(130, 160, 128, 155), time(9, 45))
+    assert not t.exit_reason and events == []  # index broke R2 - no target exit

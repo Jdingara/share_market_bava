@@ -103,7 +103,10 @@ SWING_LOW_SL = True  # owner, 2026-10-12: SL = the candle before the entry candl
 PB_FIB = 0.786  # PROFIT BOOKING side exit: Fib 0.786 of yesterday's close -> high (owner, 2026-10-12)
 PANIC_BLOCK = False  # owner, 2026-10-12: both sides (PROFIT BOOKING and PANIC) can trade - the index decides (29-09 block off)
 SECOND_ENTRY_PM_REVERSAL = True  # owner 13-10 (all bots): after the morning trade one more, from 12:30, reversal + confirmation, SL reversal low - 1
-R3_S3_FULL_PROFIT = True  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
+R3_S3_FULL_PROFIT = True
+# Owner, 2026-10-15: momentum - after an R3/S3 touch, and on a day that opened above R1 (CE) / below S1 (PE), the move
+# usually runs on (some days it reverses at once): no level-target exit, ride with the profit lock TSL instead.
+MOMENTUM_RIDE = True  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
 CANDLE = timedelta(minutes=5)
@@ -322,11 +325,17 @@ class HlcDay:
             # Owner, 2026-10-13 (NIFTY touched R3 22567 at 11:00): an R3 / S3 touch = the day's full profit - close what
             # is open and take no more trades today (NIFTY and SENSEX). (Big-gap days open beyond R2/S2 - not counted.)
             name, value = ("R3", self.levels.r3) if index.high >= self.levels.r3 else ("S3", self.levels.s3)
-            self.full_profit = f"index touched {name} {value:g} in candle {when:%H:%M} - full profit, no more trades today"
-            events.append(self.full_profit)
-            events += self.close_now(when, chain, self.full_profit)
-            self.done = True
-            return events
+            if MOMENTUM_RIDE and self.market.profit_lock_step:
+                # owner 15-10: no exit at R3/S3 - the open trade rides with the profit lock; no new trades today
+                self.full_profit = (f"index touched {name} {value:g} in candle {when:%H:%M} - full profit: no new trades "
+                                    f"today, an open trade rides with the profit lock")
+                events.append(self.full_profit)
+            else:
+                self.full_profit = f"index touched {name} {value:g} in candle {when:%H:%M} - full profit, no more trades today"
+                events.append(self.full_profit)
+                events += self.close_now(when, chain, self.full_profit)
+                self.done = True
+                return events
 
         trade = self.open_trade
         if trade is not None and trade.entry_time != when.isoformat():
@@ -337,6 +346,8 @@ class HlcDay:
         if closes >= EXIT_CLOSE:
             self.done = True
             return events
+        if self.full_profit is not None:
+            return events  # owner 13-10 / 15-10: after R3/S3 no new trades
         if self.open_trade is not None or self.pending is not None:
             return events
         if self.market.max_loss and self.market.allocation and risk_left(self.market.max_loss, self.realized_rupees()) <= 0:
@@ -580,6 +591,16 @@ class HlcDay:
             return False
         index_against = index.close < self.levels.close if side == "CE" else index.close > self.levels.close
         return index_against and premium.close < yesterday[2]
+
+    def _momentum_ride(self, trade: HlcTrade) -> bool:
+        if not (MOMENTUM_RIDE and self.market.profit_lock_step) or trade.uv is not None:
+            return False
+        if self.full_profit is not None:
+            return True
+        ladder = dict(self.levels.ladder())
+        if self.day_open is None:
+            return False
+        return (trade.side == "CE" and self.day_open > ladder["R1"]) or (trade.side == "PE" and self.day_open < ladder["S1"])
 
     def close_now(self, when: datetime, chain: dict[tuple[float, str], Candle], reason: str) -> list[str]:
         """Close the open trade at this candle's premium close (R3/S3 full profit, or the owner's own call)."""
@@ -958,6 +979,11 @@ class HlcDay:
             if reached and trade.entry_fill + reached > trade.lock_level and (
                     not trade.lock_seen or reached > trade.lock_seen[0]):
                 trade.lock_seen = (reached, now)
+        if self._momentum_ride(trade):
+            # owner 15-10: momentum - no level / Fib targets; the profit lock above (and the SL) take it out
+            if closes >= EXIT_CLOSE:
+                return [self._exit(trade, when, prem.close, "15:00 exit")]
+            return []
         if trade.pb_target is not None or trade.pb_index is not None:
             # Owner, 2026-10-12: PROFIT BOOKING side - exit only at the Fib 0.786 target or the index at S2 / R2
             if trade.pb_target is not None and prem.high >= trade.pb_target:
