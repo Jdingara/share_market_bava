@@ -237,6 +237,7 @@ def test_06_10_sensex_72500ce_near_the_atm_ce_close_with_the_index_below(monkeyp
     09:30 high 458 -> bought 441 (low 408.9 stays above SL 400); 09:55 high 559.5 -> target 529."""
     import sniper_engine as _se
     monkeypatch.setattr(_se, "FIRST_CANDLE_BREAK", False)  # tests the trigger, not the 15-10 first-candle rule
+    monkeypatch.setattr(_se, "MORNING_SNIPER_HOLD", False)  # (nor the 16-10 morning Sniper hold)
     monkeypatch.setattr(_se, "RETEST_ONLY", False)  # the older buy-stop-at-the-next-square rule
     engine, events = _run_sensex([
         ("09:25", (431.4, 410.6, 417.2, 424.05)),
@@ -264,6 +265,7 @@ def test_near_is_within_30_points_for_sensex():
 def test_close_above_the_atm_close_signals_without_the_index(monkeypatch):
     import sniper_engine as _se
     monkeypatch.setattr(_se, "FIRST_CANDLE_BREAK", False)  # tests the trigger, not the 15-10 first-candle rule
+    monkeypatch.setattr(_se, "MORNING_SNIPER_HOLD", False)  # (nor the 16-10 morning Sniper hold)
     engine, events = _run_sensex([("09:25", (435, 420, 432.0, 425))], index_close=72450)
     assert [e.kind for e in events] == ["ORDER"]
     assert (events[0].atm_close_trigger, events[0].near, events[0].next_square) == (428.80, False, 441)
@@ -272,6 +274,7 @@ def test_close_above_the_atm_close_signals_without_the_index(monkeypatch):
 def test_atm_close_trigger_does_not_need_the_atm_below_the_sniper(monkeypatch):
     import sniper_engine as _se
     monkeypatch.setattr(_se, "FIRST_CANDLE_BREAK", False)  # tests the trigger, not the 15-10 first-candle rule
+    monkeypatch.setattr(_se, "MORNING_SNIPER_HOLD", False)  # (nor the 16-10 morning Sniper hold)
     # Owner, 07-10: below the Sniper is good (HIGH tag), not required. ATM PE 420 > Sniper 404.70, still falling.
     engine, events = _run_sensex([("09:25", (435, 420, 432.0, 425))], atm_pe_close=420)
     assert [e.kind for e in events] == ["ORDER"]
@@ -601,3 +604,19 @@ def test_up_starts_on_the_atm_pe_evening_star_and_a_red_confirmation():
         if hhmm == "09:45":
             assert "up" not in engine.started
     assert "up" in engine.started and "09:50" in engine.started_why["up"]
+
+
+def test_morning_needs_the_atm_below_the_sniper_and_the_otm_holding_above_for_two_closes():
+    """Owner, 16-10 (NIFTY 23000 CE): 10:00 ATM PE closes below the Sniper with the OTM above the Sniper and its own
+    close; 10:05 holds the same -> only then the signal. One close alone = a possible fake breakout."""
+    engine = SniperDay(date(2026, 10, 6), SENSEX_ROW, index_close=72382.47, near_points=30)
+    sniper, otm_close = SENSEX_ROW.sniper, SENSEX_ROW.otm_ce_close
+    up = (otm_close + 40, otm_close + 20, otm_close + 35, otm_close + 22)
+    below = Bar(sniper - 10, sniper - 30, sniper - 20, sniper - 12)
+    above = Bar(sniper + 30, sniper + 10, sniper + 20, sniper + 12)
+    feed = lambda hhmm, pe: engine.on_candle(_at(hhmm), {**_sensex_bars(up), "atm_pe": pe,
+                                                        "index": Bar(72300, 72290, 72295, 72292)})
+    engine.started.add("up")
+    feed("09:15", above)
+    assert feed("09:30", below) == [] and engine.hold_streak["up"] == 1          # one close - wait
+    assert [e.kind for e in feed("09:35", below)] in (["ORDER"], ["ENTRY"])        # held -> signal

@@ -126,6 +126,11 @@ FIRST_CANDLE_BREAK = True
 # candle closes below that pattern's low (09:50), or the ATM CE closes above its own first 5-minute high. Down (PE) is
 # the mirror. One leg breaking while the other doesn't confirm = fake momentum.
 ATM_LEG_GATE = True
+# Owner, 2026-10-16: morning (first half) - the falling ATM must have travelled to the Sniper (close below it) while the
+# OTM closes above the Sniper AND its own yesterday close; and the NEXT candle must close the same way. Only then a
+# signal / entry at the square. Otherwise it is a fake breakout - wait (16-10 NIFTY: the 09:30 22800 PE signal with
+# the ATM CE far above the Sniper held the morning and the 10:05 23000 CE entry was missed).
+MORNING_SNIPER_HOLD = True
 # Owner, 2026-10-15: the retest is one way in; the other is MOMENTUM - once the market has started (index beyond its
 # first candle), with the falling ATM below its yesterday close and the Sniper: the OTM having CLOSED above a square
 # (signal 527.80 > 484) -> buy at the next square (529) when it trades there, from 09:30; SL one square down (484),
@@ -285,6 +290,7 @@ class SniperDay:
         self._prev_bars: Optional[dict] = None  # the previous candle's bars (momentum is armed on a CLOSE)
         self.started: set[str] = set()  # "up" / "down": the index has closed beyond that candle on that side
         self.started_why: dict[str, str] = {}
+        self.hold_streak: dict[str, int] = {"up": 0, "down": 0}  # MORNING_SNIPER_HOLD: consecutive closes meeting it
         self.leg_top: dict[str, tuple[int, float, str, float]] = {}  # ATM leg -> (idx, pattern low, name, high)
         self.prev = previous_closes(row)
         self.open_trades: list[tuple[TradeSetup, TradeResult]] = []
@@ -463,6 +469,11 @@ class SniperDay:
                     self.started.add("up")
                 if not ATM_LEG_GATE and idx.close < self.first_index.low:
                     self.started.add("down")
+        if MORNING_SNIPER_HOLD:
+            for direction, falling, otm in (("up", "atm_pe", "otm_ce"), ("down", "atm_ce", "otm_pe")):
+                ok = (bars[falling].close < self.row.sniper and bars[otm].close > self.row.sniper
+                      and bars[otm].close > self.prev[otm])
+                self.hold_streak[direction] = self.hold_streak[direction] + 1 if ok else 0
         half = entry_window_for(when)
         for pending in list(self.pending):
             self.pending.remove(pending)
@@ -754,7 +765,9 @@ class SniperDay:
     def _setups(self, half: Optional[str]) -> list[TradeSetup]:
         """This half's setups whose side has started - the index closed beyond its first 5-minute candle (owner 15-10)."""
         return [s for s in self.setups if s.half == half
-                and (not FIRST_CANDLE_BREAK or self.first_index is None or s.direction in self.started)]
+                and (not FIRST_CANDLE_BREAK or self.first_index is None or s.direction in self.started)
+                and (not MORNING_SNIPER_HOLD or half != "first" or self.first_index is None
+                     or self.hold_streak[s.direction] >= 2)]
 
     def _arm_reentry(self, setup: TradeSetup, trade: TradeResult) -> None:
         """Owner, 2026-10-13: the reason for a re-entry - draw the Fib from the move's low to its high; a pull-back to
