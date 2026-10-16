@@ -135,6 +135,9 @@ MORNING_SNIPER_HOLD = True
 # first move the market goes sideways (16-10 23000 CE: high 199.65 at 10:15, then 140-195); when a candle CLOSES above
 # that high, buy at the next square when it trades there - SL one square down, target two up (square rules as always).
 SNIPER_RANGE_BREAK_REENTRY = True
+# Owner, 2026-10-16: at 2 squares (the target) - a candle CLOSING above it is a strong break: SL to the target (2 squares
+# locked), then the square TSL; touched but no close above = no strong break -> exit at the target.
+STRONG_BREAK_OR_TARGET = True
 # Owner, 2026-10-15: the retest is one way in; the other is MOMENTUM - once the market has started (index beyond its
 # first candle), with the falling ATM below its yesterday close and the Sniper: the OTM having CLOSED above a square
 # (signal 527.80 > 484) -> buy at the next square (529) when it trades there, from 09:30; SL one square down (484),
@@ -327,7 +330,8 @@ class SniperDay:
             why = f" ({trade.tsl_why})" if trade.tsl_why else ""
             return f"candle {when:%H:%M} closed {premium:g}, below the trailing SL {trade.trail_stop:g}{why}"
         if reason == "TARGET":
-            return f"2 square numbers reached (target {trade.target:g}) in candle {when:%H:%M} -> exit"
+            return (f"2 square numbers reached (target {trade.target:g}) in candle {when:%H:%M}, no strong break "
+                    f"(no close above it) -> exit")
         if reason == "DAILY_LOSS_LIMIT":
             return f"candle {when:%H:%M} closed {premium:g} - today's loss limit Rs {self.max_loss:,.0f} reached"
         if reason == "TIME_EXIT_1500":
@@ -412,6 +416,7 @@ class SniperDay:
             ride = self.ride_normal_days and (self.buyers_day or RIDE_EVERY_DAY)
             trails = self.trailing and (id(trade) not in self.fixed_sl or ride)
             moved_now = False
+            force_target = False
             if (trails and self.first_tsl_on_touch and trade.trail_stop <= trade.stop_loss
                     and bar.high >= (math.isqrt(trade.entry_square) + 1) ** 2):
                 trade.trail_stop = float(trade.entry_square)  # owner, 07-10: first step on a touch -> cost
@@ -424,7 +429,15 @@ class SniperDay:
                 k = math.isqrt(trade.entry_square)
                 m = math.isqrt(int(bar.high))
                 state = self.ladder.setdefault(id(trade), {"cost_at": None})
-                if m >= k + 2:
+                if m >= k + 2 and state["cost_at"] is None and STRONG_BREAK_OR_TARGET:
+                    if bar.close > (k + 2) ** 2:
+                        state["cost_at"] = self.candle_no
+                        trade.trail_stop = max(trade.trail_stop, float((k + 2) ** 2))
+                        trade.tsl_why = (f"candle {when:%H:%M} closed {bar.close:g} above the target {(k + 2) ** 2} - strong "
+                                         f"break, SL to the target (2 squares locked)")
+                    else:
+                        force_target = True
+                elif m >= k + 2:
                     if state["cost_at"] is None:
                         state["cost_at"] = self.candle_no
                         # owner, 2026-10-13: at least one square of profit once 2 squares are reached (was cost)
@@ -443,7 +456,10 @@ class SniperDay:
             trailed = trade.trail_stop > trade.stop_loss
             stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
             target_hit = self.keep_target and not ride and bar.high >= trade.target
-            if target_hit and (moved_now or (self.sl_on_close and (ALL_STOPS_ON_CLOSE or not trailed))):
+            if force_target:
+                # owner 16-10: 2 squares reached without a close above - no strong break -> book the target
+                events.append(self._close(trade, when, float(trade.target), "TARGET"))
+            elif target_hit and (moved_now or (self.sl_on_close and (ALL_STOPS_ON_CLOSE or not trailed))):
                 # target reached during the candle, before a stop that only counts on the close
                 events.append(self._close(trade, when, trade.target, "TARGET"))
             elif stop_exit is not None:
@@ -846,21 +862,22 @@ class SniperDay:
         """Owner, 2026-10-16 - see SNIPER_RANGE_BREAK_REENTRY."""
         k = r.get("break_k")
         if k is not None and self.candle_no > r["break_at"]:
-            if bar.high >= k * k and (not SECOND_ENTRY_PM_REVERSAL or half == "second"):
+            # owner 16-10: after the break close, a RETEST of the square below that close -> entry there
+            if bar.low <= k * k and (not SECOND_ENTRY_PM_REVERSAL or half == "second"):
                 self.reentry = None
-                fill = max(float(k * k), bar.open) if bar.open is not None else float(k * k)
+                fill = min(float(k * k), bar.open) if bar.open is not None else float(k * k)
                 setup = TradeSetup(half, r["setup"].direction, r["setup"].falling_type, r["setup"].buy_strike,
                                    r["setup"].buy_type, square_levels(fill), contract=r["setup"].contract)
                 self.halves_used.add(half)
                 return self._open(setup, k, when, round(fill, 2), bar, True, reason=r["break_why"])
-            if bar.close > k * k:  # closed above that square too - the next one up
-                r["break_k"], r["break_at"] = highest_square_below(bar.close) + 1, self.candle_no
+            if bar.close > (k + 1) ** 2:  # closed above the next square too - retest that one
+                r["break_k"], r["break_at"] = highest_square_below(bar.close), self.candle_no
             return None
         if bar.close > r["high"]:
-            r["break_k"], r["break_at"] = highest_square_below(bar.close) + 1, self.candle_no
+            r["break_k"], r["break_at"] = highest_square_below(bar.close), self.candle_no
             r["break_why"] = (f"second entry: after the first move the market went sideways under its high {r['high']:g}; "
-                              f"candle {when:%H:%M} closed {bar.close:g} above it -> entry at the next square "
-                              f"{r['break_k'] ** 2}")
+                              f"candle {when:%H:%M} closed {bar.close:g} above it -> entry on the retest of the "
+                              f"square {r['break_k'] ** 2}")
             return None
         r["high"] = max(r["high"], bar.high)
         return None

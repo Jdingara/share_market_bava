@@ -353,8 +353,10 @@ def test_sideways_day_uv_trade_on_the_atm_after_reversal_and_retest(monkeypatch)
 
 
 @pytest.mark.ride
-def test_buyers_day_rides_past_the_target_with_the_trailing_sl():
+def test_buyers_day_rides_past_the_target_with_the_trailing_sl(monkeypatch):
     """Owner, 09-10: not a buyer's day -> the target doesn't exit; the trailing SL does."""
+    import sniper_engine as _se4
+    monkeypatch.setattr(_se4, "STRONG_BREAK_OR_TARGET", False)  # the 12/13-10 ladder at the target
     from sniper_engine import Bar, SniperDay
     from sniper_signal import MARKETS, build_daily_plan
     closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
@@ -383,9 +385,11 @@ def test_buyers_day_rides_past_the_target_with_the_trailing_sl():
 
 
 @pytest.mark.ride
-def test_buyers_day_each_square_touched_past_the_target_moves_the_tsl():
+def test_buyers_day_each_square_touched_past_the_target_moves_the_tsl(monkeypatch):
     """Owner, 12-10: entry 144 - nothing until 196 (2 squares): 196 touched -> SL 144; a later candle above 196 ->
     SL 169; 225 touched -> SL 196; the exit needs a body close below the SL."""
+    import sniper_engine as _se4
+    monkeypatch.setattr(_se4, "STRONG_BREAK_OR_TARGET", False)  # the 12/13-10 ladder at the target
     from sniper_engine import Bar, SniperDay
     from sniper_signal import MARKETS, build_daily_plan
     closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
@@ -423,9 +427,11 @@ def test_sideways_day_trades_only_the_atm(monkeypatch):
 
 
 
-def test_12_10_sensex_529_tsl_only_after_two_squares():
+def test_12_10_sensex_529_tsl_only_after_two_squares(monkeypatch):
     """Owner, 12-10: 72500 PE bought 529, SL 484 - 591 (only 1 square) moves nothing; the 09:55 wick to 498 closed
     525.35 > 484 -> still in; 625 touched -> SL 529; a later candle above 625 -> SL 576."""
+    import sniper_engine as _se4
+    monkeypatch.setattr(_se4, "STRONG_BREAK_OR_TARGET", False)  # the 12/13-10 ladder at the target
     from sniper_engine import Bar, SniperDay, TradeResult
     from sniper_signal import MARKETS, build_daily_plan
     closes = {(72600, "CE"): 496.50, (72600, "PE"): 459.90, (72700, "CE"): 442.45, (72500, "PE"): 418.55,
@@ -576,8 +582,10 @@ def test_momentum_signal_above_the_square_buys_the_next_one():
 
 
 @pytest.mark.ride
-def test_every_day_rides_past_the_target_with_the_square_tsl():
+def test_every_day_rides_past_the_target_with_the_square_tsl(monkeypatch):
     """Owner, 15-10: all Sniper trades, all days - no exit at 2 squares; the ladder locks profit and the TSL rides."""
+    import sniper_engine as _se4
+    monkeypatch.setattr(_se4, "STRONG_BREAK_OR_TARGET", False)  # the 12/13-10 ladder at the target
     engine, events = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105)),
                            ("09:35", (170, 150, 165, 160))])
     assert not engine.buyers_day
@@ -645,5 +653,20 @@ def test_second_entry_on_a_close_above_the_sideways_high_buys_the_next_square():
     assert len(day.trades) == 1 and day.trades[0].exit_reason
     assert not [e for e in day.on_candle(at("12:20"), {**other, "otm_pe": Bar(230, 200, 220, 210)}) if e.kind == "ENTRY"]
     assert not [e for e in day.on_candle(at("12:30"), {**other, "otm_pe": Bar(248, 218, 245, 220)}) if e.kind == "ENTRY"]
-    entries = [e for e in day.on_candle(at("12:35"), {**other, "otm_pe": Bar(262, 244, 258, 245)}) if e.kind == "ENTRY"]
-    assert entries and (entries[0].trade.entry_fill, entries[0].trade.stop_loss, entries[0].trade.target) == (256, 225, 324)
+    # 16-10 owner: after the break close (245) wait for the RETEST of the square below it (225)
+    assert not [e for e in day.on_candle(at("12:35"), {**other, "otm_pe": Bar(255, 244, 250, 245)}) if e.kind == "ENTRY"]
+    entries = [e for e in day.on_candle(at("12:40"), {**other, "otm_pe": Bar(258, 224, 235, 255)}) if e.kind == "ENTRY"]
+    assert entries and (entries[0].trade.entry_fill, entries[0].trade.stop_loss, entries[0].trade.target) == (225, 196, 289)
+
+
+@pytest.mark.ride
+def test_target_touched_without_a_close_above_is_booked_a_close_above_rides():
+    """Owner, 16-10: 2 squares touched, candle closes below -> exit at the target; closes above -> SL = target, ride."""
+    engine, _ = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105)),
+                      ("09:35", (172, 150, 165, 160))])
+    [t] = engine.trades
+    assert (t.exit_reason, t.exit_premium) == ("TARGET", 169)
+    engine, _ = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105)),
+                      ("09:35", (180, 150, 175, 160))])
+    [t] = engine.trades
+    assert not t.exit_reason and t.trail_stop == 169
