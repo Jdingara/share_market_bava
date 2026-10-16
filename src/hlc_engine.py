@@ -140,6 +140,7 @@ class HlcTrade:
     qty: int = 0  # owner, 2026-10-12: sized per trade (0 = the bot's fixed quantity)
     lock_seen: Optional[tuple[float, int]] = None  # profit lock: (profit reached, candle no.) waiting for a confirming close
     lock_level: float = 0.0  # profit lock: premium SL locking +N x step (owner, 13-10)
+    lock_why: str = ""
     pb_target: Optional[float] = None  # PROFIT BOOKING side: Fib 0.786 of yesterday's close -> high (owner, 12-10)
     pb_index: Optional[tuple[str, float]] = None  # ... or the index reaching S2 (PE) / R2 (CE)
     uv: Optional[dict] = None  # expiry-day PANIC-side U/V trade (owner 13-10): {"first": (k+1)^2, "target": (k+2)^2, "touched_at"}
@@ -991,14 +992,14 @@ class HlcDay:
             # Exit on a touch of the locked level.
             if trade.lock_level and prem.low <= trade.lock_level:
                 return [self._exit(trade, when, trade.lock_level,
-                                   f"profit lock {trade.lock_level - trade.entry_fill:+g} - a later candle had closed above "
-                                   f"{trade.lock_level:g}, so the SL was locked there; candle {when:%H:%M} came back to it")]
+                                   f"profit lock {trade.lock_level - trade.entry_fill:+g} - {trade.lock_why}; candle {when:%H:%M} came back to it")]
             now = len(self.index_history)
             add = self.market.profit_lock_add or step
             if trade.lock_seen and now > trade.lock_seen[1]:
                 level = trade.entry_fill + trade.lock_seen[0]
-                if prem.close >= level:
-                    trade.lock_level = max(trade.lock_level, level)
+                if prem.close >= level and level > trade.lock_level:
+                    trade.lock_level = level
+                    trade.lock_why = f"a later candle had closed above {level:g}, so the SL was locked there"
                     trade.lock_seen = None
             gain = prem.high - trade.entry_fill  # profit reached: +100, then +150, +200, ... (owner 13-10)
             reached = 0.0 if gain < step else step + ((gain - step) // add) * add
@@ -1008,7 +1009,10 @@ class HlcDay:
             if reached >= 2 * step:
                 # Owner, 2026-10-16 (NIFTY CE 136.65 touched +100 at 10:15, closed back and gave only +50): from +100
                 # (SENSEX +200) a TOUCH moves the SL to one step below it (+75 / +150), no confirming close needed
-                trade.lock_level = max(trade.lock_level, round(trade.entry_fill + reached - add, 2))
+                touch_lock = round(trade.entry_fill + reached - add, 2)
+                if touch_lock > trade.lock_level:
+                    trade.lock_level = touch_lock
+                    trade.lock_why = f"+{reached:g} touched ({trade.entry_fill + reached:g}), so the SL moved to +{reached - add:g}"
         if self._momentum_ride(trade):
             # owner 15-10: momentum - no level / Fib targets; the profit lock above (and the SL) take it out
             if closes >= EXIT_CLOSE:
