@@ -472,6 +472,8 @@ def test_no_reentry_in_the_same_half_on_the_same_signal_13_10():
 @pytest.mark.ride
 def test_reentry_at_the_0618_pullback_of_the_previous_move(monkeypatch):
     """Owner, 13-10: after an exit, draw the Fib from the move's low to its high - a pull-back to 0.618 re-enters."""
+    import sniper_engine as _se3
+    monkeypatch.setattr(_se3, "SNIPER_RANGE_BREAK_REENTRY", False)  # the 13-10 0.618 re-entry (16-10: range break)
     import sniper_engine as _se
     monkeypatch.setattr(_se, "SECOND_ENTRY_PM_REVERSAL", False)  # the 0.618 mechanics; the 12:30 rule has its own test
     from sniper_engine import Bar, SniperDay
@@ -504,9 +506,11 @@ def test_reentry_at_the_0618_pullback_of_the_previous_move(monkeypatch):
 
 
 @pytest.mark.ride
-def test_second_entry_only_from_1230_with_reversal_sl_under_its_low():
+def test_second_entry_only_from_1230_with_reversal_sl_under_its_low(monkeypatch):
     """Owner, 13-10 (all bots): after the morning trade, one more entry - only from 12:30, reversal + green
     confirmation, SL = the reversal low - 1."""
+    import sniper_engine as _se3
+    monkeypatch.setattr(_se3, "SNIPER_RANGE_BREAK_REENTRY", False)  # the 13-10 0.618 re-entry (16-10: range break)
     from sniper_engine import Bar, SniperDay
     from sniper_signal import MARKETS, build_daily_plan
     closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
@@ -620,3 +624,26 @@ def test_morning_needs_the_atm_below_the_sniper_and_the_otm_holding_above_for_tw
     feed("09:15", above)
     assert feed("09:30", below) == [] and engine.hold_streak["up"] == 1          # one close - wait
     assert [e.kind for e in feed("09:35", below)] in (["ORDER"], ["ENTRY"])        # held -> signal
+
+
+@pytest.mark.ride
+def test_second_entry_on_a_close_above_the_sideways_high_buys_the_next_square():
+    """Owner, 16-10 (NIFTY 23000 CE high 199.65 at 10:15, then sideways): a close above the first move's high ->
+    the next square when it trades there, from 12:30; SL one square down, target two up."""
+    from sniper_engine import Bar, SniperDay
+    from sniper_signal import MARKETS, build_daily_plan
+    closes = {(22600, "CE"): 132.60, (22600, "PE"): 141.70, (22700, "CE"): 87.15, (22500, "PE"): 98.60}
+    row = build_daily_plan(22603, MARKETS["NIFTY"], lambda k, t: closes[(k, t)]).final
+    day = SniperDay(date(2026, 10, 13), row)
+    day.buyers_day = True
+    at = lambda hm: datetime(2026, 10, 13, int(hm[:2]), int(hm[3:]))
+    other = {"atm_ce": Bar(126, 118, 120, 125), "atm_pe": Bar(155, 145, 150, 148), "otm_ce": Bar(85, 80, 82, 85)}
+    day.on_candle(at("09:30"), {**other, "atm_ce": Bar(130, 120, 125, 128), "otm_pe": Bar(150, 120, 149, 125)})
+    day.on_candle(at("09:35"), {**other, "otm_pe": Bar(150, 140, 148, 149)})
+    day.on_candle(at("09:40"), {**other, "otm_pe": Bar(240, 147, 230, 148)})
+    day.on_candle(at("09:45"), {**other, "otm_pe": Bar(231, 160, 165, 230)})
+    assert len(day.trades) == 1 and day.trades[0].exit_reason
+    assert not [e for e in day.on_candle(at("12:20"), {**other, "otm_pe": Bar(230, 200, 220, 210)}) if e.kind == "ENTRY"]
+    assert not [e for e in day.on_candle(at("12:30"), {**other, "otm_pe": Bar(248, 218, 245, 220)}) if e.kind == "ENTRY"]
+    entries = [e for e in day.on_candle(at("12:35"), {**other, "otm_pe": Bar(262, 244, 258, 245)}) if e.kind == "ENTRY"]
+    assert entries and (entries[0].trade.entry_fill, entries[0].trade.stop_loss, entries[0].trade.target) == (256, 225, 324)

@@ -131,6 +131,10 @@ ATM_LEG_GATE = True
 # signal / entry at the square. Otherwise it is a fake breakout - wait (16-10 NIFTY: the 09:30 22800 PE signal with
 # the ATM CE far above the Sniper held the morning and the 10:05 23000 CE entry was missed).
 MORNING_SNIPER_HOLD = True
+# Owner, 2026-10-16: the second entry is NOT a 0.618 pull-back bought at a candle's close (16-10 NIFTY 172.20). After the
+# first move the market goes sideways (16-10 23000 CE: high 199.65 at 10:15, then 140-195); when a candle CLOSES above
+# that high, buy at the next square when it trades there - SL one square down, target two up (square rules as always).
+SNIPER_RANGE_BREAK_REENTRY = True
 # Owner, 2026-10-15: the retest is one way in; the other is MOMENTUM - once the market has started (index beyond its
 # first candle), with the falling ATM below its yesterday close and the Sniper: the OTM having CLOSED above a square
 # (signal 527.80 > 484) -> buy at the next square (529) when it trades there, from 09:30; SL one square down (484),
@@ -797,6 +801,8 @@ class SniperDay:
         if bar.close < r["low"]:  # the move failed - no re-entry
             self.reentry = None
             return None
+        if SNIPER_RANGE_BREAK_REENTRY:
+            return self._range_break_entry(r, half, bar, when)
         if bar.open is not None:
             r.setdefault("candles", []).append(PatternCandle(bar.open, bar.high, bar.low, bar.close))
         if "tested_at" not in r:
@@ -835,6 +841,29 @@ class SniperDay:
                + (f"; SL = reversal low {r['reversal_low']:g} - 1" if pm else ""))
         return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, False, reentry=True, reason=why,
                           stop=stop)
+
+    def _range_break_entry(self, r: dict, half: Optional[str], bar: Bar, when: datetime) -> Optional[list[Event]]:
+        """Owner, 2026-10-16 - see SNIPER_RANGE_BREAK_REENTRY."""
+        k = r.get("break_k")
+        if k is not None and self.candle_no > r["break_at"]:
+            if bar.high >= k * k and (not SECOND_ENTRY_PM_REVERSAL or half == "second"):
+                self.reentry = None
+                fill = max(float(k * k), bar.open) if bar.open is not None else float(k * k)
+                setup = TradeSetup(half, r["setup"].direction, r["setup"].falling_type, r["setup"].buy_strike,
+                                   r["setup"].buy_type, square_levels(fill), contract=r["setup"].contract)
+                self.halves_used.add(half)
+                return self._open(setup, k, when, round(fill, 2), bar, True, reason=r["break_why"])
+            if bar.close > k * k:  # closed above that square too - the next one up
+                r["break_k"], r["break_at"] = highest_square_below(bar.close) + 1, self.candle_no
+            return None
+        if bar.close > r["high"]:
+            r["break_k"], r["break_at"] = highest_square_below(bar.close) + 1, self.candle_no
+            r["break_why"] = (f"second entry: after the first move the market went sideways under its high {r['high']:g}; "
+                              f"candle {when:%H:%M} closed {bar.close:g} above it -> entry at the next square "
+                              f"{r['break_k'] ** 2}")
+            return None
+        r["high"] = max(r["high"], bar.high)
+        return None
 
     def sync_capital(self) -> None:
         """Live bot, after each candle: tell the shared ledger how much money this bot has in open trades."""
