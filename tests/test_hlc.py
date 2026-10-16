@@ -118,7 +118,10 @@ def test_no_fib_trade_before_0930():
     assert day.on_candle(_at("09:20"), Candle(22727, 22733, 22675, 22727.95), _chain30()) == []  # touches 22682 but closes 09:25
 
 
-def test_pe_fib_trade_trails_through_s1():
+def test_pe_fib_trade_trails_through_s1(monkeypatch):
+    import hlc_engine as _he5
+    for _f in ("R2_OR_FIB_REVERSAL", "FIRST_BREAK_CONFIRM", "BOTH_PB_BUYERS_DAY"):
+        monkeypatch.setattr(_he5, _f, False)  # older rules (16-10 replacements have their own tests)
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
     day.on_candle(_at("09:15"), Candle(22760, 22770, 22740, 22745), _chain((60, 62, 55, 58)))  # below close -> PE
     day.on_candle(_at("09:20"), Candle(22745, 22750, 22738, 22742), _chain((58, 60, 57, 59)))
@@ -212,6 +215,9 @@ def test_low_premium_from_1330_uses_the_day_low_minus_one(monkeypatch):
 def test_every_trade_trails_50_below_the_premium_high_once_50_up(monkeypatch):
     """Owner, 07-10: NIFTY 50 / SENSEX 100 points up -> trailing SL that far below the premium's high (not only on
     big-gap days). CE bought 10.00 at 13:30 (SL 8.65); premium runs to 70 -> SL 20; comes back to 19.5 -> out at 20."""
+    import hlc_engine as _he5
+    for _f in ("R2_OR_FIB_REVERSAL", "FIRST_BREAK_CONFIRM", "BOTH_PB_BUYERS_DAY"):
+        monkeypatch.setattr(_he5, _f, False)  # older rules (16-10 replacements have their own tests)
     import hlc_engine as _he
     monkeypatch.setattr(_he, "R3_S3_FULL_PROFIT", False)  # tests other rules at the 29-09 S3
     from dataclasses import replace
@@ -408,9 +414,12 @@ def test_trend_trade_pattern_retest_fib_limit_fills_next_candle():
     assert events[-1].startswith("BUY PE 72500 at 350.94 (TREND")
 
 
-def test_buyers_day_touch_of_a_level_is_not_an_exit():
+def test_buyers_day_touch_of_a_level_is_not_an_exit(monkeypatch):
     """Owner, 12-10 (09-10 had it on normal days): a BUYER'S day rides - no target exit; a broken level moves the SL,
     a touch doesn't exit."""
+    import hlc_engine as _he5
+    for _f in ("R2_OR_FIB_REVERSAL", "FIRST_BREAK_CONFIRM", "BOTH_PB_BUYERS_DAY"):
+        monkeypatch.setattr(_he5, _f, False)  # older rules (16-10 replacements have their own tests)
     from hlc_engine import HlcTrade
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
     day.buyers_day = lambda: True
@@ -422,8 +431,11 @@ def test_buyers_day_touch_of_a_level_is_not_an_exit():
     assert "S1 22728.5 broken" in events[0] and trade.exit_reason == ""
 
 
-def test_break_entry_first_close_above_the_first_5_minute_high_09_10_sensex():
+def test_break_entry_first_close_above_the_first_5_minute_high_09_10_sensex(monkeypatch):
     """Owner, 09-10: CE day, 71600 CE first candle high 859; the 09:25 candle closes 882.45 -> buy 882.45."""
+    import hlc_engine as _he5
+    for _f in ("R2_OR_FIB_REVERSAL", "FIRST_BREAK_CONFIRM", "BOTH_PB_BUYERS_DAY"):
+        monkeypatch.setattr(_he5, _f, False)  # older rules (16-10 replacements have their own tests)
     levels = hlc_levels(71593.2, 71600, 597.95, 599.95)
     day = HlcDay(date(2026, 10, 9), levels, HLC_MARKETS["SENSEX"], {"CE": (1061.45, 575.15, 597.95), "PE": (641, 225.4, 599.95)})
     day.gap_done = True
@@ -455,6 +467,9 @@ def test_close_retest_entry_12_10_sensex():
 
 def test_profit_booking_side_exits_at_fib_0786_of_yesterdays_close_to_high(monkeypatch):
     """Owner, 12-10: NIFTY 22550 PE was PROFIT BOOKING (H 272.9, C 95.95) -> target 95.95 + 0.786 x 176.95 = 235.04."""
+    import hlc_engine as _he5
+    for _f in ("R2_OR_FIB_REVERSAL", "FIRST_BREAK_CONFIRM", "BOTH_PB_BUYERS_DAY"):
+        monkeypatch.setattr(_he5, _f, False)  # older rules (16-10 replacements have their own tests)
     import hlc_engine as _he2
     monkeypatch.setattr(_he2, "INDEX_FIB_TARGET", None)  # tests an older exit (16-10 index Fib target has its own test)
     from hlc_engine import HlcTrade
@@ -625,8 +640,11 @@ def test_profit_lock_touch_of_two_steps_moves_the_sl_one_step_below():
     assert t.lock_level == 211.65
 
 
-def test_index_fib_0786_is_the_first_target_and_a_close_beyond_re_enters():
+def test_index_fib_0786_is_the_first_target_and_a_close_beyond_re_enters(monkeypatch):
     """Owner, 16-10 NIFTY: Fib close (0) -> R2 (1); 0.786 is the first target; a later close beyond it re-enters."""
+    import hlc_engine as _he5
+    for _f in ("R2_OR_FIB_REVERSAL", "FIRST_BREAK_CONFIRM", "BOTH_PB_BUYERS_DAY"):
+        monkeypatch.setattr(_he5, _f, False)  # older rules (16-10 replacements have their own tests)
     from hlc_engine import HlcTrade
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
     level = round(LEVELS.close + 0.786 * (LEVELS.r2 - LEVELS.close), 2)
@@ -639,3 +657,55 @@ def test_index_fib_0786_is_the_first_target_and_a_close_beyond_re_enters():
     day.on_candle(_at("10:15"), Candle(level - 3, level + 8, level - 5, level + 6), chain((135, 145, 130, 142)))
     r = day.trades[-1]
     assert r.kind == "FIB 0.618 BREAK" and r.entry_fill == 142 and r.fib_from == 0.618  # next target: 0.786
+
+
+def test_both_profit_booking_is_a_buyers_day():
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"], {"CE": (120.0, 30.0, 35.0), "PE": (100.0, 40.0, 45.0)})
+    assert day.buyers_day()
+
+
+def _r2_trade(day):
+    from hlc_engine import HlcTrade
+    t = HlcTrade(date="x", kind="RETEST", side="CE", strike=22800, pattern="", entry_time="2026-09-29T09:30:00",
+                 entry_fill=100, entry_index=LEVELS.close + 5, sl_premium=60, targets=[("R1", LEVELS.r1), ("R2", LEVELS.r2)])
+    day.trades.append(t); day.open_trade = t
+    day.day_open = LEVELS.close  # not a momentum day
+    return t
+
+
+def test_non_momentum_day_books_at_r2():
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    t = _r2_trade(day)
+    day.index_history += [Candle(1, 1, 1, 1)] * 3
+    day._manage(t, _at("09:40"), Candle(LEVELS.r1, LEVELS.r1 + 5, LEVELS.r1 - 5, LEVELS.r1 + 2), Candle(110, 115, 105, 112), time(9, 45))
+    assert not t.exit_reason  # R1 is no longer an exit
+    day._manage(t, _at("09:45"), Candle(LEVELS.r2 - 10, LEVELS.r2 + 1, LEVELS.r2 - 12, LEVELS.r2 - 2), Candle(120, 130, 118, 128), time(9, 50))
+    assert t.exit_reason.startswith("TARGET R2")
+
+
+def test_r2_not_reached_books_at_the_fib_075_on_a_reversal_candle():
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    t = _r2_trade(day)
+    f75 = day.index_fib("CE", 0.75)
+    green = Candle(f75 - 30, f75 + 2, f75 - 31, f75)        # crosses 0.75
+    red = Candle(f75 + 1, f75 + 1.5, f75 - 35, f75 - 34)     # engulfs it - a reversal
+    day.index_history += [Candle(1, 1, 1, 1), green]
+    day._manage(t, _at("09:40"), green, Candle(110, 120, 108, 118), time(9, 45))
+    assert not t.exit_reason
+    day.index_history.append(red)
+    day._manage(t, _at("09:45"), red, Candle(118, 119, 105, 106), time(9, 50))
+    assert t.exit_reason.startswith("TARGET booked at the Fib 0.75")
+
+
+def test_first_5_minute_break_with_premium_then_a_confirmation_candle_enters():
+    """Owner, 16-10: index closes above its first 5-min high with the CE above its own first 5-min high; the next
+    candle confirms (index on up, CE green) -> CE at that close."""
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    day.gap_done = True  # (no FIB trade in this test)
+    c = LEVELS.close
+    pe = (60, 62, 58, 59)
+    day.on_candle(_at("09:15"), Candle(c - 10, c + 10, c - 20, c), {(22800.0, "CE"): Candle(20, 22, 18, 21), (22800.0, "PE"): Candle(*pe)})
+    day.on_candle(_at("09:20"), Candle(c, c + 22, c - 2, c + 20), {(22800.0, "CE"): Candle(21, 26, 20, 25), (22800.0, "PE"): Candle(*pe)})
+    events = day.on_candle(_at("09:25"), Candle(c + 20, c + 33, c + 18, c + 30),
+                           {(22800.0, "CE"): Candle(25, 29, 24, 28), (22800.0, "PE"): Candle(*pe)})
+    assert day.trades and day.trades[0].kind == "FIRST BREAK" and day.trades[0].entry_fill == 28, events

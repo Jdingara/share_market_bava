@@ -117,7 +117,16 @@ FLIP_ON_CONFIRMATION = True
 INDEX_FIB_TARGET = 0.786
 # Owner, 2026-10-16 (SENSEX turned at the 0.618 golden ratio, NIFTY at 0.786): a Fib ladder - the first unreached level
 # is the target; a close beyond it re-enters with the next level as the target (then R2 -> R3). Once per level.
-INDEX_FIB_LEVELS = (0.618, 0.786)  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
+INDEX_FIB_LEVELS = (0.618, 0.786)
+# Owner, 2026-10-16 (later): replaces the 0.618/0.786 ladder + break re-entries. Non-momentum days: the target is R2 (PE:
+# S2); if it doesn't get there - once the index has crossed the Fib 0.75 of close -> R2, a reversal candle on the index
+# books it (at 0.786 if that was touched, else 0.75). Momentum days keep riding with the profit lock.
+R2_OR_FIB_REVERSAL = True
+# Owner, 2026-10-16: the side is decided by the index breaking its first 5-minute candle (close above its high -> CE,
+# below its low -> PE) with that side's premium also closing above its own first 5-minute high; the NEXT candle must
+# confirm (index on in the same direction, premium green) -> entry at that close.
+FIRST_BREAK_CONFIRM = True
+BOTH_PB_BUYERS_DAY = True  # owner 16-10: CE and PE both PROFIT BOOKING yesterday is a buyer's day too  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
 CANDLE = timedelta(minutes=5)
@@ -149,6 +158,7 @@ class HlcTrade:
     lock_why: str = ""
     pb_target: Optional[float] = None  # PROFIT BOOKING side: Fib 0.786 of yesterday's close -> high (owner, 12-10)
     pb_index: Optional[tuple[str, float]] = None  # ... or the index reaching S2 (PE) / R2 (CE)
+    index_best: Optional[float] = None  # R2_OR_FIB_REVERSAL: the index's best level since entry
     fib_from: float = -1.0  # INDEX_FIB_LEVELS: the Fib ratio this re-entry broke (its target is the next one)
     uv: Optional[dict] = None  # expiry-day PANIC-side U/V trade (owner 13-10): {"first": (k+1)^2, "target": (k+2)^2, "touched_at"}
     exit_time: str = ""
@@ -321,6 +331,7 @@ class HlcDay:
         self._track_trend(when)
         self._track_trend_patterns(chain)
         self._track_expiry_uv()
+        self._track_first_break(when)
         self._track_second_reversal()
 
         if len(self.index_history) >= 3 and self._zone_touch(index):
@@ -545,6 +556,8 @@ class HlcDay:
         09:25 candle closed 882.45 -> 882 (owner's trade). SL -50/-25, targets the next index levels, trailing."""
         if self.break_done or self.trades:
             return None
+        if FIRST_BREAK_CONFIRM:
+            return self._first_break_confirm(when, index, chain)
         side = self.day_side(index, chain)
         atm = self.levels.atm
         history = self.premium_history.get((atm, side), []) if side else []
@@ -556,6 +569,43 @@ class HlcDay:
         self.break_done = True
         return self._enter("BREAK", side, atm, when, chain[(atm, side)], index,
                            f"{side} closed {c.close:g} above its first 5-min high {high:g}",
+                           "S3" if side == "PE" else "R3")
+
+    def _track_first_break(self, when: datetime) -> None:
+        """Owner, 2026-10-16 - see FIRST_BREAK_CONFIRM. Runs every candle (the break can come before 09:30)."""
+        if not FIRST_BREAK_CONFIRM or self.break_done or len(self.index_history) < 2:
+            return
+        atm, first, index = self.levels.atm, self.index_history[0], self.index_history[-1]
+        n = len(self.index_history)
+        st = getattr(self, "_fb", None)
+        if st is not None and n == st["at"] + 1:
+            side = st["side"]
+            prem = (self.premium_history.get((atm, side)) or [None])[-1]
+            prev = self.index_history[-2]
+            on = index.close > prev.close if side == "CE" else index.close < prev.close
+            self._fb = None
+            if prem is not None and on and prem.close > prem.open:
+                self._fb_ready = {"side": side, "at": n, "when": when}
+                return
+        if getattr(self, "_fb", None) is not None:
+            return
+        for side, broke in (("CE", index.close > first.high), ("PE", index.close < first.low)):
+            hist = self.premium_history.get((atm, side), [])
+            if broke and side in self.first5_high and len(hist) > 1 and hist[-1].close > self.first5_high[side]:
+                self._fb = {"side": side, "at": n}  # broken together - the next candle must confirm
+
+    def _first_break_confirm(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+        ready = getattr(self, "_fb_ready", None)
+        if ready is None or ready["at"] != len(self.index_history):
+            return None
+        side, atm, first = ready["side"], self.levels.atm, self.index_history[0]
+        if (atm, side) not in chain:
+            return None
+        self.break_done = True
+        return self._enter("FIRST BREAK", side, atm, when, chain[(atm, side)], index,
+                           f"index closed beyond its first 5-min {'high' if side == 'CE' else 'low'} "
+                           f"{first.high if side == 'CE' else first.low:g} with the {side} above its first 5-min high "
+                           f"{self.first5_high.get(side, 0):g}; confirmation candle {when:%H:%M}",
                            "S3" if side == "PE" else "R3")
 
     def _trend_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
@@ -789,9 +839,13 @@ class HlcDay:
         return []
 
     def buyers_day(self) -> bool:
-        """One leg PROFIT BOOKING yesterday, the other PANIC."""
+        """One leg PROFIT BOOKING yesterday, the other PANIC - or (owner, 16-10) BOTH PROFIT BOOKING: first one side
+        books profit, then the other."""
         ce, pe = self.yesterday.get("CE"), self.yesterday.get("PE")
-        return bool(ce and pe) and leg_label(*ce) != leg_label(*pe)
+        if not (ce and pe):
+            return False
+        a, b = leg_label(*ce), leg_label(*pe)
+        return a != b or (BOTH_PB_BUYERS_DAY and a == b == "PROFIT BOOKING")
 
     def _breakout_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], atm: float) -> Optional[str]:
         """Owner, 2026-10-01 (buyer's day): the last trade booked at a PANIC-side premium high; the premium
@@ -1013,7 +1067,7 @@ class HlcDay:
         elif prem.low <= trade.sl_premium:
             return [self._exit(trade, when, trade.sl_premium, f"SL ({trade.sl_rule}) - premium low {prem.low:g} touched the SL {trade.sl_premium:g} in candle {when:%H:%M}")]
         pe = trade.side == "PE"
-        if INDEX_FIB_TARGET and self.full_profit is None:
+        if INDEX_FIB_TARGET and not R2_OR_FIB_REVERSAL and self.full_profit is None:
             for ratio in (r for r in INDEX_FIB_LEVELS if r > trade.fib_from):
                 level = self.index_fib(trade.side, ratio)
                 if (trade.entry_index >= level) if not pe else (trade.entry_index <= level):
@@ -1056,6 +1110,25 @@ class HlcDay:
                     trade.lock_why = f"+{reached:g} touched ({trade.entry_fill + reached:g}), so the SL moved to +{reached - add:g}"
         if self._momentum_ride(trade):
             # owner 15-10: momentum - no level / Fib targets; the profit lock above (and the SL) take it out
+            if closes >= EXIT_CLOSE:
+                return [self._exit(trade, when, prem.close, "15:00 exit")]
+            return []
+        if R2_OR_FIB_REVERSAL and not trade.big_gap:
+            name, value = ("S2", self.levels.s2) if pe else ("R2", self.levels.r2)
+            trade.index_best = (min if pe else max)(trade.index_best if trade.index_best is not None else trade.entry_index,
+                                                    index.low if pe else index.high)
+            if (trade.entry_index > value) if pe else (trade.entry_index < value):  # R2 / S2 still ahead at entry
+                if (index.low <= value) if pe else (index.high >= value):
+                    return [self._exit(trade, when, prem.close, f"TARGET {name} {value:g} reached in candle {when:%H:%M}")]
+                f75, f786 = self.index_fib(trade.side, 0.75), self.index_fib(trade.side, 0.786)
+                crossed = trade.index_best <= f75 if pe else trade.index_best >= f75
+                turn = (bullish_pattern if pe else bearish_pattern)(self.index_history[-3:])
+                if crossed and turn and turn[0] not in DIRECTIONLESS:
+                    hit786 = trade.index_best <= f786 if pe else trade.index_best >= f786
+                    ratio, level = (0.786, f786) if hit786 else (0.75, f75)
+                    return [self._exit(trade, when, prem.close,
+                                       f"TARGET booked at the Fib {ratio:g} {level:g} (close -> {name}): {name} not reached, "
+                                       f"index {turn[0]} in candle {when:%H:%M}")]
             if closes >= EXIT_CLOSE:
                 return [self._exit(trade, when, prem.close, "15:00 exit")]
             return []
