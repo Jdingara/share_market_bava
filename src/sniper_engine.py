@@ -88,7 +88,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Literal, Optional
 
-from hlc_signal import DIRECTIONLESS, bullish_pattern
+from hlc_signal import DIRECTIONLESS, bearish_pattern, bullish_pattern
 from sizing import risk_left, size_qty
 from hlc_signal import Candle as PatternCandle
 from sniper_signal import (
@@ -121,6 +121,11 @@ RETEST_ONLY = True
 # Owner, 2026-10-15: until an index candle CLOSES beyond the first 5-minute candle (09:15-09:20) the market is sideways
 # for us - no entry. A close above its high starts the market for CE (up) setups; a close below its low for PE (down).
 FIRST_CANDLE_BREAK = True
+# Owner, 2026-10-16: judge the start on the two ATM strikes, not the index (16-10: the index's 09:15 spike candle held
+# the start until 10:10). Up (CE) starts when the ATM PE shows a bearish reversal (09:40 Evening Star) and a later RED
+# candle closes below that pattern's low (09:50), or the ATM CE closes above its own first 5-minute high. Down (PE) is
+# the mirror. One leg breaking while the other doesn't confirm = fake momentum.
+ATM_LEG_GATE = True
 # Owner, 2026-10-15: the retest is one way in; the other is MOMENTUM - once the market has started (index beyond its
 # first candle), with the falling ATM below its yesterday close and the Sniper: the OTM having CLOSED above a square
 # (signal 527.80 > 484) -> buy at the next square (529) when it trades there, from 09:30; SL one square down (484),
@@ -279,6 +284,8 @@ class SniperDay:
         self._cur_bars: Optional[dict] = None
         self._prev_bars: Optional[dict] = None  # the previous candle's bars (momentum is armed on a CLOSE)
         self.started: set[str] = set()  # "up" / "down": the index has closed beyond that candle on that side
+        self.started_why: dict[str, str] = {}
+        self.leg_top: dict[str, tuple[int, float, str, float]] = {}  # ATM leg -> (idx, pattern low, name, high)
         self.prev = previous_closes(row)
         self.open_trades: list[tuple[TradeSetup, TradeResult]] = []
         self.trades: list[TradeResult] = []
@@ -346,6 +353,8 @@ class SniperDay:
             if bar.open is not None:
                 history = self.atm_history[leg]
                 history.append(PatternCandle(bar.open, bar.high, bar.low, bar.close))
+                if ATM_LEG_GATE:
+                    self._track_leg_gate(leg, history, when)
                 found = bullish_pattern(history[-3:])
                 if found and found[0] not in DIRECTIONLESS:
                     span = history[-found[1]:]
@@ -450,9 +459,9 @@ class SniperDay:
             if self.first_index is None:
                 self.first_index = idx
             else:
-                if idx.close > self.first_index.high:
+                if not ATM_LEG_GATE and idx.close > self.first_index.high:
                     self.started.add("up")
-                if idx.close < self.first_index.low:
+                if not ATM_LEG_GATE and idx.close < self.first_index.low:
                     self.started.add("down")
         half = entry_window_for(when)
         for pending in list(self.pending):
@@ -715,7 +724,32 @@ class SniperDay:
         pending.momentum_k, pending.momentum_at = k, self.candle_no
         pending.reason += (f"; momentum: candle {when:%H:%M} closed {bar.close:g} above {(k - 1) ** 2} with the ATM "
                            f"{pending.setup.falling_type} {falling.close:g} below its close {self.prev[key]:g} and the "
-                           f"Sniper {self.row.sniper:g} -> entry at the next square {k * k}")
+                           f"Sniper {self.row.sniper:g} -> entry at the next square {k * k}"
+                           + (f" [market started: {self.started_why[pending.setup.direction]}]"
+                              if pending.setup.direction in self.started_why else ""))
+
+    def _track_leg_gate(self, leg: str, history: list, when: datetime) -> None:
+        """Owner, 2026-10-16 - see ATM_LEG_GATE."""
+        rises = "up" if leg == "atm_ce" else "down"  # this leg rising = that side's buy
+        falls = "down" if leg == "atm_ce" else "up"  # this leg turning down (confirmed) = the other side's buy
+        name = "CE" if leg == "atm_ce" else "PE"
+        c, first = history[-1], history[0]
+        if len(history) > 1 and c.close > first.high and rises not in self.started:
+            self.started.add(rises)
+            self.started_why[rises] = f"ATM {name} closed {c.close:g} above its first 5-minute high {first.high:g} at {when:%H:%M}"
+        top = self.leg_top.get(leg)
+        if (top is not None and len(history) - 1 > top[0] and c.close < c.open and c.close < top[1]
+                and falls not in self.started):
+            self.started.add(falls)
+            self.started_why[falls] = (f"ATM {name} {top[2]} then a red confirmation candle {when:%H:%M} closed "
+                                       f"{c.close:g} below {top[1]:g}")
+        if top is not None and c.close > top[3]:
+            top = self.leg_top.pop(leg)  # closed above the pattern's high - that reversal failed
+            top = None
+        found = bearish_pattern(history[-3:])
+        if found and found[0] not in DIRECTIONLESS:  # the latest reversal is the one a red close must confirm
+            span = history[-found[1]:]
+            self.leg_top[leg] = (len(history) - 1, min(x.low for x in span), found[0], max(x.high for x in span))
 
     def _setups(self, half: Optional[str]) -> list[TradeSetup]:
         """This half's setups whose side has started - the index closed beyond its first 5-minute candle (owner 15-10)."""

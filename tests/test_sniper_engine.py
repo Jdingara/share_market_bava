@@ -545,7 +545,9 @@ def test_retest_only_never_chases_the_next_square(monkeypatch):
     assert not engine.trades and [e.kind for e in events] == ["ORDER"]
 
 
-def test_no_entry_until_the_index_closes_beyond_its_first_5_minute_candle():
+def test_no_entry_until_the_index_closes_beyond_its_first_5_minute_candle(monkeypatch):
+    import sniper_engine as _se
+    monkeypatch.setattr(_se, "ATM_LEG_GATE", False)  # the 15-10 index gate (16-10: the two ATM legs decide)
     """Owner, 15-10: until an index candle closes above the first 5-minute candle's high, the market is sideways for
     a CE (up) setup - no signal; after that close the market has started."""
     engine = SniperDay(date(2026, 10, 6), SENSEX_ROW, index_close=72382.47, near_points=30)
@@ -583,3 +585,19 @@ def test_entry_candle_close_does_not_move_the_sl():
     engine, _ = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (150, 102, 148, 105))])
     [t] = engine.trades
     assert (t.entry_fill, t.stop_loss, t.trail_stop) == (121, 100, 100)
+
+
+def test_up_starts_on_the_atm_pe_evening_star_and_a_red_confirmation():
+    """Owner, 16-10 (SENSEX 74000 PE): 09:40 Evening Star, 09:45 green (no), 09:50 red close 426.65 below the
+    pattern low 444.05 -> the market has started for CE. The index's 09:15 spike no longer holds it back."""
+    engine = SniperDay(date(2026, 10, 6), SENSEX_ROW, index_close=72382.47, near_points=30)
+    pe = [("09:15", (558, 336, 538, 425)), ("09:20", (539, 456, 473.8, 538)), ("09:25", (517, 459, 502, 473.8)),
+          ("09:30", (531, 481, 525.65, 502.65)), ("09:35", (553, 502, 531.85, 525.65)),
+          ("09:40", (531.85, 444.05, 460.45, 531.85)), ("09:45", (504.6, 457, 467.7, 460.45)),
+          ("09:50", (472.5, 419.45, 426.65, 467.7))]
+    for hhmm, bar in pe:
+        engine.on_candle(_at(hhmm), {**_sensex_bars((300, 290, 295, 292)), "atm_pe": Bar(*bar),
+                                     "index": Bar(74504, 74093, 74108, 74100)})
+        if hhmm == "09:45":
+            assert "up" not in engine.started
+    assert "up" in engine.started and "09:50" in engine.started_why["up"]
