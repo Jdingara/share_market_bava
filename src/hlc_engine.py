@@ -111,7 +111,10 @@ MOMENTUM_RIDE = True
 # whose index shows a reversal against it AND whose own premium shows a top (16-10 NIFTY PE: 09:40 index Morning Star +
 # PE Evening Star) -> exit at that close; then the other side is taken when the index closes beyond yesterday's close
 # (09:55, 23026.95 -> CE 136.65) - before 12:30 too, once.
-FLIP_ON_CONFIRMATION = True  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
+FLIP_ON_CONFIRMATION = True
+# Owner, 2026-10-16: index Fib from yesterday's close (0) to R2 (1) - 0.786 is the institutions' profit area: the first
+# target (PE: close -> S2). A later candle CLOSING beyond 0.786 is a re-entry (targets R2 -> R3), once a day.
+INDEX_FIB_TARGET = 0.786  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
 CANDLE = timedelta(minutes=5)
@@ -192,6 +195,7 @@ class HlcDay:
         self.expiry_uv: Optional[dict] = None  # {"side", "at", "low", "high", "name", "confirm"}
         self.expiry_uv_done = False
         self.second_rev: Optional[dict] = None  # owner 13-10: the 12:30+ reversal entry - {"at", "low", "name", "confirm"}
+        self.fib_reentry: Optional[dict] = None  # INDEX_FIB_TARGET: {"side", "level", "at", "done"}
         self.flip: Optional[dict] = None  # FLIP_ON_CONFIRMATION: {"side", "at", "why"} - the side to take next
         self.full_profit: Optional[str] = None  # owner 13-10: the index touched R3 / S3 -> full profit, no more trades
 
@@ -364,6 +368,16 @@ class HlcDay:
             return events
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
+        if INDEX_FIB_TARGET and self.fib_reentry is not None and not self.fib_reentry.get("done"):
+            f = self.fib_reentry
+            beyond = index.close > f["level"] if f["side"] == "CE" else index.close < f["level"]
+            if len(self.index_history) > f["at"] and beyond and (self.levels.atm, f["side"]) in chain:
+                f["done"] = True
+                event = self._enter("FIB 0.786 BREAK", f["side"], self.levels.atm, when, chain[(self.levels.atm, f["side"])],
+                                    index, f"index closed {index.close:.2f} beyond the Fib {INDEX_FIB_TARGET:g} {f['level']:g}",
+                                    "R3" if f["side"] == "CE" else "S3")
+                if event:
+                    return events + [self._with_premium_targets(event)]
         if FLIP_ON_CONFIRMATION and self.flip is not None and not self.flip.get("done"):
             f = self.flip
             beyond = index.close > self.levels.close if f["side"] == "CE" else index.close < self.levels.close
@@ -609,6 +623,12 @@ class HlcDay:
             return False
         index_against = index.close < self.levels.close if side == "CE" else index.close > self.levels.close
         return index_against and premium.close < yesterday[2]
+
+    def index_fib(self, side: OptionType) -> float:
+        lv = self.levels
+        if side == "CE":
+            return round(lv.close + INDEX_FIB_TARGET * (lv.r2 - lv.close), 2)
+        return round(lv.close - INDEX_FIB_TARGET * (lv.close - lv.s2), 2)
 
     def _momentum_ride(self, trade: HlcTrade) -> bool:
         if not (MOMENTUM_RIDE and self.market.profit_lock_step) or trade.uv is not None:
@@ -985,6 +1005,16 @@ class HlcDay:
         elif prem.low <= trade.sl_premium:
             return [self._exit(trade, when, trade.sl_premium, f"SL ({trade.sl_rule}) - premium low {prem.low:g} touched the SL {trade.sl_premium:g} in candle {when:%H:%M}")]
         pe = trade.side == "PE"
+        if INDEX_FIB_TARGET and trade.kind != "FIB 0.786 BREAK" and self.full_profit is None:
+            level = self.index_fib(trade.side)
+            ahead = trade.entry_index < level if not pe else trade.entry_index > level
+            touched = index.high >= level if not pe else index.low <= level
+            if ahead and touched:
+                if self.fib_reentry is None:
+                    self.fib_reentry = {"side": trade.side, "level": level, "at": len(self.index_history)}
+                return [self._exit(trade, when, prem.close,
+                                   f"TARGET index Fib {INDEX_FIB_TARGET:g} (close -> {'S2' if pe else 'R2'}) {level:g} - "
+                                   f"institutions' profit area, touched in candle {when:%H:%M}")]
         step = self.market.profit_lock_step
         if step:
             # Owner, 2026-10-13 (SENSEX): ride to the target; once the premium is +100 and a LATER candle closes there

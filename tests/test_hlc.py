@@ -244,6 +244,8 @@ def test_panic_pe_above_yesterdays_high_blocks_ce_trades(monkeypatch):
 
 
 def test_hlc_more_trades_allowed_after_a_target_up_to_the_daily_limit(monkeypatch):
+    import hlc_engine as _he2
+    monkeypatch.setattr(_he2, "INDEX_FIB_TARGET", None)  # tests an older exit (16-10 index Fib target has its own test)
     import hlc_engine as _he
     monkeypatch.setattr(_he, "SECOND_ENTRY_PM_REVERSAL", False)  # the older 4-a-day rule
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, S1 22728.55, S2 22644.35
@@ -451,8 +453,10 @@ def test_close_retest_entry_12_10_sensex():
     assert events[-1].startswith("BUY PE 72600 at 529.30 (RETEST")
 
 
-def test_profit_booking_side_exits_at_fib_0786_of_yesterdays_close_to_high():
+def test_profit_booking_side_exits_at_fib_0786_of_yesterdays_close_to_high(monkeypatch):
     """Owner, 12-10: NIFTY 22550 PE was PROFIT BOOKING (H 272.9, C 95.95) -> target 95.95 + 0.786 x 176.95 = 235.04."""
+    import hlc_engine as _he2
+    monkeypatch.setattr(_he2, "INDEX_FIB_TARGET", None)  # tests an older exit (16-10 index Fib target has its own test)
     from hlc_engine import HlcTrade
     levels = hlc_levels(22520.5, 22550, 108.5, 95.95)
     day = HlcDay(date(2026, 10, 12), levels, HLC_MARKETS["NIFTY"], {"CE": (146.85, 44.35, 108.5), "PE": (272.9, 82.35, 95.95)})
@@ -573,8 +577,10 @@ def test_profit_booking_target_behind_the_entry_is_ignored():
     assert ahead.pb_target == 102.88 and ahead.pb_index == ("R2", LEVELS.r2)
 
 
-def test_momentum_day_rides_with_the_profit_lock_not_the_level_target():
+def test_momentum_day_rides_with_the_profit_lock_not_the_level_target(monkeypatch):
     """Owner, 15-10: a day opening above R1 is a momentum day - a CE trade doesn't exit at R2; the profit lock rides it."""
+    import hlc_engine as _he2
+    monkeypatch.setattr(_he2, "INDEX_FIB_TARGET", None)  # tests an older exit (16-10 index Fib target has its own test)
     from hlc_engine import HlcTrade
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
     day.day_open = LEVELS.r1 + 5
@@ -617,3 +623,18 @@ def test_profit_lock_touch_of_two_steps_moves_the_sl_one_step_below():
     day.index_history.append(Candle(1, 1, 1, 1))
     day._manage(t, _at("10:15"), Candle(22800, 22810, 22790, 22805), Candle(188, 237, 182, 229.55), time(10, 20))
     assert t.lock_level == 211.65
+
+
+def test_index_fib_0786_is_the_first_target_and_a_close_beyond_re_enters():
+    """Owner, 16-10 NIFTY: Fib close (0) -> R2 (1); 0.786 is the first target; a later close beyond it re-enters."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    level = round(LEVELS.close + 0.786 * (LEVELS.r2 - LEVELS.close), 2)
+    t = HlcTrade(date="x", kind="FLIP", side="CE", strike=22800, pattern="", entry_time="2026-09-29T09:55:00",
+                 entry_fill=100, entry_index=LEVELS.close + 10, sl_premium=75, targets=[("R1", LEVELS.r1), ("R2", LEVELS.r2)])
+    day.trades.append(t); day.open_trade = t
+    chain = lambda ce: {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(50, 52, 48, 50)}
+    day.on_candle(_at("10:10"), Candle(level - 20, level + 2, level - 25, level - 3), chain((120, 140, 118, 135)))
+    assert t.exit_reason.startswith("TARGET index Fib 0.786") and t.exit_premium == 135
+    day.on_candle(_at("10:15"), Candle(level - 3, level + 8, level - 5, level + 6), chain((135, 145, 130, 142)))
+    assert day.trades[-1].kind == "FIB 0.786 BREAK" and day.trades[-1].entry_fill == 142
