@@ -605,3 +605,15 @@ def test_flip_on_the_opposite_confirmation_then_the_other_side_beyond_the_close(
     events = day.on_candle(_at("09:55"), Candle(c - 5, c + 30, c - 6, c + 29),
                            {(22800.0, "PE"): Candle(120, 121, 88, 89), (22800.0, "CE"): Candle(112, 140, 111, 136.65)})
     assert day.trades[-1].kind == "FLIP" and day.trades[-1].side == "CE" and day.trades[-1].entry_fill == 136.65
+
+
+def test_profit_lock_touch_of_two_steps_moves_the_sl_one_step_below():
+    """Owner, 16-10 NIFTY: CE 136.65 touched 237 (+100) and closed 224 - SL should go to +75 (211.65) at once."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    t = HlcTrade(date="x", kind="FLIP", side="CE", strike=22800, pattern="", entry_time="2026-09-29T09:55:00",
+                 entry_fill=136.65, entry_index=22800, sl_premium=111.65, targets=[("R3", LEVELS.r3)])
+    day.trades.append(t); day.open_trade = t
+    day.index_history.append(Candle(1, 1, 1, 1))
+    day._manage(t, _at("10:15"), Candle(22800, 22810, 22790, 22805), Candle(188, 237, 182, 229.55), time(10, 20))
+    assert t.lock_level == 211.65

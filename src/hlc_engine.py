@@ -1005,6 +1005,10 @@ class HlcDay:
             if reached and trade.entry_fill + reached > trade.lock_level and (
                     not trade.lock_seen or reached > trade.lock_seen[0]):
                 trade.lock_seen = (reached, now)
+            if reached >= 2 * step:
+                # Owner, 2026-10-16 (NIFTY CE 136.65 touched +100 at 10:15, closed back and gave only +50): from +100
+                # (SENSEX +200) a TOUCH moves the SL to one step below it (+75 / +150), no confirming close needed
+                trade.lock_level = max(trade.lock_level, round(trade.entry_fill + reached - add, 2))
         if self._momentum_ride(trade):
             # owner 15-10: momentum - no level / Fib targets; the profit lock above (and the SL) take it out
             if closes >= EXIT_CLOSE:
