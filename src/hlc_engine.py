@@ -106,7 +106,12 @@ SECOND_ENTRY_PM_REVERSAL = True  # owner 13-10 (all bots): after the morning tra
 R3_S3_FULL_PROFIT = True
 # Owner, 2026-10-15: momentum - after an R3/S3 touch, and on a day that opened above R1 (CE) / below S1 (PE), the move
 # usually runs on (some days it reverses at once): no level-target exit, ride with the profit lock TSL instead.
-MOMENTUM_RIDE = True  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
+MOMENTUM_RIDE = True
+# Owner, 2026-10-16: the retest decides, but when the market gives the OTHER confirmation, change sides. A losing trade
+# whose index shows a reversal against it AND whose own premium shows a top (16-10 NIFTY PE: 09:40 index Morning Star +
+# PE Evening Star) -> exit at that close; then the other side is taken when the index closes beyond yesterday's close
+# (09:55, 23026.95 -> CE 136.65) - before 12:30 too, once.
+FLIP_ON_CONFIRMATION = True  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
 CANDLE = timedelta(minutes=5)
@@ -186,6 +191,7 @@ class HlcDay:
         self.expiry_uv: Optional[dict] = None  # {"side", "at", "low", "high", "name", "confirm"}
         self.expiry_uv_done = False
         self.second_rev: Optional[dict] = None  # owner 13-10: the 12:30+ reversal entry - {"at", "low", "name", "confirm"}
+        self.flip: Optional[dict] = None  # FLIP_ON_CONFIRMATION: {"side", "at", "why"} - the side to take next
         self.full_profit: Optional[str] = None  # owner 13-10: the index touched R3 / S3 -> full profit, no more trades
 
     # --- helpers ---
@@ -357,6 +363,17 @@ class HlcDay:
             return events
         if not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
+        if FLIP_ON_CONFIRMATION and self.flip is not None and not self.flip.get("done"):
+            f = self.flip
+            beyond = index.close > self.levels.close if f["side"] == "CE" else index.close < self.levels.close
+            if len(self.index_history) > f["at"] and beyond and (self.levels.atm, f["side"]) in chain:
+                f["done"] = True
+                event = self._enter("FLIP", f["side"], self.levels.atm, when, chain[(self.levels.atm, f["side"])], index,
+                                    f"after {f['why']}, index closed {index.close:.2f} "
+                                    f"{'above' if f['side'] == 'CE' else 'below'} yesterday's close {self.levels.close:g}",
+                                    "R3" if f["side"] == "CE" else "S3")
+                if event:
+                    return events + [self._with_premium_targets(event)]
         if SECOND_ENTRY_PM_REVERSAL and self.trades:
             event = self._second_reversal_entry(when, index, chain) if len(self.trades) < 2 else None
             return events + ([event] if event else [])
@@ -952,6 +969,15 @@ class HlcDay:
                 return [self._exit(trade, when, prem.close, f"daily loss limit (Rs {self.market.max_loss:,.0f}) - candle {when:%H:%M} closed {prem.close:g}")]
         if trade.uv is not None:
             return self._manage_uv(trade, when, prem, closes)
+        if FLIP_ON_CONFIRMATION and self.flip is None and prem.close < trade.entry_fill:
+            against = (bullish_pattern if trade.side == "PE" else bearish_pattern)(self.index_history[-3:])
+            top = bearish_pattern(self.premium_history.get((trade.strike, trade.side), [])[-3:])
+            strong = ("Morning Star", "Evening Star", "Bullish Engulfing", "Bearish Engulfing")  # not Harami / single candles
+            if against and top and against[0] in strong and top[0] in strong:
+                other = "CE" if trade.side == "PE" else "PE"
+                why = f"index {against[0]} + {trade.side} {top[0]} at {when:%H:%M}"
+                self.flip = {"side": other, "at": len(self.index_history), "why": why}
+                return [self._exit(trade, when, prem.close, f"opposite confirmation ({why}) - exit, watch {other}")]
         if trade.index_sl is not None:
             if (trade.side == "CE" and index.low <= trade.index_sl) or (trade.side == "PE" and index.high >= trade.index_sl):
                 return [self._exit(trade, when, prem.close, f"SL ({trade.sl_rule}) - index reached the SL {trade.index_sl:g} in candle {when:%H:%M}")]

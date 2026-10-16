@@ -135,6 +135,7 @@ def test_pe_fib_trade_trails_through_s1():
 def test_big_gap_uses_the_strike_near_the_market_and_exits_when_the_pattern_turns(monkeypatch):
     import hlc_engine as _he
     monkeypatch.setattr(_he, "MOMENTUM_RIDE", False)  # the 05-10 big-gap pattern exit (15-10 momentum ride replaces it)
+    monkeypatch.setattr(_he, "FLIP_ON_CONFIRMATION", False)
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # close 22780.25, R2 22955.65
     day.level_break_done = True  # keep the 13-10 15-min R1/S1 break out of this test
     chain = lambda ce: {(22950.0, "CE"): Candle(*ce), (22950.0, "PE"): Candle(40, 42, 38, 40),
@@ -584,3 +585,23 @@ def test_momentum_day_rides_with_the_profit_lock_not_the_level_target():
     events = day._manage(t, _at("09:40"), Candle(LEVELS.r2 - 5, LEVELS.r2 + 10, LEVELS.r2 - 6, LEVELS.r2 + 8),
                          Candle(130, 160, 128, 155), time(9, 45))
     assert not t.exit_reason and events == []  # index broke R2 - no target exit
+
+
+def test_flip_on_the_opposite_confirmation_then_the_other_side_beyond_the_close():
+    """Owner, 16-10 NIFTY: PE (retest) losing; 09:40 index Morning Star + PE Evening Star -> exit at that close; 09:55
+    index closes above yesterday's close -> CE at that close (before 12:30)."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    t = HlcTrade(date="x", kind="RETEST", side="PE", strike=22800, pattern="", entry_time="2026-09-29T09:30:00",
+                 entry_fill=143.25, entry_index=22770, sl_premium=113, targets=[("S1", LEVELS.s1)])
+    day.trades.append(t); day.open_trade = t
+    c = LEVELS.close
+    idx = [Candle(c - 20, c - 18, c - 45, c - 42), Candle(c - 42, c - 30, c - 50, c - 41), Candle(c - 41, c - 5, c - 42, c - 6)]
+    pe = [Candle(133, 145, 132, 143.25), Candle(143.25, 145, 140, 142.95), Candle(142.95, 143, 120, 122.8)]
+    events = []
+    for i, (ix, p) in enumerate(zip(idx, pe)):
+        events += day.on_candle(_at(f"09:{30 + 5 * i}"), ix, {(22800.0, "PE"): p, (22800.0, "CE"): Candle(90, 110, 88, 108)})
+    assert t.exit_reason.startswith("opposite confirmation") and t.exit_premium == 122.8
+    events = day.on_candle(_at("09:55"), Candle(c - 5, c + 30, c - 6, c + 29),
+                           {(22800.0, "PE"): Candle(120, 121, 88, 89), (22800.0, "CE"): Candle(112, 140, 111, 136.65)})
+    assert day.trades[-1].kind == "FLIP" and day.trades[-1].side == "CE" and day.trades[-1].entry_fill == 136.65
