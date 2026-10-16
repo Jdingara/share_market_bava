@@ -635,6 +635,7 @@ def test_index_fib_0786_is_the_first_target_and_a_close_beyond_re_enters():
     day.trades.append(t); day.open_trade = t
     chain = lambda ce: {(22800.0, "CE"): Candle(*ce), (22800.0, "PE"): Candle(50, 52, 48, 50)}
     day.on_candle(_at("10:10"), Candle(level - 20, level + 2, level - 25, level - 3), chain((120, 140, 118, 135)))
-    assert t.exit_reason.startswith("TARGET index Fib 0.786") and t.exit_premium == 135
+    assert t.exit_reason.startswith("TARGET index Fib 0.618") and t.exit_premium == 135  # the first level ahead
     day.on_candle(_at("10:15"), Candle(level - 3, level + 8, level - 5, level + 6), chain((135, 145, 130, 142)))
-    assert day.trades[-1].kind == "FIB 0.786 BREAK" and day.trades[-1].entry_fill == 142
+    r = day.trades[-1]
+    assert r.kind == "FIB 0.618 BREAK" and r.entry_fill == 142 and r.fib_from == 0.618  # next target: 0.786
