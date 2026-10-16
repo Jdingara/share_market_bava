@@ -574,3 +574,12 @@ def test_every_day_rides_past_the_target_with_the_square_tsl():
     assert not engine.buyers_day
     [t] = engine.trades
     assert not t.exit_reason and t.trail_stop == 144  # 169 (2 squares) touched -> SL 144, still riding
+
+
+@pytest.mark.ride
+def test_entry_candle_close_does_not_move_the_sl():
+    """16-10 SENSEX 74100 CE: bought 841, the entry candle closed 918.75 and the old close-trail put the SL at 841.
+    With the square ladder nothing moves until 2 squares."""
+    engine, _ = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (150, 102, 148, 105))])
+    [t] = engine.trades
+    assert (t.entry_fill, t.stop_loss, t.trail_stop) == (121, 100, 100)

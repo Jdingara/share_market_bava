@@ -891,7 +891,9 @@ class SniperDay:
             return events
         if fixed_sl:
             self.fixed_sl.add(id(trade))
-        elif self.trailing:
+        elif self.trailing and not SQUARE_LADDER_TSL:
+            # (16-10: with the square ladder nothing moves until 2 squares - the old close-trail on the entry candle
+            # had put SENSEX 74100 CE 841's SL at 841 the moment it was bought)
             trade.trail_stop = trailed_stop(trade.trail_stop, bar.close)
         self.open_trades.append((setup, trade))
         return events
