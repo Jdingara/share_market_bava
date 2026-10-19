@@ -1,3 +1,14 @@
 date,market,side,strike,qty,entry_time,entry_fill,entry_index,sl_index,target_index,exit_time,exit_premium,exit_index,exit_reason,pnl_points,pnl_rupees,entry_reason
-2026-10-19,NIFTY,PE,23000,130,09:25,101,22981.9,23175.25,22595.2,,,,OPEN,,,candle 09:25 closed 22981.9 below the range low 23074.6 -> ATM 23000 PE
-2026-10-19,SENSEX,PE,74200,120,09:25,475.4,74208.4,74849.75,72925.7,,,,OPEN,,,candle 09:25 closed 74208.4 below the range low 74513 -> ATM 74200 PE
+2026-10-19,NIFTY,PE,23050,130,09:55,86.5,23040.9,23090.9,22940.9,10:00,65.45,23069.05,SL - index reached 23090.9 in candle 10:00,-21.05,-2736,candle 09:55 closed 23040.9 below the range low 23074.6 -> ATM 23050 PE
+2026-10-19,NIFTY,PE,23050,130,10:00,65.45,23069.05,23119.05,22969.05,10:30,49.9,23080,SL - index reached 23119 in candle 10:30,-15.55,-2022,candle 10:00 closed 23069 below the range low 23074.6 -> ATM 23050 PE
+2026-10-19,NIFTY,PE,23050,130,10:35,66.15,23051,23101,22951.0,12:00,130.4,22954.2,TARGET 1:2 - index reached 22951 in candle 12:00,64.25,8352,candle 10:35 closed 23051 below the range low 23074.6 -> ATM 23050 PE
+2026-10-19,NIFTY,PE,22950,130,12:25,63.85,22945.8,22995.8,22845.8,13:45,96.15,22874.3,TARGET 1:2 - index reached 22845.8 in candle 13:45,32.3,4199,candle 12:25 closed 22945.8 below the range low 23074.6 -> ATM 22950 PE
+2026-10-19,NIFTY,PE,22850,130,13:45,32.65,22874.3,22924.3,22774.3,15:10,13.65,22873.55,15:16 square-off,-19.0,-2470,candle 13:45 closed 22874.3 below the range low 23074.6 -> ATM 22850 PE
+2026-10-19,SENSEX,PE,74400,120,09:55,462.35,74417.48,74517.48,74217.48,10:00,416.3,74464.83,SL - index reached 74517.5 in candle 10:00,-46.05,-5526,candle 09:55 closed 74417.5 below the range low 74513 -> ATM 74400 PE
+2026-10-19,SENSEX,PE,74500,120,10:00,468.4,74464.83,74564.83,74264.83,10:30,438.9,74477.76,SL - index reached 74564.8 in candle 10:30,-29.5,-3540,candle 10:00 closed 74464.8 below the range low 74513 -> ATM 74500 PE
+2026-10-19,SENSEX,PE,74500,120,10:30,438.9,74477.76,74577.76,74277.76,11:35,627.7,74191.99,TARGET 1:2 - index reached 74277.8 in candle 11:35,188.8,22656,candle 10:30 closed 74477.8 below the range low 74513 -> ATM 74500 PE
+2026-10-19,SENSEX,PE,74200,120,11:35,448.5,74191.99,74291.99,73991.99,12:15,540.5,74001.74,TARGET 1:2 - index reached 73992 in candle 12:15,92.0,11040,candle 11:35 closed 74192 below the range low 74513 -> ATM 74200 PE
+2026-10-19,SENSEX,PE,74000,120,12:25,416.75,74020.89,74120.89,73820.89,13:20,520.8,73795.63,TARGET 1:2 - index reached 73820.9 in candle 13:20,104.05,12486,candle 12:25 closed 74020.9 below the range low 74513 -> ATM 74000 PE
+2026-10-19,SENSEX,PE,73800,120,13:20,412.45,73795.63,73895.63,73595.63,13:40,399.05,73766.13,SL - index reached 73895.6 in candle 13:40,-13.4,-1608,candle 13:20 closed 73795.6 below the range low 74513 -> ATM 73800 PE
+2026-10-19,SENSEX,PE,73800,120,13:40,399.05,73766.13,73866.13,73566.13,14:05,384.1,73817.13,SL - index reached 73866.1 in candle 14:05,-14.95,-1794,candle 13:40 closed 73766.1 below the range low 74513 -> ATM 73800 PE
+2026-10-19,SENSEX,PE,73800,120,14:05,384.1,73817.13,73917.13,73617.13,15:10,368.15,73799.13,15:16 square-off,-15.95,-1914,candle 14:05 closed 73817.1 below the range low 74513 -> ATM 73800 PE
