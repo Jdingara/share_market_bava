@@ -107,6 +107,45 @@ def williams_r(bars: Sequence[Bar], period: int = 14) -> list[Optional[float]]:
     return out
 
 
+def ema(values: Sequence[float], period: int = 20) -> list[Optional[float]]:
+    """TradingView ta.ema: seeded with the SMA of the first `period` values, alpha = 2 / (period + 1)."""
+    out: list[Optional[float]] = [None] * len(values)
+    if len(values) < period:
+        return out
+    e = sum(values[:period]) / period
+    out[period - 1] = e
+    a = 2 / (period + 1)
+    for i in range(period, len(values)):
+        e = a * values[i] + (1 - a) * e
+        out[i] = e
+    return out
+
+
+def cci(bars: Sequence[Bar], period: int = 20) -> list[Optional[float]]:
+    """Commodity Channel Index on the typical price (H + L + C) / 3, mean deviation, 0.015 constant."""
+    tp = [(b.high + b.low + b.close) / 3 for b in bars]
+    out: list[Optional[float]] = []
+    for i in range(len(tp)):
+        if i + 1 < period:
+            out.append(None)
+            continue
+        window = tp[i + 1 - period:i + 1]
+        mean = sum(window) / period
+        md = sum(abs(x - mean) for x in window) / period
+        out.append((tp[i] - mean) / (0.015 * md) if md else 0.0)
+    return out
+
+
+def cpr(high: float, low: float, close: float) -> dict[str, float]:
+    """Central Pivot Range from yesterday's daily candle: P, BC = (H + L) / 2, TC = 2P - BC; R1 / S1 as the classic
+    pivot; width as a % of P."""
+    p = (high + low + close) / 3
+    bc = (high + low) / 2
+    tc = 2 * p - bc
+    return {"P": p, "BC": min(bc, tc), "TC": max(bc, tc), "R1": 2 * p - low, "S1": 2 * p - high,
+            "width_pct": abs(tc - bc) / p * 100}
+
+
 def pivots(high: float, low: float, close: float) -> dict[str, float]:
     p = (high + low + close) / 3
     return {"P": p, "R1": 2 * p - low, "S1": 2 * p - high, "R2": p + (high - low), "S2": p - (high - low)}

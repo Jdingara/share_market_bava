@@ -140,7 +140,9 @@ def feed(engine: LalithaDay, rows, prem: Premiums, chain, market, processed: set
         st, r, bb, wr = ind["st"], ind["rsi"], ind["bb"], ind["wr"]
         state.set(indicators={"supertrend": round(st[0], 2) if st[0] else None, "direction": st[1],
                               "rsi": round(r, 1) if r else None, "bb": [round(x, 2) for x in bb] if bb else None,
-                              "close": engine.bars[-1].close, "wr": round(wr, 1) if wr is not None else None},
+                              "close": engine.bars[-1].close, "wr": round(wr, 1) if wr is not None else None,
+                              "ema": round(ind["ema"], 2) if ind["ema"] else None,
+                              "cci": round(ind["cci"]) if ind["cci"] is not None else None},
                   trades=[{**t.__dict__, "pnl_rupees": t.pnl_rupees} for t in engine.trades])
     return out
 
@@ -199,9 +201,12 @@ def live(name: str, open_browser: bool) -> None:
         webbrowser.open(url)
     notify = Notifier(day, state, prefix=f"LALITHA_{name}_log", phone=False)
     chain, lot, engine, y = _setup(kite, market, day)
-    state.set(pivot={k: round(v, 2) for k, v in engine.pivot.items()}, expiry=chain.expiry.isoformat(), qty=engine.qty)
+    state.set(pivot={**{k: round(v, 3) for k, v in engine.pivot.items()}, "narrow": engine.cpr_narrow},
+              expiry=chain.expiry.isoformat(), qty=engine.qty)
     notify.send(f"Lalitha started ({name}, {market.lots} lots x {lot} = {engine.qty}, expiry {chain.expiry}) - PAPER MODE. "
-                f"Pivot {engine.pivot['P']:.2f}, R1 {engine.pivot['R1']:.2f}, S1 {engine.pivot['S1']:.2f}", phone=False)
+                f"CPR {engine.pivot['BC']:.2f}-{engine.pivot['TC']:.2f} (width {engine.pivot['width_pct']:.3f}%, "
+                f"{'NARROW - trades allowed' if engine.cpr_narrow else 'not narrow - no trades today'}), "
+                f"R1 {engine.pivot['R1']:.2f}, S1 {engine.pivot['S1']:.2f}", phone=False)
     prem = Premiums(kite, chain, day)
     processed: set[datetime] = set()
     started = datetime.now()
@@ -243,7 +248,8 @@ def replay(day: date, name: str, save: bool) -> None:
     market = MARKETS[name]
     kite = connected_client()
     chain, lot, engine, y = _setup(kite, market, day)
-    print(f"Lalitha replay {name} {day} (PAPER) - qty {engine.qty}, expiry {chain.expiry}, pivot {engine.pivot['P']:.2f} "
+    print(f"Lalitha replay {name} {day} (PAPER) - qty {engine.qty}, expiry {chain.expiry}, CPR width "
+          f"{engine.pivot['width_pct']:.3f}% ({'narrow' if engine.cpr_narrow else 'NOT narrow - no trades'}), "
           f"R1 {engine.pivot['R1']:.2f} S1 {engine.pivot['S1']:.2f}")
     end = datetime.combine(day, time(15, 30))
     rows = _historical(kite, market.index_token, datetime.combine(day, time(9, 15)), end, INTERVAL)

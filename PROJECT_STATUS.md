@@ -333,3 +333,4 @@ data/
 - Strike: the option of that side with premium nearest Rs 250 (ITM fine). Exit at the close of the candle where the Supertrend changes direction; 15:15 square-off. 09:15-15:15, max 10 trades a day.
 - Qty: NIFTY 4 lots, SENSEX 10 lots, BANK NIFTY 6 lots (lot size from Kite).
 - Files: src/lalitha_indicators.py, src/lalitha_engine.py, src/lalitha_live.py (--replay), src/lalitha_dashboard.html (:8056 NIFTY, :8057 SENSEX, :8058 BANKNIFTY), history/lalitha/.
+- **Lalitha condition sheet (owner, 19-10)**: all AND on 5-min index candles - PE: close < Supertrend(10,2), < EMA20, RSI14 < 30, CCI20 < -200, Williams %R14 < -85, close < CPR S1, CPR narrow (width < 0.25% of P), close < Bollinger(20,3) lower; CE mirror (> Supertrend, > EMA20, RSI > 70, CCI > +200, W%R > -15, > CPR R1, narrow CPR, > upper band). Traditional pivot removed. A day with a wide CPR = no Lalitha trades.

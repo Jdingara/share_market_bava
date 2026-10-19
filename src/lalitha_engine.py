@@ -1,12 +1,13 @@
 """
-Lalitha - strategy #4 (owner, 2026-10-19). PAPER MODE. Indicator based, on the INDEX's 5-minute candles (owner 19-10 afternoon; was 3).
+Lalitha - strategy #4 (owner, 2026-10-19). PAPER MODE. Indicator based, on the INDEX's 5-minute candles.
+Owner's condition sheet (19-10, all AND):
 
-  CE BUY when a 5-minute candle closes with ALL of:
-      Supertrend(10, 2) up, RSI(14) > 70, close above yesterday's Traditional pivot R1, close above the
-      Bollinger(20, 3) upper band, Williams %R(14) above -30 (PE: below -70).
-  PE BUY: the mirror - Supertrend down, RSI < 30, close below S1, close below the lower band.
+  PE BUY: close < Supertrend(10, 2), close < EMA(20), RSI(14) < 30, CCI(20) < -200, Williams %R(14) < -85,
+          close < CPR S1, CPR is narrow (width < 0.25% of the pivot), close < Bollinger(20, 3) lower band.
+  CE BUY: the mirror - close > Supertrend, > EMA, RSI > 70, CCI > +200, Williams %R > -15, close > CPR R1,
+          CPR narrow, close > the upper band.
   Strike: the option of that side whose premium is nearest Rs 250 (ITM is fine).
-  Exit: the candle on which the Supertrend changes direction - at its close. Everything closed by 15:15.
+  Exit: a candle closing back across the Supertrend (its direction changes) - at its close. Closed by 15:15.
   Markets NIFTY (4 lots), SENSEX (10 lots), BANK NIFTY (6 lots); at most 10 trades a day; 09:15 - 15:15.
 """
 
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Callable, Optional
 
-from lalitha_indicators import Bar, bollinger, pivots, rsi, supertrend, williams_r
+from lalitha_indicators import Bar, bollinger, cci, cpr, ema, rsi, supertrend, williams_r
 
 CANDLE = timedelta(minutes=5)  # owner 19-10 afternoon: 5 minutes (was 3)
 FIRST_ENTRY_CLOSE = time(9, 20)
@@ -26,7 +27,10 @@ SQUARE_OFF = time(15, 15)
 MAX_TRADES = 10
 TARGET_PREMIUM = 250.0
 RSI_UP, RSI_DOWN = 70.0, 30.0
-WR_UP, WR_DOWN = -30.0, -70.0  # owner 19-10: Williams %R(14) above -30 for CE, below -70 for PE
+WR_UP, WR_DOWN = -15.0, -85.0  # owner's sheet 19-10 (was -30 / -70)
+CCI_UP, CCI_DOWN = 200.0, -200.0
+EMA_PERIOD, CCI_PERIOD = 20, 20
+CPR_NARROW_PCT = 0.25
 
 
 @dataclass
@@ -58,7 +62,8 @@ class LalithaDay:
     def __init__(self, day: date, qty: int, yesterday: tuple[float, float, float], warmup: list[Bar]):
         """`warmup`: earlier 3-minute index candles (previous days) so the indicators match a continuous chart."""
         self.day, self.qty = day, qty
-        self.pivot = pivots(*yesterday)
+        self.pivot = cpr(*yesterday)  # owner 19-10: CPR replaces the traditional pivot
+        self.cpr_narrow = self.pivot["width_pct"] < CPR_NARROW_PCT
         self.bars: list[Bar] = list(warmup)
         self.trades: list[LalithaTrade] = []
         self.open_trade: Optional[LalithaTrade] = None
@@ -77,7 +82,8 @@ class LalithaDay:
         r = rsi(closes, 14)
         bb = bollinger(closes, BB_PERIOD, BB_MULT)
         wr = williams_r(self.bars, 14)
-        return {"st": st[-1], "st_prev": st[-2] if len(st) > 1 else (None, 0), "rsi": r[-1], "bb": bb[-1], "wr": wr[-1]}
+        return {"st": st[-1], "st_prev": st[-2] if len(st) > 1 else (None, 0), "rsi": r[-1], "bb": bb[-1], "wr": wr[-1],
+                "ema": ema(closes, EMA_PERIOD)[-1], "cci": cci(self.bars, CCI_PERIOD)[-1]}
 
     def on_candle(self, when: datetime, bar: Bar, premium: PremiumAt, candidates: Callable[[str], list[float]]) -> list[str]:
         if self.done:
@@ -104,15 +110,16 @@ class LalithaDay:
             return events
         if self.open_trade is not None or len(self.trades) >= MAX_TRADES or not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
-        if ind["rsi"] is None or ind["bb"] is None or ind["wr"] is None or direction == 0:
+        if (ind["rsi"] is None or ind["bb"] is None or ind["wr"] is None or ind["ema"] is None or ind["cci"] is None
+                or direction == 0 or not self.cpr_narrow):
             return events
         lower, _, upper = ind["bb"]
         side = None
-        if (direction == 1 and ind["rsi"] > RSI_UP and bar.close > self.pivot["R1"] and bar.close > upper
-                and ind["wr"] > WR_UP):
+        if (direction == 1 and bar.close > line and bar.close > ind["ema"] and ind["rsi"] > RSI_UP and ind["cci"] > CCI_UP
+                and ind["wr"] > WR_UP and bar.close > self.pivot["R1"] and bar.close > upper):
             side = "CE"
-        elif (direction == -1 and ind["rsi"] < RSI_DOWN and bar.close < self.pivot["S1"] and bar.close < lower
-              and ind["wr"] < WR_DOWN):
+        elif (direction == -1 and bar.close < line and bar.close < ind["ema"] and ind["rsi"] < RSI_DOWN
+              and ind["cci"] < CCI_DOWN and ind["wr"] < WR_DOWN and bar.close < self.pivot["S1"] and bar.close < lower):
             side = "PE"
         if side is None:
             return events
@@ -122,7 +129,8 @@ class LalithaDay:
         _, strike, fill = min(priced)
         why = (f"candle {when:%H:%M} closed {bar.close:g}: Supertrend {'up' if side == 'CE' else 'down'} ({line:.2f}), "
                f"RSI {ind['rsi']:.1f} {'>' if side == 'CE' else '<'} {RSI_UP if side == 'CE' else RSI_DOWN:g}, "
-               f"{'above R1' if side == 'CE' else 'below S1'} {self.pivot['R1' if side == 'CE' else 'S1']:.2f}, "
+               f"EMA20 {ind['ema']:.2f}, CCI {ind['cci']:.0f}, CPR narrow ({self.pivot['width_pct']:.3f}%), "
+               f"{'above CPR R1' if side == 'CE' else 'below CPR S1'} {self.pivot['R1' if side == 'CE' else 'S1']:.2f}, "
                f"{'above the upper' if side == 'CE' else 'below the lower'} Bollinger band "
                f"{upper if side == 'CE' else lower:.2f}, Williams %R {ind['wr']:.1f} -> {strike:g} {side} (premium nearest 250)")
         trade = LalithaTrade(date=self.day.isoformat(), side=side, strike=strike, qty=self.qty, entry_time=when.isoformat(),
