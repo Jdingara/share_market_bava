@@ -1,6 +1,6 @@
 ﻿# Daily paper-bot start (owner, 2026-10-08). Run by Windows Task Scheduler at 08:40, Mon-Fri.
 # Syncs the code from GitHub, opens the Zerodha login (you log in; no copy-paste), then starts the
-# 4 paper bots hidden in the background. Dashboards: :8050 :8051 :8052 :8053. PAPER MODE - no real orders.
+# paper bots hidden in the background. Dashboards: :8050 :8051 :8052 :8053, Vengat ORB :8054 :8055. PAPER MODE - no real orders.
 $ErrorActionPreference = "Continue"
 $repo = $PSScriptRoot
 Set-Location $repo
@@ -17,14 +17,16 @@ py src\auto_login.py 2>&1 | ForEach-Object { Note "login: $_" }
 if ($LASTEXITCODE -ne 0) { Note "login failed - bots not started"; exit 1 }
 
 # already running (e.g. started by hand)? then leave them alone
-$running = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '(sniper|hlc)_live\.py' -and $_.Name -eq 'python.exe' }
+$running = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '(sniper|hlc|orb)_live\.py' -and $_.Name -eq 'python.exe' }
 if ($running) { Note "bots already running - not starting again"; exit 0 }
 
 $bots = @(
   @{ n = "sniper_NIFTY";  a = "src\sniper_live.py --market NIFTY --no-browser" },
   @{ n = "sniper_SENSEX"; a = "src\sniper_live.py --market SENSEX --no-browser" },
   @{ n = "hlc_NIFTY";     a = "src\hlc_live.py --market NIFTY --no-browser" },
-  @{ n = "hlc_SENSEX";    a = "src\hlc_live.py --market SENSEX --no-browser" }
+  @{ n = "hlc_SENSEX";    a = "src\hlc_live.py --market SENSEX --no-browser" },
+  @{ n = "orb_NIFTY";     a = "src\orb_live.py --market NIFTY --no-browser" },
+  @{ n = "orb_SENSEX";    a = "src\orb_live.py --market SENSEX --no-browser" }
 )
 foreach ($b in $bots) {
   Start-Process py -WorkingDirectory $repo -ArgumentList $b.a -WindowStyle Hidden `

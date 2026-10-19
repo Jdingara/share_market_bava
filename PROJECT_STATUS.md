@@ -316,3 +316,9 @@ data/
 - **Sniper target (owner, 16-10)**: at 2 squares - a candle CLOSING above the target = strong break -> SL to the target (2 squares locked), then the square TSL; touched without a close above -> exit at the target. `STRONG_BREAK_OR_TARGET`.
 - **Sniper 12:30+ re-entry (owner, 16-10)**: after a close above the sideways high, entry on the RETEST of the square below that close; SL one square down, target two up.
 - **HLC targets / direction (owner, 16-10 afternoon; live from 19-10)**: (a) CE and PE both PROFIT BOOKING yesterday = buyer's day too (`BOTH_PB_BUYERS_DAY`). (b) FIRST BREAK entry: the index closes beyond its first 5-minute high (CE) / low (PE) with that side's premium closing above its own first 5-minute high; the NEXT candle confirms (index on, premium green) -> entry at that close (`FIRST_BREAK_CONFIRM`, replaces the 09-10 BREAK). (c) Non-momentum days: target R2/S2 (R1 no longer an exit); if not reached, after the index crosses the Fib 0.75 (close -> R2/S2) a reversal candle books it (0.786 if touched, else 0.75). Momentum days keep riding with the profit lock. The 0.618 ladder and Fib-break re-entries are off (`R2_OR_FIB_REVERSAL`).
+
+## Vengat ORB (owner, 19-10) - third strategy, paper
+- Range = the index's 09:15-09:20 candle. A 5-minute candle CLOSING above the range high -> ATM CE at that close; below the range low -> ATM PE. No other confirmation.
+- SL = the other end of the range (index); target 1:2 on the index. Entries on candles closing 09:30-12:00 and 12:30-15:15; max 10 trades a day; re-entry on any close outside the range; an opposite break closes the old trade and opens the new side; everything closed at 15:16.
+- Fixed size: NIFTY 2 lots (130), SENSEX 6 lots (120). No daily loss limit yet.
+- Files: src/orb_engine.py, src/orb_live.py (--replay YYYY-MM-DD [--record]), src/orb_history.py -> history/orb/, src/orb_dashboard.html (:8054 NIFTY, :8055 SENSEX). Started by daily_start.ps1; shown in all_bots.html.

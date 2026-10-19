@@ -1,0 +1,3 @@
+date,market,side,strike,qty,entry_time,entry_fill,entry_index,sl_index,target_index,exit_time,exit_premium,exit_index,exit_reason,pnl_points,pnl_rupees,entry_reason
+2026-10-19,NIFTY,PE,23000,130,09:25,101,22981.9,23175.25,22595.2,,,,OPEN,,,candle 09:25 closed 22981.9 below the range low 23074.6 -> ATM 23000 PE
+2026-10-19,SENSEX,PE,74200,120,09:25,475.4,74208.4,74849.75,72925.7,,,,OPEN,,,candle 09:25 closed 74208.4 below the range low 74513 -> ATM 74200 PE
