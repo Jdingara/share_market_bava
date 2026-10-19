@@ -138,6 +138,11 @@ SNIPER_RANGE_BREAK_REENTRY = True
 # Owner, 2026-10-16: at 2 squares (the target) - a candle CLOSING above it is a strong break: SL to the target (2 squares
 # locked), then the square TSL; touched but no close above = no strong break -> exit at the target.
 STRONG_BREAK_OR_TARGET = True
+# Owner, 2026-10-19 (SENSEX: 09:50 ATM CE closed 404.75 below the Sniper 428.08; at 09:55 the 74500 PE ran from 390 through
+# 441 to 529.95): the conditions are on the OTM only - the opposite ATM just has to CONFIRM (one close below the Sniper).
+# From the next candle, the first square above the Sniper and the OTM's yesterday close (441) is the entry when the OTM
+# trades there; SL one square down, target two up. First half.
+ATM_CONFIRM_SQUARE_ENTRY = True
 # Owner, 2026-10-15: the retest is one way in; the other is MOMENTUM - once the market has started (index beyond its
 # first candle), with the falling ATM below its yesterday close and the Sniper: the OTM having CLOSED above a square
 # (signal 527.80 > 484) -> buy at the next square (529) when it trades there, from 09:30; SL one square down (484),
@@ -532,6 +537,9 @@ class SniperDay:
         # Owner, 2026-10-12: an unfilled body-entry limit doesn't block the half - the normal signal can still come
         # and replaces it (12-10 SENSEX: body limit 441 never filled; the normal 72500 PE 529 trade was missed).
         body_waiting = [p for p in self.pending if p.limit_only and p.setup.half == half]
+        event = self._atm_confirm_entry(half, bars, when)
+        if event:
+            return events + event
         event = self._reentry_entry(half, bars, when)
         if event:
             return events + event
@@ -868,6 +876,40 @@ class SniperDay:
                + (f"; SL = reversal low {r['reversal_low']:g} - 1" if pm else ""))
         return self._open(setup, highest_square_below(fill), when, round(fill, 2), bar, False, reentry=True, reason=why,
                           stop=stop)
+
+    def _atm_confirm_entry(self, half: Optional[str], bars: dict[str, Bar], when: datetime) -> Optional[list[Event]]:
+        """Owner, 2026-10-19 - see ATM_CONFIRM_SQUARE_ENTRY."""
+        if (not ATM_CONFIRM_SQUARE_ENTRY or half != "first" or self._prev_bars is None or self.open_trades
+                or self.pending or half in self.halves_used or not self._next_trade_allowed()):
+            return None
+        prev = self._prev_bars
+        for setup in (s for s in self.setups if s.half == half):
+            falling = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
+            otm = _key(setup)
+            if setup.contract or prev[falling].close >= self.row.sniper:
+                continue  # the opposite ATM hasn't confirmed (closed below the Sniper) yet
+            floor = max(self.row.sniper, self.prev[otm], prev[otm].close)
+            k = math.isqrt(int(floor)) + 1
+            bar = bars[otm]
+            if bar.high < k * k:
+                continue
+            fill = max(float(k * k), bar.open) if bar.open is not None else float(k * k)
+            self.halves_used.add(half)
+            why = (f"ATM {setup.falling_type} confirmed: closed {prev[falling].close:g} below the Sniper {self.row.sniper:g}; "
+                   f"OTM {setup.buy_type} went above the Sniper and its close {self.prev[otm]:g} -> the first square above, "
+                   f"{k * k}, traded in candle {when:%H:%M}")
+            events = self._open(setup, k, when, round(fill, 2), bar, True, prev[falling].close < self.row.sniper, reason=why)
+            trade = events[0].trade if events else None
+            if trade is not None and not trade.exit_reason and bar.high >= trade.target and bar.close <= trade.target:
+                # 2 squares inside the entry candle without a close above - no strong break -> book it (owner 16-10)
+                self.open_trades = [(st, t) for st, t in self.open_trades if t is not trade]
+                events.append(self._close(trade, when, float(trade.target), "TARGET"))
+            elif trade is not None and not trade.exit_reason and bar.close > trade.target:
+                trade.trail_stop = float(trade.target)  # strong break in the entry candle - 2 squares locked
+                trade.tsl_why = f"entry candle closed {bar.close:g} above the target - SL to the target"
+                self.ladder[id(trade)] = {"cost_at": self.candle_no}
+            return events
+        return None
 
     def _range_break_entry(self, r: dict, half: Optional[str], bar: Bar, when: datetime) -> Optional[list[Event]]:
         """Owner, 2026-10-16 - see SNIPER_RANGE_BREAK_REENTRY."""
