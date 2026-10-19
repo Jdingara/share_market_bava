@@ -2,10 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 48 trade(s), +3003.10 points, ₹+653,647**
+**All days: 52 trade(s), +3239.35 points, ₹+680,377**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
+| 2026-10-19 | SENSEX | 74600 | PANIC / PROFIT BOOKING | yes | 2 | +149.80 | ₹+14,972 | finished |
+| 2026-10-19 | NIFTY | 23100 | PANIC / PROFIT BOOKING | yes | 2 | +86.45 | ₹+11,758 | finished |
 | 2026-10-16 | SENSEX | 74000 | PANIC / PROFIT BOOKING | yes | 2 | +68.60 | ₹+13,976 | finished |
 | 2026-10-16 | NIFTY | 22950 | PANIC / PROFIT BOOKING | yes | 4 | +48.15 | ₹+1,771 | finished |
 | 2026-10-15 | SENSEX | 72700 | PROFIT BOOKING / PROFIT BOOKING | no | 1 | +257.85 | ₹+30,942 | finished |
@@ -32,6 +34,28 @@
 | 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | -42.10 | ₹-13,682 | finished |
 | 2026-09-29 | SENSEX | 72900 | PROFIT BOOKING / PANIC | yes | 1 | -50.00 | ₹-15,000 | replayed |
 | 2026-09-29 | NIFTY | 22800 | PROFIT BOOKING / PANIC | yes | 1 | +45.60 | ₹+14,820 | replayed |
+
+## 2026-10-19 (Mon)
+
+### NIFTY — finished (last update 2026-10-19 15:00)
+
+- Close 23146.15, ATM 23100. R3 23373.55 · R2 23281.2 · R1 23192.35 · S1 23011.15 · S2 22918.8 · S3 22829.95.
+- CE PANIC, PE PROFIT BOOKING — buyer’s day.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| FIB | 130 × 23100 PE | first candle 0.75 at 23099.76 | 09:30 | 85.25 | 0.0 (index above first high 23175.2) | 167.7 (12:05) | TARGET booked at the Fib 0.786 22967.5 (close -> S2): S2 not reached, index Bullish Harami in candle 12:05 | +82.45 | ₹+10,718 |
+| PM REVERSAL | 260 × 23100 PE | 12:30+ entry: Bullish Engulfing reversal, green confirmation closed 194.15 | 12:40 | 194.15 | 167 (reversal low 168 - 1) | 198.15 (12:50) | TARGET S2 22918.8 reached in candle 12:50 | +4.00 | ₹+1,040 |
+
+### SENSEX — finished (last update 2026-10-19 15:00)
+
+- Close 74729.27, ATM 74600. R3 76026.9 · R2 75550.75 · R1 75076.15 · S1 74125.4 · S2 73649.25 · S3 73174.65.
+- CE PANIC, PE PROFIT BOOKING — buyer’s day.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| FIB | 100 × 74600 PE | first candle 0.75 at 74765.56 | 09:35 | 405.5 | 0.0 (index above first high 74849.8) | 555.5 (10:45) | profit lock +150 - a later candle had closed above 555.5, so the SL was locked there; candle 10:45 came back to it | +150.00 | ₹+15,000 |
+| PM REVERSAL | 140 × 74600 PE | 12:30+ entry: Bullish Engulfing reversal, green confirmation closed 825.05 | 12:40 | 825.05 | 762.1 (reversal low 763.1 - 1) | 824.85 (12:55) | TARGET booked at the Fib 0.75 73919.3 (close -> S2): S2 not reached, index Hammer in candle 12:55 | -0.20 | ₹-28 |
 
 ## 2026-10-16 (Fri)
 
