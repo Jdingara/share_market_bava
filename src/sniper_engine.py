@@ -893,7 +893,10 @@ class SniperDay:
             floor = max(self.row.sniper, self.prev[otm], prev[otm].close)
             k = math.isqrt(int(floor)) + 1
             bar = bars[otm]
-            if bar.high < k * k:
+            same_atm = "atm_ce" if setup.buy_type == "CE" else "atm_pe"
+            if bar.high < k * k or bar.high <= self.prev[same_atm]:
+                # owner 19-10: the OTM must also go above the same side's ATM yesterday close (09:40 ATM PE below the
+                # Sniper but the 74700 CE never above the ATM CE close 476.15 -> no OTM entry)
                 continue
             fill = max(float(k * k), bar.open) if bar.open is not None else float(k * k)
             self.halves_used.add(half)
