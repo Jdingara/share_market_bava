@@ -1,0 +1,2 @@
+date,market,side,strike,qty,entry_time,entry_fill,entry_index,exit_time,exit_premium,exit_index,exit_reason,pnl_points,pnl_rupees,entry_reason
+2026-10-19,BANKNIFTY,PE,54800,180,09:27,246.7,55397.2,09:33,184.1,55637.5,Supertrend turned up - candle 09:33 closed 55637.5 (above 55373.61),-62.6,-11268,"candle 09:27 closed 55397.2: Supertrend down (55628.58), RSI 23.4 < 30, EMA20 55676.11, CCI -299, CPR narrow (0.103%), below CPR S1 55583.68, below the lower Bollinger band 55401.07, Williams %R -95.1 -> 54800 PE (premium nearest 250)"
