@@ -327,3 +327,9 @@ data/
 - **Vengat ORB (owner, 19-10)**: trades every day; an opening range wider than NIFTY 100 / SENSEX 300 points puts the SL at the range's middle (50%), the 1:2 target from that SL. No daily loss limit.
 - **19-10 later**: Sniper ATM-confirm entry needs the confirmation candle after 09:30 (a 09:20 confirmation doesn't count). Vengat ORB: SL at most NIFTY 50 / SENSEX 100 index points from the entry (replaces the 50% range rule), every day.
 - **Vengat ORB (owner, 19-10)**: entries only after 09:30 - the first possible entry is the candle closing 09:35.
+
+## Lalitha - strategy #4 (owner, 19-10) - branch `lalitha` only, paper
+- Index 3-minute candles (NIFTY, SENSEX, BANK NIFTY). CE when a candle closes with Supertrend(10,2) up, RSI(14) > 70, close above yesterday's Traditional pivot R1 and above the Bollinger(20,2) upper band; PE the mirror (down, < 30, below S1, below the lower band).
+- Strike: the option of that side with premium nearest Rs 250 (ITM fine). Exit at the close of the candle where the Supertrend changes direction; 15:15 square-off. 09:15-15:15, max 10 trades a day.
+- Qty: NIFTY 4 lots, SENSEX 10 lots, BANK NIFTY 6 lots (lot size from Kite).
+- Files: src/lalitha_indicators.py, src/lalitha_engine.py, src/lalitha_live.py (--replay), src/lalitha_dashboard.html (:8056 NIFTY, :8057 SENSEX, :8058 BANKNIFTY), history/lalitha/.
