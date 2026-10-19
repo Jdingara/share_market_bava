@@ -1,5 +1,5 @@
 """
-Lalitha - strategy #4 (owner, 2026-10-19). PAPER MODE. Indicator based, on the INDEX's 5-minute candles.
+Lalitha - strategy #4 (owner, 2026-10-19). PAPER MODE. Indicator based, on the INDEX's 3-minute candles.
 Owner's condition sheet (19-10, all AND):
 
   PE BUY: close < Supertrend(10, 2), close < EMA(20), RSI(14) < 30, CCI(20) < -200, Williams %R(14) < -85,
@@ -19,9 +19,9 @@ from typing import Callable, Optional
 
 from lalitha_indicators import Bar, bollinger, cci, cpr, ema, rsi, supertrend, williams_r
 
-CANDLE = timedelta(minutes=5)  # owner 19-10 afternoon: 5 minutes (was 3)
-FIRST_ENTRY_CLOSE = time(9, 20)
-LAST_ENTRY_CLOSE = time(15, 10)
+CANDLE = timedelta(minutes=3)  # owner 19-10 13:30: back to 3 minutes
+FIRST_ENTRY_CLOSE = time(9, 18)
+LAST_ENTRY_CLOSE = time(15, 12)
 BB_PERIOD, BB_MULT = 20, 3.0  # owner 19-10 afternoon: Bollinger 20, 3 (was 20, 2)
 SQUARE_OFF = time(15, 15)
 MAX_TRADES = 10
