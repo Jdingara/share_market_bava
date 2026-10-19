@@ -883,6 +883,8 @@ class SniperDay:
                 or self.pending or half in self.halves_used or not self._next_trade_allowed()):
             return None
         prev = self._prev_bars
+        if (when - timedelta(minutes=5)).time() < time(9, 30):
+            return None  # owner 19-10: the confirmation candle must be after 09:30 (a 09:20 confirmation doesn't count)
         for setup in (s for s in self.setups if s.half == half):
             falling = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
             otm = _key(setup)
