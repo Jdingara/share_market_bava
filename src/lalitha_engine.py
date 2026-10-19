@@ -8,7 +8,7 @@ Owner's condition sheet (19-10, all AND):
           CPR narrow, close > the upper band.
   Strike: the option of that side whose premium is nearest Rs 250 (ITM is fine).
   Exit: a candle closing back across the Supertrend (its direction changes) - at its close. Closed by 15:15.
-  Markets NIFTY (4 lots), SENSEX (10 lots), BANK NIFTY (6 lots); at most 10 trades a day; 09:15 - 15:15.
+  Markets NIFTY (4 lots), SENSEX (10 lots) - BANK NIFTY removed 19-10; at most 10 trades a day; 09:15 - 15:15.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """
 Lalitha (strategy #4) - live paper bot on Zerodha data. PAPER MODE - no orders are placed.
 
-    py src\\lalitha_live.py --market NIFTY        (dashboard :8056; SENSEX :8057; BANKNIFTY :8058)
+    py src\\lalitha_live.py --market NIFTY        (dashboard :8056; SENSEX :8057)
     py src\\lalitha_live.py --market BANKNIFTY --replay 2026-10-16 [--record]
 """
 
@@ -42,9 +42,8 @@ class LalithaMarket:
 MARKETS = {
     "NIFTY": LalithaMarket("NIFTY", 256265, "NFO", 50, 4),
     "SENSEX": LalithaMarket("SENSEX", 265, "BFO", 100, 10),
-    "BANKNIFTY": LalithaMarket("BANKNIFTY", 260105, "NFO", 100, 6),
-}
-PORTS = {"NIFTY": 8056, "SENSEX": 8057, "BANKNIFTY": 8058}
+}  # owner 19-10: BANK NIFTY removed (was 6 lots)
+PORTS = {"NIFTY": 8056, "SENSEX": 8057}
 PAGE = PROJECT_ROOT / "src" / "lalitha_dashboard.html"
 HISTORY_DIR = PROJECT_ROOT / "history" / "lalitha"
 INTERVAL = "3minute"

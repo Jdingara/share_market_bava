@@ -335,3 +335,4 @@ data/
 - Files: src/lalitha_indicators.py, src/lalitha_engine.py, src/lalitha_live.py (--replay), src/lalitha_dashboard.html (:8056 NIFTY, :8057 SENSEX, :8058 BANKNIFTY), history/lalitha/.
 - **Lalitha condition sheet (owner, 19-10)**: all AND on 5-min index candles - PE: close < Supertrend(10,2), < EMA20, RSI14 < 30, CCI20 < -200, Williams %R14 < -85, close < CPR S1, CPR narrow (width < 0.25% of P), close < Bollinger(20,3) lower; CE mirror (> Supertrend, > EMA20, RSI > 70, CCI > +200, W%R > -15, > CPR R1, narrow CPR, > upper band). Traditional pivot removed. A day with a wide CPR = no Lalitha trades.
 - **Lalitha timeframe (owner, 19-10 13:30)**: back to 3-minute index candles (all the sheet's conditions unchanged).
+- **Lalitha markets (owner, 19-10)**: BANK NIFTY removed - NIFTY (4 lots) and SENSEX (10 lots) only.
