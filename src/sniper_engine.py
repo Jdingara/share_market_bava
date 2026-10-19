@@ -639,6 +639,11 @@ class SniperDay:
         index = bars.get("index")
         if (index is not None and self.index_close is not None and index.close < self.index_close
                 and atm_close - buy_close <= self.near_points):
+            if RETEST_ONLY:
+                # owner 19-10 (SENSEX 74500 PE 468.40, ATM PE close 474.60): below the ATM close -> the retest of the
+                # square under the close (441); momentum waits for a close above the ATM close
+                return _Pending(setup, highest_square_below(buy_close), buy_close, atm_below_sniper=atm_below_sniper,
+                                atm_close_trigger=atm_close, near=True)
             return _Pending(setup, n - 1, buy_close, has_limit=False, atm_below_sniper=atm_below_sniper,
                             atm_close_trigger=atm_close, near=True)
         return None
