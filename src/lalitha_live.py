@@ -137,10 +137,10 @@ def feed(engine: LalithaDay, rows, prem: Premiums, chain, market, processed: set
             break
     if state is not None and engine.bars:
         ind = engine.indicators()
-        st, r, bb = ind["st"], ind["rsi"], ind["bb"]
+        st, r, bb, wr = ind["st"], ind["rsi"], ind["bb"], ind["wr"]
         state.set(indicators={"supertrend": round(st[0], 2) if st[0] else None, "direction": st[1],
                               "rsi": round(r, 1) if r else None, "bb": [round(x, 2) for x in bb] if bb else None,
-                              "close": engine.bars[-1].close},
+                              "close": engine.bars[-1].close, "wr": round(wr, 1) if wr is not None else None},
                   trades=[{**t.__dict__, "pnl_rupees": t.pnl_rupees} for t in engine.trades])
     return out
 

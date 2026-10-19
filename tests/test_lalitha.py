@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 
 from lalitha_engine import LalithaDay
-from lalitha_indicators import Bar, bollinger, pivots, rsi, supertrend
+from lalitha_indicators import Bar, bollinger, pivots, rsi, supertrend, williams_r
 
 
 def test_pivots_traditional():
@@ -44,3 +44,9 @@ def test_ce_signal_buys_the_premium_nearest_250_and_exits_on_the_supertrend_flip
     when = t0 + timedelta(minutes=50)
     day.on_candle(when, Bar(100, 100, 80, 80), lambda k, s: 150.0, candidates)  # crash -> Supertrend flips down
     assert t.exit_reason.startswith("Supertrend turned down") and t.exit_premium == 150.0
+
+
+def test_williams_r_at_the_high_is_zero_and_at_the_low_is_minus_100():
+    bars = [Bar(100, 110, 90, 100)] * 13
+    assert williams_r(bars + [Bar(100, 110, 90, 110)])[-1] == 0.0
+    assert williams_r(bars + [Bar(100, 110, 90, 90)])[-1] == -100.0

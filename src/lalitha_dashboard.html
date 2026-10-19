@@ -24,13 +24,14 @@
 </head>
 <body>
 <h1>Lalitha #4 <span id="market"></span> <span class="muted" id="mode"></span></h1>
-<div class="muted">PAPER MODE · 5-min index · Supertrend(10,2) + RSI(14) 70/30 + Pivot R1/S1 + Bollinger(20,3) close → premium ≈ 250 · exit on Supertrend flip</div>
+<div class="muted">PAPER MODE · 5-min index · Supertrend(10,2) + RSI(14) 70/30 + Pivot R1/S1 + Bollinger(20,3) + Williams %R -30/-70 close → premium ≈ 250 · exit on Supertrend flip</div>
 <div class="card row">
   <div><div class="muted">Pivot / R1 / S1</div><div class="big" id="piv">–</div></div>
   <div><div class="muted">Close</div><div class="big" id="close">–</div></div>
   <div><div class="muted">Supertrend</div><div class="big" id="st">–</div></div>
   <div><div class="muted">RSI</div><div class="big" id="rsi">–</div></div>
   <div><div class="muted">Bollinger L / U</div><div class="big" id="bb">–</div></div>
+  <div><div class="muted">Williams %R</div><div class="big" id="wr">–</div></div>
   <div><div class="muted">P&amp;L ₹</div><div class="big" id="pnl">0</div></div>
 </div>
 <div class="card"><div class="muted" id="status">–</div></div>
@@ -51,6 +52,7 @@ async function tick() {
       $("st").className = "big " + (i.direction === 1 ? "up" : "down");
       $("rsi").textContent = i.rsi ?? "–";
       $("bb").textContent = i.bb ? `${i.bb[0]} / ${i.bb[2]}` : "–";
+      $("wr").textContent = i.wr ?? "–";
     }
     $("status").textContent = s.status;
     const total = s.trades.filter(t => t.exit_reason).reduce((a, t) => a + t.pnl_rupees, 0);

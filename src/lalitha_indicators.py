@@ -94,6 +94,19 @@ def bollinger(closes: Sequence[float], period: int = 20, mult: float = 2.0) -> l
     return out
 
 
+def williams_r(bars: Sequence[Bar], period: int = 14) -> list[Optional[float]]:
+    """Williams %R: (highest high - close) / (highest high - lowest low) x -100 over `period` bars (0 .. -100)."""
+    out: list[Optional[float]] = []
+    for i in range(len(bars)):
+        if i + 1 < period:
+            out.append(None)
+            continue
+        window = bars[i + 1 - period:i + 1]
+        hh, ll = max(b.high for b in window), min(b.low for b in window)
+        out.append(-100.0 * (hh - bars[i].close) / (hh - ll) if hh > ll else -50.0)
+    return out
+
+
 def pivots(high: float, low: float, close: float) -> dict[str, float]:
     p = (high + low + close) / 3
     return {"P": p, "R1": 2 * p - low, "S1": 2 * p - high, "R2": p + (high - low), "S2": p - (high - low)}

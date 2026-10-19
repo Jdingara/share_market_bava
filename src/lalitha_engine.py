@@ -3,7 +3,7 @@ Lalitha - strategy #4 (owner, 2026-10-19). PAPER MODE. Indicator based, on the I
 
   CE BUY when a 5-minute candle closes with ALL of:
       Supertrend(10, 2) up, RSI(14) > 70, close above yesterday's Traditional pivot R1, close above the
-      Bollinger(20, 3) upper band.
+      Bollinger(20, 3) upper band, Williams %R(14) above -30 (PE: below -70).
   PE BUY: the mirror - Supertrend down, RSI < 30, close below S1, close below the lower band.
   Strike: the option of that side whose premium is nearest Rs 250 (ITM is fine).
   Exit: the candle on which the Supertrend changes direction - at its close. Everything closed by 15:15.
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Callable, Optional
 
-from lalitha_indicators import Bar, bollinger, pivots, rsi, supertrend
+from lalitha_indicators import Bar, bollinger, pivots, rsi, supertrend, williams_r
 
 CANDLE = timedelta(minutes=5)  # owner 19-10 afternoon: 5 minutes (was 3)
 FIRST_ENTRY_CLOSE = time(9, 20)
@@ -26,6 +26,7 @@ SQUARE_OFF = time(15, 15)
 MAX_TRADES = 10
 TARGET_PREMIUM = 250.0
 RSI_UP, RSI_DOWN = 70.0, 30.0
+WR_UP, WR_DOWN = -30.0, -70.0  # owner 19-10: Williams %R(14) above -30 for CE, below -70 for PE
 
 
 @dataclass
@@ -75,7 +76,8 @@ class LalithaDay:
         st = supertrend(self.bars, 10, 2.0)
         r = rsi(closes, 14)
         bb = bollinger(closes, BB_PERIOD, BB_MULT)
-        return {"st": st[-1], "st_prev": st[-2] if len(st) > 1 else (None, 0), "rsi": r[-1], "bb": bb[-1]}
+        wr = williams_r(self.bars, 14)
+        return {"st": st[-1], "st_prev": st[-2] if len(st) > 1 else (None, 0), "rsi": r[-1], "bb": bb[-1], "wr": wr[-1]}
 
     def on_candle(self, when: datetime, bar: Bar, premium: PremiumAt, candidates: Callable[[str], list[float]]) -> list[str]:
         if self.done:
@@ -102,13 +104,15 @@ class LalithaDay:
             return events
         if self.open_trade is not None or len(self.trades) >= MAX_TRADES or not (FIRST_ENTRY_CLOSE <= closes <= LAST_ENTRY_CLOSE):
             return events
-        if ind["rsi"] is None or ind["bb"] is None or direction == 0:
+        if ind["rsi"] is None or ind["bb"] is None or ind["wr"] is None or direction == 0:
             return events
         lower, _, upper = ind["bb"]
         side = None
-        if direction == 1 and ind["rsi"] > RSI_UP and bar.close > self.pivot["R1"] and bar.close > upper:
+        if (direction == 1 and ind["rsi"] > RSI_UP and bar.close > self.pivot["R1"] and bar.close > upper
+                and ind["wr"] > WR_UP):
             side = "CE"
-        elif direction == -1 and ind["rsi"] < RSI_DOWN and bar.close < self.pivot["S1"] and bar.close < lower:
+        elif (direction == -1 and ind["rsi"] < RSI_DOWN and bar.close < self.pivot["S1"] and bar.close < lower
+              and ind["wr"] < WR_DOWN):
             side = "PE"
         if side is None:
             return events
@@ -120,7 +124,7 @@ class LalithaDay:
                f"RSI {ind['rsi']:.1f} {'>' if side == 'CE' else '<'} {RSI_UP if side == 'CE' else RSI_DOWN:g}, "
                f"{'above R1' if side == 'CE' else 'below S1'} {self.pivot['R1' if side == 'CE' else 'S1']:.2f}, "
                f"{'above the upper' if side == 'CE' else 'below the lower'} Bollinger band "
-               f"{upper if side == 'CE' else lower:.2f} -> {strike:g} {side} (premium nearest 250)")
+               f"{upper if side == 'CE' else lower:.2f}, Williams %R {ind['wr']:.1f} -> {strike:g} {side} (premium nearest 250)")
         trade = LalithaTrade(date=self.day.isoformat(), side=side, strike=strike, qty=self.qty, entry_time=when.isoformat(),
                              entry_fill=round(fill, 2), entry_index=round(bar.close, 2), entry_reason=why)
         self.trades.append(trade)
