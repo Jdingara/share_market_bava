@@ -327,3 +327,8 @@ data/
 - **Vengat ORB (owner, 19-10)**: trades every day; an opening range wider than NIFTY 100 / SENSEX 300 points puts the SL at the range's middle (50%), the 1:2 target from that SL. No daily loss limit.
 - **19-10 later**: Sniper ATM-confirm entry needs the confirmation candle after 09:30 (a 09:20 confirmation doesn't count). Vengat ORB: SL at most NIFTY 50 / SENSEX 100 index points from the entry (replaces the 50% range rule), every day.
 - **Vengat ORB (owner, 19-10)**: entries only after 09:30 - the first possible entry is the candle closing 09:35.
+
+## One branch per strategy (owner, 19-10)
+- Branches: `sniper` (#1), `hlc` (#2), `orb` (#3), `lalitha` (#4); `main` = shared code + the daily scripts. Each strategy runs from its own git worktree: E:\BOT\Share_BOTots\<strategy>. Sniper and HLC share one data/paper_trades folder (junction to bots\shared_paper_trades) so the Rs 5 lakh capital pool still works.
+- daily_start.ps1 (08:40): pulls main + every worktree, logs in once, copies the session and .env into each worktree, starts each strategy's bots from its own folder. daily_push.ps1 (15:10): commits each worktree's history/ and pushes it to that strategy's branch.
+- A rule change goes ONLY to that strategy's branch (ask the owner which strategy first).
