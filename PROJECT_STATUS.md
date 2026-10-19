@@ -329,7 +329,7 @@ data/
 - **Vengat ORB (owner, 19-10)**: entries only after 09:30 - the first possible entry is the candle closing 09:35.
 
 ## Lalitha - strategy #4 (owner, 19-10) - branch `lalitha` only, paper
-- Index 3-minute candles (NIFTY, SENSEX, BANK NIFTY). CE when a candle closes with Supertrend(10,2) up, RSI(14) > 70, close above yesterday's Traditional pivot R1 and above the Bollinger(20,2) upper band; PE the mirror (down, < 30, below S1, below the lower band).
+- Index 5-minute candles (NIFTY, SENSEX, BANK NIFTY) - owner 19-10 afternoon (was 3 min); Bollinger (20, 3) (was 20, 2). CE when a candle closes with Supertrend(10,2) up, RSI(14) > 70, close above yesterday's Traditional pivot R1 and above the Bollinger(20,2) upper band; PE the mirror (down, < 30, below S1, below the lower band).
 - Strike: the option of that side with premium nearest Rs 250 (ITM fine). Exit at the close of the candle where the Supertrend changes direction; 15:15 square-off. 09:15-15:15, max 10 trades a day.
 - Qty: NIFTY 4 lots, SENSEX 10 lots, BANK NIFTY 6 lots (lot size from Kite).
 - Files: src/lalitha_indicators.py, src/lalitha_engine.py, src/lalitha_live.py (--replay), src/lalitha_dashboard.html (:8056 NIFTY, :8057 SENSEX, :8058 BANKNIFTY), history/lalitha/.

@@ -47,7 +47,7 @@ MARKETS = {
 PORTS = {"NIFTY": 8056, "SENSEX": 8057, "BANKNIFTY": 8058}
 PAGE = PROJECT_ROOT / "src" / "lalitha_dashboard.html"
 HISTORY_DIR = PROJECT_ROOT / "history" / "lalitha"
-INTERVAL = "3minute"
+INTERVAL = "5minute"
 STRIKES_EACH_SIDE = 12
 
 
@@ -170,8 +170,8 @@ def record(day: date, market: str, engine: LalithaDay, status: str, note: str = 
         _write(HISTORY_DIR / "trades.csv", fields_t, trades)
         total = sum(float(d["pnl_rupees"] or 0) for d in days)
         lines = ["# Lalitha (strategy #4) - Trade History", "",
-                 "**Paper trades - no real orders.** 3-minute index candles: Supertrend(10,2) + RSI(14) > 70 / < 30 + "
-                 "pivot R1 / S1 + Bollinger(20,2) band close -> the CE / PE with premium nearest 250; exit on a Supertrend flip.",
+                 "**Paper trades - no real orders.** 5-minute index candles: Supertrend(10,2) + RSI(14) > 70 / < 30 + "
+                 "pivot R1 / S1 + Bollinger(20,3) band close -> the CE / PE with premium nearest 250; exit on a Supertrend flip.",
                  "", f"**All days: ₹{total:+,.0f}**", "", "| Date | Market | Trades | P&L ₹ | Status |", "|---|---|---|---|---|"]
         lines += [f"| {d['date']} | {d['market']} | {d['trades']} | ₹{float(d['pnl_rupees'] or 0):+,.0f} | {d['status']} |"
                   for d in reversed(days)]
@@ -183,7 +183,7 @@ def record(day: date, market: str, engine: LalithaDay, status: str, note: str = 
 
 def _next_poll(now: datetime) -> datetime:
     minutes = now.hour * 60 + now.minute
-    nxt = (minutes // 3 + 1) * 3
+    nxt = (minutes // 5 + 1) * 5
     return datetime.combine(now.date(), time(0, 0)) + timedelta(minutes=nxt, seconds=10)
 
 
@@ -215,7 +215,7 @@ def live(name: str, open_browser: bool) -> None:
                 tried = True
             else:
                 nxt = _next_poll(datetime.now())
-                state.set(status=f"Waiting for the next 3-minute candle - checking at {nxt:%H:%M:%S}")
+                state.set(status=f"Waiting for the next 5-minute candle - checking at {nxt:%H:%M:%S}")
                 while datetime.now() < nxt:
                     time_module.sleep(min(30.0, max((nxt - datetime.now()).total_seconds(), 0.5)))
             now = datetime.now()

@@ -1,9 +1,9 @@
 """
-Lalitha - strategy #4 (owner, 2026-10-19). PAPER MODE. Indicator based, on the INDEX's 3-minute candles.
+Lalitha - strategy #4 (owner, 2026-10-19). PAPER MODE. Indicator based, on the INDEX's 5-minute candles (owner 19-10 afternoon; was 3).
 
-  CE BUY when a 3-minute candle closes with ALL of:
+  CE BUY when a 5-minute candle closes with ALL of:
       Supertrend(10, 2) up, RSI(14) > 70, close above yesterday's Traditional pivot R1, close above the
-      Bollinger(20, 2) upper band.
+      Bollinger(20, 3) upper band.
   PE BUY: the mirror - Supertrend down, RSI < 30, close below S1, close below the lower band.
   Strike: the option of that side whose premium is nearest Rs 250 (ITM is fine).
   Exit: the candle on which the Supertrend changes direction - at its close. Everything closed by 15:15.
@@ -18,9 +18,10 @@ from typing import Callable, Optional
 
 from lalitha_indicators import Bar, bollinger, pivots, rsi, supertrend
 
-CANDLE = timedelta(minutes=3)
-FIRST_ENTRY_CLOSE = time(9, 18)
-LAST_ENTRY_CLOSE = time(15, 12)
+CANDLE = timedelta(minutes=5)  # owner 19-10 afternoon: 5 minutes (was 3)
+FIRST_ENTRY_CLOSE = time(9, 20)
+LAST_ENTRY_CLOSE = time(15, 10)
+BB_PERIOD, BB_MULT = 20, 3.0  # owner 19-10 afternoon: Bollinger 20, 3 (was 20, 2)
 SQUARE_OFF = time(15, 15)
 MAX_TRADES = 10
 TARGET_PREMIUM = 250.0
@@ -73,7 +74,7 @@ class LalithaDay:
         closes = [b.close for b in self.bars]
         st = supertrend(self.bars, 10, 2.0)
         r = rsi(closes, 14)
-        bb = bollinger(closes, 20, 2.0)
+        bb = bollinger(closes, BB_PERIOD, BB_MULT)
         return {"st": st[-1], "st_prev": st[-2] if len(st) > 1 else (None, 0), "rsi": r[-1], "bb": bb[-1]}
 
     def on_candle(self, when: datetime, bar: Bar, premium: PremiumAt, candidates: Callable[[str], list[float]]) -> list[str]:
