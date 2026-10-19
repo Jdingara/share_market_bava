@@ -64,3 +64,11 @@ def test_at_most_ten_trades():
         hhmm = f"{10 + i // 6:02d}:{(i % 6) * 10:02d}"
         day.on_candle(_at(hhmm), Candle(23045, 23200, 23040, 23050), _chain(ce=100, strike=23050.0))
     assert len(day.trades) == 10
+
+
+def test_wide_range_puts_the_sl_at_the_middle():
+    day = OrbDay(date(2026, 10, 19), ORB_MARKETS["NIFTY"])
+    day.on_candle(_at("09:15"), Candle(23000, 23100, 22980, 23050), _chain())  # 120 points > 100
+    day.on_candle(_at("09:25"), Candle(23090, 23110, 23085, 23105), _chain(ce=150, strike=23100.0))
+    t = day.trades[0]
+    assert t.sl_index == 23040 and t.target_index == 23105 + 2 * 65

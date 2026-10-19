@@ -4,7 +4,8 @@ Vengat ORB - Opening Range Breakout (owner, 2026-10-19). PAPER MODE.
   * Range: the index's first 5-minute candle (09:15-09:20) - its high and low.
   * Entry: a 5-minute candle CLOSING above the range high -> buy the ATM CE at that candle's close; closing below the
     range low -> the ATM PE. No other confirmation.
-  * SL: the other end of the range on the index (CE: range low, PE: range high).
+  * SL: the other end of the range on the index (CE: range low, PE: range high); a range wider than NIFTY 100 /
+    SENSEX 300 points -> SL at the range's middle (owner 19-10). Trades every day.
   * Target 1:2 on the index: CE target = entry index + 2 x (entry index - range low); PE mirrored.
   * Entries only on candles closing 09:30-12:00 and 12:30-15:15, at most 10 trades a day; NIFTY 2 lots, SENSEX 6 lots.
   * Re-entry: any later candle closing outside the range. An opposite break closes the open trade and opens the new
@@ -33,10 +34,11 @@ class OrbMarket:
     name: str
     strike_step: int
     lot: int  # quantity per trade (lots x lot size)
+    wide_range: float  # owner 19-10: a first candle wider than this -> SL at the range's middle (50%)
 
 
 # owner 19-10: fixed size - NIFTY 2 lots (2 x 65), SENSEX 6 lots (6 x 20)
-ORB_MARKETS = {"NIFTY": OrbMarket("NIFTY", 50, 2 * 65), "SENSEX": OrbMarket("SENSEX", 100, 6 * 20)}
+ORB_MARKETS = {"NIFTY": OrbMarket("NIFTY", 50, 2 * 65, 100), "SENSEX": OrbMarket("SENSEX", 100, 6 * 20, 300)}
 
 
 @dataclass
@@ -108,7 +110,7 @@ class OrbDay:
                 target_hit = index.high >= t.target_index if ce else index.low <= t.target_index
                 if sl_hit:  # (both in one candle: the SL is assumed first)
                     events.append(self._exit(t, when, premium, index.close,
-                                             f"SL - index reached the range {'low' if ce else 'high'} {t.sl_index:g} "
+                                             f"SL - index reached {t.sl_index:g} "
                                              f"in candle {when:%H:%M}"))
                 elif target_hit:
                     events.append(self._exit(t, when, premium, index.close,
@@ -135,6 +137,9 @@ class OrbDay:
         if prem is None:
             return events + [f"No {strike:g} {side} candle - entry skipped"]
         sl = self.low if side == "CE" else self.high
+        wide = self.high - self.low > self.market.wide_range
+        if wide:  # owner 19-10: a wide opening range (NIFTY > 100, SENSEX > 300) -> SL at its middle, trade anyway
+            sl = (self.high + self.low) / 2
         risk = abs(index.close - sl)
         target = index.close + REWARD * risk if side == "CE" else index.close - REWARD * risk
         trade = OrbTrade(date=self.day.isoformat(), side=side, strike=strike, qty=self.market.lot,
@@ -146,7 +151,8 @@ class OrbDay:
         self.trades.append(trade)
         self.open_trade = trade
         events.append(f"BUY {trade.qty} x {side} {strike:g} at {trade.entry_fill:.2f} ({trade.entry_reason}) - "
-                      f"SL index {trade.sl_index:g} ({risk:.2f} pts), target index {trade.target_index:g} (1:2)")
+                      f"SL index {trade.sl_index:g} ({risk:.2f} pts{', 50% of a wide range' if wide else ''}), "
+                      f"target index {trade.target_index:g} (1:2)")
         return events
 
     def total(self) -> tuple[float, float]:
