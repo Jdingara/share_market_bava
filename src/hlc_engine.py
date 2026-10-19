@@ -1122,8 +1122,11 @@ class HlcDay:
                     return [self._exit(trade, when, prem.close, f"TARGET {name} {value:g} reached in candle {when:%H:%M}")]
                 f75, f786 = self.index_fib(trade.side, 0.75), self.index_fib(trade.side, 0.786)
                 crossed = trade.index_best <= f75 if pe else trade.index_best >= f75
+                # 19-10: a trade entered already beyond the 0.75 (12:40 PM reversals) aims straight at S2 / R2 - the Fib
+                # booking only applies to a move that crosses the 0.75 after the entry
+                entered_before = trade.entry_index > f75 if pe else trade.entry_index < f75
                 turn = (bullish_pattern if pe else bearish_pattern)(self.index_history[-3:])
-                if crossed and turn and turn[0] not in DIRECTIONLESS:
+                if entered_before and crossed and turn and turn[0] not in DIRECTIONLESS:
                     hit786 = trade.index_best <= f786 if pe else trade.index_best >= f786
                     ratio, level = (0.786, f786) if hit786 else (0.75, f75)
                     return [self._exit(trade, when, prem.close,

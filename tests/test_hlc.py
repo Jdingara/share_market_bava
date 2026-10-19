@@ -709,3 +709,19 @@ def test_first_5_minute_break_with_premium_then_a_confirmation_candle_enters():
     events = day.on_candle(_at("09:25"), Candle(c + 20, c + 33, c + 18, c + 30),
                            {(22800.0, "CE"): Candle(25, 29, 24, 28), (22800.0, "PE"): Candle(*pe)})
     assert day.trades and day.trades[0].kind == "FIRST BREAK" and day.trades[0].entry_fill == 28, events
+
+
+def test_fib_booking_does_not_apply_to_a_trade_entered_beyond_the_075():
+    """19-10: PM reversal PE bought with the index already past the 0.786 - booked at once on a Harami (+0.20).
+    Such a trade aims at S2 instead."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    f786 = day.index_fib("PE", 0.786)
+    t = HlcTrade(date="x", kind="PM REVERSAL", side="PE", strike=22800, pattern="", entry_time="2026-09-29T12:40:00",
+                 entry_fill=100, entry_index=f786 - 10, sl_premium=80, targets=[("S2", LEVELS.s2)])
+    day.trades.append(t); day.open_trade = t
+    day.day_open = LEVELS.close
+    green = Candle(f786 - 20, f786 - 5, f786 - 21, f786 - 6)
+    day.index_history += [Candle(f786 - 5, f786 - 4, f786 - 30, f786 - 25), green]
+    day._manage(t, _at("12:45"), green, Candle(100, 102, 98, 101), time(12, 50))
+    assert not t.exit_reason
