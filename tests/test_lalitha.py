@@ -36,11 +36,11 @@ def test_ce_signal_buys_the_premium_nearest_250_and_exits_on_the_supertrend_flip
     events = []
     for i in range(6):  # a strong rally: above R1 and the upper band, RSI > 70, Supertrend up
         c = 101 + 2 * i
-        events += day.on_candle(t0 + timedelta(minutes=5 * i), Bar(c - 1.5, c + 0.5, c - 2, c), lambda k, s: prem.get((k, s)), candidates)
+        events += day.on_candle(t0 + timedelta(minutes=3 * i), Bar(c - 1.5, c + 0.5, c - 2, c), lambda k, s: prem.get((k, s)), candidates)
         if day.trades:
             break
     t = day.trades[0]
     assert t.side == "CE" and t.strike == 23000.0 and t.entry_fill == 255.0 and t.qty == 260
-    when = t0 + timedelta(minutes=50)
+    when = t0 + timedelta(minutes=30)
     day.on_candle(when, Bar(100, 100, 80, 80), lambda k, s: 150.0, candidates)  # crash -> Supertrend flips down
     assert t.exit_reason.startswith("Supertrend turned down") and t.exit_premium == 150.0
