@@ -2,16 +2,16 @@
 
 **Paper trades - no real orders.** Opening range = the index's 09:15-09:20 candle; a close outside it buys the ATM CE / PE (NIFTY 2 lots, SENSEX 6 lots), SL the other end of the range, target 1:2. Written by `src/orb_history.py`.
 
-**All days: 13 trade(s), ₹+41,508**
+**All days: 13 trade(s), ₹+37,124**
 
 | Date | Market | Range | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|
-| 2026-10-19 | SENSEX | 74513 - 74849.75 | 8 | +280.95 | ₹+33,714 | watching |
-| 2026-10-19 | NIFTY | 23074.6 - 23175.25 | 5 | +59.95 | ₹+7,794 | watching |
+| 2026-10-19 | SENSEX | 74513 - 74849.75 | 8 | +265.00 | ₹+31,800 | finished |
+| 2026-10-19 | NIFTY | 23074.6 - 23175.25 | 5 | +40.95 | ₹+5,324 | finished |
 
 ## 2026-10-19
 
-### NIFTY - range 23074.6 - 23175.25 (watching)
+### NIFTY - range 23074.6 - 23175.25 (finished)
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
@@ -19,9 +19,9 @@
 | 130 x 23050 PE | 10:00 | 65.45 | 23119.05 / 22969.05 | 49.9 (10:30) | SL - index reached 23119 in candle 10:30 | -15.55 | -2022 |
 | 130 x 23050 PE | 10:35 | 66.15 | 23101 / 22951.0 | 130.4 (12:00) | TARGET 1:2 - index reached 22951 in candle 12:00 | 64.25 | 8352 |
 | 130 x 22950 PE | 12:25 | 63.85 | 22995.8 / 22845.8 | 96.15 (13:45) | TARGET 1:2 - index reached 22845.8 in candle 13:45 | 32.3 | 4199 |
-| 130 x 22850 PE | 13:45 | 32.65 | 22924.3 / 22774.3 | open | OPEN | - | - |
+| 130 x 22850 PE | 13:45 | 32.65 | 22924.3 / 22774.3 | 13.65 (15:10) | 15:16 square-off | -19.0 | -2470 |
 
-### SENSEX - range 74513 - 74849.75 (watching)
+### SENSEX - range 74513 - 74849.75 (finished)
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
@@ -32,4 +32,4 @@
 | 120 x 74000 PE | 12:25 | 416.75 | 74120.89 / 73820.89 | 520.8 (13:20) | TARGET 1:2 - index reached 73820.9 in candle 13:20 | 104.05 | 12486 |
 | 120 x 73800 PE | 13:20 | 412.45 | 73895.63 / 73595.63 | 399.05 (13:40) | SL - index reached 73895.6 in candle 13:40 | -13.4 | -1608 |
 | 120 x 73800 PE | 13:40 | 399.05 | 73866.13 / 73566.13 | 384.1 (14:05) | SL - index reached 73866.1 in candle 14:05 | -14.95 | -1794 |
-| 120 x 73800 PE | 14:05 | 384.1 | 73917.13 / 73617.13 | open | OPEN | - | - |
+| 120 x 73800 PE | 14:05 | 384.1 | 73917.13 / 73617.13 | 368.15 (15:10) | 15:16 square-off | -15.95 | -1914 |
