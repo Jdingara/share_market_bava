@@ -322,3 +322,4 @@ data/
 - SL = the other end of the range (index); target 1:2 on the index. Entries on candles closing 09:30-12:00 and 12:30-15:15; max 10 trades a day; re-entry on any close outside the range; an opposite break closes the old trade and opens the new side; everything closed at 15:16.
 - Fixed size: NIFTY 2 lots (130), SENSEX 6 lots (120). No daily loss limit yet.
 - Files: src/orb_engine.py, src/orb_live.py (--replay YYYY-MM-DD [--record]), src/orb_history.py -> history/orb/, src/orb_dashboard.html (:8054 NIFTY, :8055 SENSEX). Started by daily_start.ps1; shown in all_bots.html.
+- **Momentum needs the OTM above the same-side ATM close (owner 16-10 point 2, coded 19-10)**: below it only the retest square (19-10 SENSEX 74500 PE: 468.40 < ATM PE close 474.60 - bought 484 by momentum and lost; the 441 retest was the entry). `MOMENTUM_NEEDS_ATM_CLOSE`.

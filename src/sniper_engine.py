@@ -143,7 +143,8 @@ STRONG_BREAK_OR_TARGET = True
 # (signal 527.80 > 484) -> buy at the next square (529) when it trades there, from 09:30; SL one square down (484),
 # target two up (625). A later close above 529 moves it up to 576, and so on.
 MOMENTUM_ENTRY = True
-MOMENTUM_FROM = time(9, 30)  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
+MOMENTUM_FROM = time(9, 30)
+MOMENTUM_NEEDS_ATM_CLOSE = True  # owner 16-10 point 2 / 19-10: the OTM must be above the same-side ATM's yesterday close  # owner, 2026-10-13: re-entry at the 0.618 pull-back of the previous move's low -> high
 UV_TRADE = True  # owner, 2026-10-09: sideways days - no OTM trade, but the ATM U/V trade (own SL/TSL/target)
 UV_FIB = 0.618  # U/V trade entry: Fib 0.618 of the confirmation (retest) candle, from its high down (owner, 08-10)
 TRAILING_SL = True
@@ -746,6 +747,11 @@ class SniperDay:
         key = "atm_ce" if pending.setup.falling_type == "CE" else "atm_pe"
         bar, falling = bars[_key(pending.setup)], bars[key]
         if not (falling.close < self.row.sniper and falling.close < self.prev[key]):
+            return
+        same_atm = "atm_ce" if pending.setup.buy_type == "CE" else "atm_pe"
+        if MOMENTUM_NEEDS_ATM_CLOSE and bar.close <= self.prev[same_atm]:
+            # owner 16-10 point 2 (19-10 SENSEX 74500 PE 468.40 < ATM PE close 474.60 bought 484 and lost): momentum only
+            # once the OTM is above the same side's ATM yesterday close - otherwise the retest square only
             return
         if FIRST_CANDLE_BREAK and self.first_index is not None and pending.setup.direction not in self.started:
             return

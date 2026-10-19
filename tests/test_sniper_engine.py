@@ -670,3 +670,12 @@ def test_target_touched_without_a_close_above_is_booked_a_close_above_rides():
                       ("09:35", (180, 150, 175, 160))])
     [t] = engine.trades
     assert not t.exit_reason and t.trail_stop == 169
+
+
+def test_no_momentum_while_the_otm_is_below_the_same_side_atm_close():
+    """Owner, 19-10 (SENSEX 74500 PE 468.40 < ATM PE close 474.60): only the retest square, no next-square chase."""
+    engine = SniperDay(date(2026, 9, 29), ROW)
+    engine.prev["atm_pe"] = 110.0  # the ATM PE closed 110 yesterday - above the OTM's 101.90 signal close
+    for hhmm, pe in [("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105))]:
+        engine.on_candle(_at(hhmm), _bars(pe))
+    assert not engine.trades  # 121 was traded but no momentum; the retest 100 didn't come
