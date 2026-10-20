@@ -1,3 +1,5 @@
 date,market,range_high,range_low,trades,pnl_points,pnl_rupees,status,last_update,note
 2026-10-19,NIFTY,23175.25,23074.6,5,40.95,5324,finished,2026-10-19 15:15,
 2026-10-19,SENSEX,74849.75,74513,8,265.0,31800,finished,2026-10-19 15:15,
+2026-10-20,NIFTY,,,0,0,0,finished,2026-10-20 10:00,
+2026-10-20,SENSEX,,,0,0,0,finished,2026-10-20 10:00,

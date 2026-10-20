@@ -6,8 +6,18 @@
 
 | Date | Market | Range | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|
+| 2026-10-20 | SENSEX |  -  | 0 | +0.00 | ₹+0 | finished |
+| 2026-10-20 | NIFTY |  -  | 0 | +0.00 | ₹+0 | finished |
 | 2026-10-19 | SENSEX | 74513 - 74849.75 | 8 | +265.00 | ₹+31,800 | finished |
 | 2026-10-19 | NIFTY | 23074.6 - 23175.25 | 5 | +40.95 | ₹+5,324 | finished |
+
+## 2026-10-20
+
+### NIFTY - range  -  (finished)
+- No trade.
+
+### SENSEX - range  -  (finished)
+- No trade.
 
 ## 2026-10-19
 
