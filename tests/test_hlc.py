@@ -725,3 +725,22 @@ def test_fib_booking_does_not_apply_to_a_trade_entered_beyond_the_075():
     day.index_history += [Candle(f786 - 5, f786 - 4, f786 - 30, f786 - 25), green]
     day._manage(t, _at("12:45"), green, Candle(100, 102, 98, 101), time(12, 50))
     assert not t.exit_reason
+
+
+@pytest.mark.pattern_gate
+def test_pattern_gate_needs_a_reversal_at_a_level_then_a_confirmation_candle():
+    """Owner, 21-10: no HLC entry without an index reversal pattern at an HLC level and a confirmation candle."""
+    from hlc_engine import HlcTrade
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    t = lambda: HlcTrade(date="x", kind="LEVEL", side="CE", strike=22800, pattern="R1 break", entry_time="2026-09-29T09:30:00",
+                         entry_fill=100, entry_index=LEVELS.r1 + 5, sl_premium=80)
+    s1 = LEVELS.s1
+    day.index_history.append(Candle(s1 + 30, s1 + 31, s1 + 10, s1 + 12))
+    assert not day._gate_open(t())  # no pattern yet
+    day.index_history.append(Candle(s1 + 12, s1 + 40, s1 - 2, s1 + 38))  # Bullish Engulfing with its low at S1
+    day._track_pattern_gate(_at("09:35"))
+    assert not day._gate_open(t())  # the pattern candle itself is not enough
+    day.index_history.append(Candle(s1 + 38, s1 + 55, s1 + 36, s1 + 52))  # green close above the pattern high
+    day._track_pattern_gate(_at("09:40"))
+    trade = t()
+    assert day._gate_open(trade) and "confirmed by candle 09:40" in trade.pattern

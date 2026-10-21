@@ -126,6 +126,11 @@ R2_OR_FIB_REVERSAL = True
 # below its low -> PE) with that side's premium also closing above its own first 5-minute high; the NEXT candle must
 # confirm (index on in the same direction, premium green) -> entry at that close.
 FIRST_BREAK_CONFIRM = True
+# Owner, 2026-10-21 (LEVEL CE taken on a plain R1 break, both markets stopped out at once): EVERY HLC entry needs an
+# index reversal pattern (not a Doji / Spinning Top) formed AT an HLC level (Close, R1-R3, S1-S3, within the level
+# tolerance) and then a confirmation candle (CE: closes green above the pattern's high; PE: red below its low). The
+# entry is only allowed on that confirmation candle.
+PATTERN_GATE = True
 BOTH_PB_BUYERS_DAY = True  # owner 16-10: CE and PE both PROFIT BOOKING yesterday is a buyer's day too  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
@@ -212,6 +217,8 @@ class HlcDay:
         self.fib_reentry: Optional[dict] = None  # INDEX_FIB_TARGET: {"side", "ratio", "level", "at", "done"}
         self.fib_used: set[float] = set()  # ratios already re-entered on
         self.flip: Optional[dict] = None  # FLIP_ON_CONFIRMATION: {"side", "at", "why"} - the side to take next
+        self.gate_setup: dict[str, dict] = {}  # PATTERN_GATE: side -> {"at", "low", "high", "name", "level"}
+        self.gate_ready: dict[str, dict] = {}  # side -> {"at", "why"} - the confirmation candle that opens entries
         self.full_profit: Optional[str] = None  # owner 13-10: the index touched R3 / S3 -> full profit, no more trades
 
     # --- helpers ---
@@ -332,6 +339,7 @@ class HlcDay:
         self._track_trend_patterns(chain)
         self._track_expiry_uv()
         self._track_first_break(when)
+        self._track_pattern_gate(when)
         self._track_second_reversal()
 
         if len(self.index_history) >= 3 and self._zone_touch(index):
@@ -426,6 +434,10 @@ class HlcDay:
         event = self._expiry_uv_entry(when, index, chain)
         if event:
             return events + [event]
+
+        event = self._pattern_entry(when, index, chain, atm)
+        if event:
+            return events + [self._with_premium_targets(event)]
 
         event = (self._close_retest_entry(when, index, chain) or self._level_break_entry(when, index, chain)
                  or self._break_entry(when, index, chain) or self._pattern_trend_entry(when, index, chain)
@@ -998,8 +1010,74 @@ class HlcDay:
     def realized_rupees(self) -> float:
         return sum(t.pnl_points * t.qty for t in self.trades if t.exit_reason and t.qty)
 
+    def _track_pattern_gate(self, when: datetime) -> None:
+        """Owner, 2026-10-21 - see PATTERN_GATE."""
+        if not PATTERN_GATE:
+            return
+        n, c = len(self.index_history), self.index_history[-1]
+        for side, st in list(self.gate_setup.items()):
+            if n != st["at"] + 1:
+                continue
+            ok = (c.close > c.open and c.close > st["high"]) if side == "CE" else (c.close < c.open and c.close < st["low"])
+            del self.gate_setup[side]
+            if ok:
+                self.gate_ready[side] = {"at": n, "low": st["low"], "high": st["high"],
+                                         "why": f"index {st['name']} at {st['level']} ({st['when']:%H:%M}), "
+                                                f"confirmed by candle {when:%H:%M} closing {c.close:g}"}
+        names = ("Close", "R1", "R2", "R3", "S1", "S2", "S3")
+        for side, finder in (("CE", bullish_pattern), ("PE", bearish_pattern)):
+            found = finder(self.index_history[-3:])
+            if not found or found[0] in DIRECTIONLESS:
+                continue
+            span = self.index_history[-found[1]:]
+            low, high = min(x.low for x in span), max(x.high for x in span)
+            level = self._level_near(low if side == "CE" else high, names)
+            if level:
+                self.gate_setup[side] = {"at": n, "low": low, "high": high, "name": found[0], "level": level, "when": when}
+
+    def _pattern_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], atm: float) -> Optional[str]:
+        """Owner, 2026-10-21: the pattern at an HLC level + its confirmation candle IS the entry - SL just past the
+        pattern on the index (a small SL: "pattern-il eduthal than SL kammi")."""
+        if not PATTERN_GATE:
+            return None
+        n = len(self.index_history)
+        for side in ("CE", "PE"):
+            ready = self.gate_ready.get(side)
+            if ready is None or ready["at"] != n or (atm, side) not in chain or side in self.blocked:
+                continue
+            sl = ready["low"] - 1 if side == "CE" else ready["high"] + 1
+            targets = self._targets(side, index.close, "R3" if side == "CE" else "S3")
+            if not targets:
+                continue
+            prem = chain[(atm, side)]
+            trade = HlcTrade(date=self.day.isoformat(), kind="PATTERN", side=side, strike=atm, pattern="",
+                             entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=index.close,
+                             sl_premium=0.0, sl_rule=f"index {'below' if side == 'CE' else 'above'} the pattern {sl:g}",
+                             index_sl=round(sl, 2), targets=targets, big_gap=self.big_gap)
+            trade.premium_targets = self.premium_ladder(trade.side, trade.strike, trade.entry_fill)
+            if not self._size(trade):
+                continue
+            self.trades.append(trade)
+            self.open_trade = trade
+            names = " -> ".join(f"{nm} {v:g}" for nm, v in targets)
+            return (f"BUY {side} {atm:g} at {prem.close:.2f} (PATTERN, {trade.pattern}; index {index.close:.2f}) - "
+                    f"SL index {sl:g}, targets {names}")
+        return None
+
+    def _gate_open(self, trade: HlcTrade) -> bool:
+        if not PATTERN_GATE:
+            return True
+        ready = self.gate_ready.get(trade.side)
+        if ready is None or ready["at"] != len(self.index_history):
+            return False
+        trade.pattern = f"{trade.pattern} | {ready['why']}" if trade.pattern else ready["why"]
+        return True
+
     def _size(self, trade: HlcTrade) -> bool:
-        """Owner, 2026-10-12: as many lots as the allotment buys, cut so a stop-out stays within today's loss limit."""
+        """Owner, 2026-10-12: as many lots as the allotment buys, cut so a stop-out stays within today's loss limit.
+        (Owner 21-10: also the place every entry passes - no trade without the pattern gate.)"""
+        if not self._gate_open(trade):
+            return False
         m = self.market
         if not (m.allocation and m.lot):
             return True
