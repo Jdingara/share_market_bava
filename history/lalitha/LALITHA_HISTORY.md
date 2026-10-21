@@ -6,6 +6,8 @@
 
 | Date | Market | Trades | P&L ₹ | Status |
 |---|---|---|---|---|
+| 2026-10-20 | SENSEX | 0 | ₹+0 | finished |
+| 2026-10-20 | NIFTY | 0 | ₹+0 | finished |
 | 2026-10-19 | SENSEX | 0 | ₹+0 | finished |
 | 2026-10-19 | NIFTY | 0 | ₹+0 | finished |
 | 2026-10-19 | BANKNIFTY | 1 | ₹-11,268 | watching |
