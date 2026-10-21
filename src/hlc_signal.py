@@ -41,11 +41,11 @@ class HlcMarket:
 HLC_MARKETS = {
     "NIFTY": HlcMarket("NIFTY", strike_step=50, level_tolerance=15, quantity=260,  # owner 12-10 (was 325)
                          sl_points=25, big_gap=150,
-                       big_gap_trail=50, allocation=100_000, max_loss=7_500, lot=65, far_sl_points=40,
+                       big_gap_trail=50, allocation=100_000, max_loss=10_000, lot=65, far_sl_points=40,
                        profit_lock_step=50, profit_lock_add=25),  # owner 13-10: +50 confirmed, then +25 steps
     "SENSEX": HlcMarket("SENSEX", strike_step=100, level_tolerance=50, quantity=200,  # owner 12-10 (was 160, 300 before 09-10)
                           sl_points=50, big_gap=300,
-                        big_gap_trail=100, allocation=175_000, max_loss=10_000, lot=20, far_sl_points=100, profit_lock_step=100, profit_lock_add=50),
+                        big_gap_trail=100, allocation=175_000, max_loss=15_000, lot=20, far_sl_points=100, profit_lock_step=100, profit_lock_add=50),
 }
 
 
