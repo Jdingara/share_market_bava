@@ -2,12 +2,12 @@
 
 **Paper trades - no real orders.** Opening range = the index's 09:15-09:20 candle; a close outside it buys the ATM CE / PE (NIFTY 2 lots, SENSEX 6 lots), SL the other end of the range, target 1:2. Written by `src/orb_history.py`.
 
-**All days: 24 trade(s), ₹+56,495**
+**All days: 24 trade(s), ₹+42,920**
 
 | Date | Market | Range | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|
-| 2026-10-21 | SENSEX | 74149.89 - 74479.28 | 7 | +61.00 | ₹+7,320 | watching |
-| 2026-10-21 | NIFTY | 22976.15 - 23063.6 | 4 | +92.70 | ₹+12,051 | watching |
+| 2026-10-21 | SENSEX | 74149.89 - 74479.28 | 7 | -32.90 | ₹-3,948 | finished |
+| 2026-10-21 | NIFTY | 22976.15 - 23063.6 | 4 | +74.95 | ₹+9,744 | finished |
 | 2026-10-20 | SENSEX |  -  | 0 | +0.00 | ₹+0 | finished |
 | 2026-10-20 | NIFTY |  -  | 0 | +0.00 | ₹+0 | finished |
 | 2026-10-19 | SENSEX | 74513 - 74849.75 | 8 | +265.00 | ₹+31,800 | finished |
@@ -15,16 +15,16 @@
 
 ## 2026-10-21
 
-### NIFTY - range 22976.15 - 23063.6 (watching)
+### NIFTY - range 22976.15 - 23063.6 (finished)
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
 | 130 x 23100 CE | 09:30 | 181.8 | 23065.65 / 23215.65 | 153.35 (09:45) | SL - index reached 23065.7 in candle 09:45 | -28.45 | -3698 |
 | 130 x 22950 PE | 10:05 | 155.9 | 23018.1 / 22868.1 | 206.35 (11:30) | TARGET 1:2 - index reached 22868.1 in candle 11:30 | 50.45 | 6558 |
 | 130 x 22850 PE | 11:30 | 157.3 | 22912.8 / 22762.8 | 228 (12:10) | TARGET 1:2 - index reached 22762.8 in candle 12:10 | 70.7 | 9191 |
-| 130 x 22750 PE | 12:25 | 182.55 | 22787.5 / 22637.5 | open | OPEN | - | - |
+| 130 x 22750 PE | 12:25 | 182.55 | 22787.5 / 22637.5 | 164.8 (15:10) | 15:16 square-off | -17.75 | -2308 |
 
-### SENSEX - range 74149.89 - 74479.28 (watching)
+### SENSEX - range 74149.89 - 74479.28 (finished)
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
@@ -34,7 +34,7 @@
 | 120 x 73900 PE | 11:30 | 345.35 | 73974.56 / 73674.56 | 449.65 (12:00) | TARGET 1:2 - index reached 73674.6 in candle 12:00 | 104.3 | 12516 |
 | 120 x 73500 PE | 12:25 | 394.6 | 73570.01 / 73270.01 | 334.3 (12:30) | SL - index reached 73570 in candle 12:30 | -60.3 | -7236 |
 | 120 x 73600 PE | 12:30 | 386.15 | 73679.3 / 73379.3 | 449.45 (13:40) | TARGET 1:2 - index reached 73379.3 in candle 13:40 | 63.3 | 7596 |
-| 120 x 73400 PE | 13:40 | 333.5 | 73497.4 / 73197.4 | open | OPEN | - | - |
+| 120 x 73400 PE | 13:40 | 333.5 | 73497.4 / 73197.4 | 239.6 (15:10) | SL - index reached 73497.4 in candle 15:10 | -93.9 | -11268 |
 
 ## 2026-10-20
 
