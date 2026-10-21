@@ -728,19 +728,22 @@ def test_fib_booking_does_not_apply_to_a_trade_entered_beyond_the_075():
 
 
 @pytest.mark.pattern_gate
-def test_pattern_gate_needs_a_reversal_at_a_level_then_a_confirmation_candle():
-    """Owner, 21-10: no HLC entry without an index reversal pattern at an HLC level and a confirmation candle."""
+def test_pattern_gate_needs_the_index_pattern_at_a_level_and_the_opposite_option_turning_down():
+    """Owner, 21-10: CE only with an index bullish pattern at an HLC level AND the ATM PE showing a bearish pattern."""
     from hlc_engine import HlcTrade
     day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
-    t = lambda: HlcTrade(date="x", kind="LEVEL", side="CE", strike=22800, pattern="R1 break", entry_time="2026-09-29T09:30:00",
-                         entry_fill=100, entry_index=LEVELS.r1 + 5, sl_premium=80)
+    t = lambda: HlcTrade(date="x", kind="LEVEL", side="CE", strike=22800, pattern="", entry_time="2026-09-29T09:30:00",
+                         entry_fill=100, entry_index=LEVELS.s1 + 40, sl_premium=80)
     s1 = LEVELS.s1
-    day.index_history.append(Candle(s1 + 30, s1 + 31, s1 + 10, s1 + 12))
-    assert not day._gate_open(t())  # no pattern yet
-    day.index_history.append(Candle(s1 + 12, s1 + 40, s1 - 2, s1 + 38))  # Bullish Engulfing with its low at S1
+    pe = day.premium_history.setdefault((22800.0, "PE"), [])
+    day.index_history.append(Candle(s1 + 30, s1 + 31, s1 + 10, s1 + 12)); pe.append(Candle(80, 92, 79, 90))
+    day._track_pattern_gate(_at("09:30"))
+    day.index_history.append(Candle(s1 + 12, s1 + 40, s1 - 2, s1 + 38)); pe.append(Candle(90, 91, 70, 72))  # both turn
     day._track_pattern_gate(_at("09:35"))
-    assert not day._gate_open(t())  # the pattern candle itself is not enough
-    day.index_history.append(Candle(s1 + 38, s1 + 55, s1 + 36, s1 + 52))  # green close above the pattern high
-    day._track_pattern_gate(_at("09:40"))
     trade = t()
-    assert day._gate_open(trade) and "confirmed by candle 09:40" in trade.pattern
+    assert day._gate_open(trade) and "ATM PE Bearish Engulfing" in trade.pattern
+    day2 = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])  # index pattern alone - no entry
+    day2.index_history += [Candle(s1 + 30, s1 + 31, s1 + 10, s1 + 12), Candle(s1 + 12, s1 + 40, s1 - 2, s1 + 38)]
+    day2.premium_history[(22800.0, "PE")] = [Candle(80, 92, 79, 90), Candle(90, 95, 88, 94)]
+    day2._track_pattern_gate(_at("09:35"))
+    assert not day2._gate_open(t())

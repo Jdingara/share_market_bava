@@ -1011,33 +1011,35 @@ class HlcDay:
         return sum(t.pnl_points * t.qty for t in self.trades if t.exit_reason and t.qty)
 
     def _track_pattern_gate(self, when: datetime) -> None:
-        """Owner, 2026-10-21 - see PATTERN_GATE."""
+        """Owner, 2026-10-21 - see PATTERN_GATE. Two confirmations (owner, 21-10 evening): an index reversal pattern at
+        an HLC level AND the opposite option's premium turning down - CE: index bullish + ATM PE bearish; PE: index
+        bearish + ATM CE bearish - on the same candle or the next one. Entry on the candle that completes both."""
         if not PATTERN_GATE:
             return
-        n, c = len(self.index_history), self.index_history[-1]
-        for side, st in list(self.gate_setup.items()):
-            if n != st["at"] + 1:
-                continue
-            ok = (c.close > c.open and c.close > st["high"]) if side == "CE" else (c.close < c.open and c.close < st["low"])
-            del self.gate_setup[side]
-            if ok:
-                self.gate_ready[side] = {"at": n, "low": st["low"], "high": st["high"],
-                                         "why": f"index {st['name']} at {st['level']} ({st['when']:%H:%M}), "
-                                                f"confirmed by candle {when:%H:%M} closing {c.close:g}"}
+        n = len(self.index_history)
         names = ("Close", "R1", "R2", "R3", "S1", "S2", "S3")
         for side, finder in (("CE", bullish_pattern), ("PE", bearish_pattern)):
             found = finder(self.index_history[-3:])
-            if not found or found[0] in DIRECTIONLESS:
-                continue
-            span = self.index_history[-found[1]:]
-            low, high = min(x.low for x in span), max(x.high for x in span)
-            level = self._level_near(low if side == "CE" else high, names)
-            if level:
-                self.gate_setup[side] = {"at": n, "low": low, "high": high, "name": found[0], "level": level, "when": when}
+            if found and found[0] not in DIRECTIONLESS:
+                span = self.index_history[-found[1]:]
+                low, high = min(x.low for x in span), max(x.high for x in span)
+                level = self._level_near(low if side == "CE" else high, names)
+                if level:
+                    self.gate_setup[side] = {"at": n, "low": low, "high": high, "name": found[0], "level": level, "when": when}
+            other = "PE" if side == "CE" else "CE"
+            prem = self.premium_history.get((self.levels.atm, other), [])
+            down = bearish_pattern(prem[-3:]) if prem else None
+            if down and down[0] not in DIRECTIONLESS:
+                self.gate_setup[f"opt_{side}"] = {"at": n, "name": down[0], "when": when}
+            idx, opt = self.gate_setup.get(side), self.gate_setup.get(f"opt_{side}")
+            if idx and opt and n - min(idx["at"], opt["at"]) <= 1 and n == max(idx["at"], opt["at"]):
+                self.gate_ready[side] = {"at": n, "low": idx["low"], "high": idx["high"],
+                                         "why": f"index {idx['name']} at {idx['level']} ({idx['when']:%H:%M}) + ATM {other} "
+                                                f"{opt['name']} ({opt['when']:%H:%M})"}
 
     def _pattern_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], atm: float) -> Optional[str]:
-        """Owner, 2026-10-21: the pattern at an HLC level + its confirmation candle IS the entry - SL just past the
-        pattern on the index (a small SL: "pattern-il eduthal than SL kammi")."""
+        """Owner, 2026-10-21: the two confirmations (index pattern at an HLC level + the opposite option turning down)
+        ARE the entry - SL just past the index pattern (a small SL: "pattern-il eduthal than SL kammi")."""
         if not PATTERN_GATE:
             return None
         n = len(self.index_history)
