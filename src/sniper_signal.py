@@ -58,11 +58,11 @@ class MarketConfig:
 
 
 MARKETS = {
-    "NIFTY": MarketConfig(name="NIFTY", strike_step=100, min_gap=20, expiry_weekday=1, lot_size=65, max_lots=4, allocation=100_000, max_loss=7_500,
+    "NIFTY": MarketConfig(name="NIFTY", strike_step=100, min_gap=20, expiry_weekday=1, lot_size=65, max_lots=4, allocation=100_000, max_loss=10_000,
                           index_token=256265, options_exchange="NFO", widen_otm_fallback=False,  # owner 05-10: dropped
                           relaxed_min_gap=None, near_atm_close=20),  # NSE, Tuesday expiry, 260 qty (owner 12-10; was 325)
     "SENSEX": MarketConfig(name="SENSEX", strike_step=100, min_gap=27,  # owner 12-10: 30, "slightly less is fine" -> 27
-                            expiry_weekday=3, lot_size=20, max_lots=10, allocation=125_000, max_loss=10_000,
+                            expiry_weekday=3, lot_size=20, max_lots=10, allocation=125_000, max_loss=15_000,
                            index_token=265, options_exchange="BFO",
                            widen_otm=False,  # owner 07-10: OTM +-100, shift the ATM like NIFTY (was True 29-09)
                            widen_both_fallback=False,  # owner 12-10: OTM always +-100 (08-10 widening dropped)
