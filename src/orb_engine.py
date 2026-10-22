@@ -10,7 +10,7 @@ Vengat ORB - Opening Range Breakout (owner, 2026-10-19). PAPER MODE.
   * SL: the other end of the range on the index (CE: range low, PE: range high); but at most NIFTY 50 /
     SENSEX 100 index points from the entry (owner 19-10). Trades every day.
   * Target 1:2 on the index: CE target = entry index + 2 x (entry index - range low); PE mirrored.
-  * Entries only on candles closing after 09:30 (09:35)-12:00 and 12:30-15:15, at most 5 trades a day (owner 22-10, was 10), no new entry once the day's profit is Rs 10,000; NIFTY 2 lots, SENSEX 6 lots.
+  * Entries only on candles closing after 09:30 (09:35)-12:00 and 12:30-15:15, at most 5 trades a day (owner 22-10, was 10), no new entry once the day's LOSS is Rs 10,000 (profit unlimited); NIFTY 2 lots, SENSEX 6 lots.
   * Re-entry: any later candle closing outside the range. An opposite break closes the open trade and opens the new
     side. Everything is closed by 15:16 (at the close of the candle ending 15:15).
 
@@ -32,7 +32,8 @@ if NO_MIDDAY_GAP:
     WINDOWS = ((time(9, 35), time(15, 10)),)
 SQUARE_OFF = time(15, 15)  # the candle closing 15:15 closes everything (owner: "all close 3.16pm")
 MAX_TRADES = 5  # owner 22-10: 5 trades a day (was 10 - kept in tag orb-rules-2026-10-21)
-PROFIT_STOP = 10_000  # owner 22-10: once the day's booked profit reaches Rs 10,000 - no new entry
+PROFIT_STOP = 0  # owner 22-10 night: "sorry - loss 10k, target unlimited" - no profit stop (was Rs 10,000 earlier on 22-10)
+LOSS_STOP = 10_000  # owner 22-10 night: once the day's booked loss reaches Rs 10,000 - no new entry
 REWARD = 2.0  # 1:2
 # owner 22-10: after the break, enter on the RETEST of the first 5-min candle's 0.75 (Fib on that candle):
 #   PE (break below): Fib from the low up -> 0.75 = low + 0.75 x range;  CE (break above): high - 0.75 x range.
@@ -185,6 +186,8 @@ class OrbDay:
             return events
         if PROFIT_STOP and sum(t.pnl_rupees for t in self.trades) >= PROFIT_STOP:
             return events
+        if LOSS_STOP and sum(t.pnl_rupees for t in self.trades) <= -LOSS_STOP:
+            return events
         if not any(a <= closes <= b for a, b in WINDOWS):
             return events
         side = "CE" if index.close > self.high else "PE" if index.close < self.low else None
@@ -230,6 +233,7 @@ class OrbDay:
         a = self.armed
         if a is not None and (len(self.trades) < MAX_TRADES
                               and not (PROFIT_STOP and sum(t.pnl_rupees for t in self.trades) >= PROFIT_STOP)
+                              and not (LOSS_STOP and sum(t.pnl_rupees for t in self.trades) <= -LOSS_STOP)
                               and any(x <= closes <= y for x, y in WINDOWS)):
             touched = index.low <= a["level"] if a["side"] == "CE" else index.high >= a["level"]
             if touched:

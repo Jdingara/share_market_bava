@@ -70,13 +70,21 @@ def test_at_most_five_trades():  # owner 22-10 (was 10)
     assert len(day.trades) == 5
 
 
-def test_no_new_entry_after_rs_10000_profit():  # owner 22-10
+def test_no_new_entry_after_rs_10000_loss():  # owner 22-10 night: loss 10k stops the day, profit unlimited
     day = _day()
-    for i in range(12):  # the premium climbs 100 a candle: the first trade books 100 x 130 = Rs 13,000
+    for i in range(12):  # the premium falls 100 a candle: the first trade loses 100 x 130 = Rs 13,000
+        hhmm = f"{10 + i // 6:02d}:{(i % 6) * 10:02d}"
+        day.on_candle(_at(hhmm), Candle(23045, 23200, 23040, 23050), _chain(ce=2000 - 100 * i, strike=23050.0))
+    assert day.trades[0].pnl_rupees <= -10_000
+    assert len(day.trades) == 1
+
+
+def test_profit_does_not_stop_entries():
+    day = _day()
+    for i in range(12):
         hhmm = f"{10 + i // 6:02d}:{(i % 6) * 10:02d}"
         day.on_candle(_at(hhmm), Candle(23045, 23200, 23040, 23050), _chain(ce=100 + 100 * i, strike=23050.0))
-    assert day.trades[0].pnl_rupees >= 10_000
-    assert len(day.trades) == 1
+    assert day.trades[0].pnl_rupees >= 10_000 and len(day.trades) > 1
 
 
 def test_sl_is_capped_at_50_nifty_points():
