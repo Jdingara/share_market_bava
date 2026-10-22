@@ -331,3 +331,4 @@ data/
 - **HLC PATTERN entry (owner, 21-10)**: the pattern-at-a-level + confirmation candle is itself an entry (first entry of the day) - SL on the index just past the pattern (low - 1 / high + 1), targets to R3/S3 ("pattern-il eduthal than SL kammi").
 - **HLC two confirmations (owner, 21-10 evening)**: the pattern gate now needs BOTH an index reversal pattern at an HLC level AND the opposite option turning down (CE: index bullish + ATM PE bearish pattern; PE: index bearish + ATM CE bearish), on the same or the next candle; entry on the candle completing both (replaces the 'next candle confirms' step). Doji / Spinning Top don't count.
 - **Loss limits (owner, 21-10)**: HLC NIFTY Rs 10,000 (was 7,500), SENSEX Rs 15,000 (was 10,000).
+- **HLC level tolerance (owner, 22-10)**: a pattern counts as AT a level within NIFTY 30 / SENSEX 100 points (was 15 / 50) - 22-10 SENSEX 10:05 Bullish Harami + PE Bearish Harami was 98.7 below S1.
