@@ -283,7 +283,7 @@ def test_confirm_trade_index_back_in_the_fib_zone_plus_premium_pattern():
     """Owner, 01-10 ("double confirmation"): PE side, the index comes down into the first candle's Fib
     0.75-0.786 zone (72384.66-72394.12) and the PE premium shows a bullish pattern -> buy, SL -50, S1 -> S2."""
     levels = hlc_levels(72480.3, 72500, 232.55, 279.0)
-    day = HlcDay(date(2026, 10, 1), levels, dataclasses.replace(HLC_MARKETS["SENSEX"], level_tolerance=50))  # (pre 22-10 tolerance)
+    day = HlcDay(date(2026, 10, 1), levels, HLC_MARKETS["SENSEX"])
     day.close_retest_done = True  # keep the 12-10 RETEST entry out of this test
     day.first_swing = "CE"
     ce = Candle(250, 255, 245, 250)

@@ -1023,9 +1023,9 @@ class HlcDay:
             if found and found[0] not in DIRECTIONLESS:
                 span = self.index_history[-found[1]:]
                 low, high = min(x.low for x in span), max(x.high for x in span)
-                level = self._level_near(low if side == "CE" else high, names)
-                if level:
-                    self.gate_setup[side] = {"at": n, "low": low, "high": high, "name": found[0], "level": level, "when": when}
+                # owner 22-10: no level needed - the two confirmations (index + opposite option) are the reversal point
+                level = self._level_near(low if side == "CE" else high, names) or "no level"
+                self.gate_setup[side] = {"at": n, "low": low, "high": high, "name": found[0], "level": level, "when": when}
             other = "PE" if side == "CE" else "CE"
             prem = self.premium_history.get((self.levels.atm, other), [])
             down = bearish_pattern(prem[-3:]) if prem else None
@@ -1034,7 +1034,7 @@ class HlcDay:
             idx, opt = self.gate_setup.get(side), self.gate_setup.get(f"opt_{side}")
             if idx and opt and n - min(idx["at"], opt["at"]) <= 1 and n == max(idx["at"], opt["at"]):
                 self.gate_ready[side] = {"at": n, "low": idx["low"], "high": idx["high"],
-                                         "why": f"index {idx['name']} at {idx['level']} ({idx['when']:%H:%M}) + ATM {other} "
+                                         "why": f"index {idx['name']} ({idx['level']}, {idx['when']:%H:%M}) + ATM {other} "
                                                 f"{opt['name']} ({opt['when']:%H:%M})"}
 
     def _pattern_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], atm: float) -> Optional[str]:
