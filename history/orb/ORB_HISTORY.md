@@ -2,12 +2,12 @@
 
 **Paper trades - no real orders.** Opening range = the index's 09:15-09:20 candle; a close outside it buys the ATM CE / PE (NIFTY 2 lots, SENSEX 6 lots), SL the other end of the range, target 1:2. Written by `src/orb_history.py`.
 
-**All days: 27 trade(s), ₹+50,256**
+**All days: 27 trade(s), ₹+50,530**
 
 | Date | Market | Range | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|
 | 2026-10-22 | SENSEX | 73005.11 - 73396.56 | 1 | +21.00 | ₹+2,520 | finished |
-| 2026-10-22 | NIFTY | 22564.9 - 22697.55 | 2 | +37.05 | ₹+4,816 | finished |
+| 2026-10-22 | NIFTY | 22564.9 - 22697.55 | 2 | +39.15 | ₹+5,090 | finished |
 | 2026-10-21 | SENSEX | 74149.89 - 74479.28 | 7 | -32.90 | ₹-3,948 | finished |
 | 2026-10-21 | NIFTY | 22976.15 - 23063.6 | 4 | +74.95 | ₹+9,744 | finished |
 | 2026-10-20 | SENSEX |  -  | 0 | +0.00 | ₹+0 | finished |
@@ -21,7 +21,7 @@
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
-| 130 x 22650 PE | 09:40 | 164.45 | 22643.85 / 22624.39 | 195.2 (10:00) | TSL - index reached 22643.8 in candle 10:00 | 30.75 | 3998 |
+| 130 x 22700 PE | 09:40 | 190.15 | 22643.85 / 22624.39 | 223 (10:00) | TSL - index reached 22643.8 in candle 10:00 | 32.85 | 4270 |
 | 130 x 22600 CE | 12:10 | 179.75 | 22629.1 / 22638.06 | 186.05 (12:30) | TSL - index reached 22629.1 in candle 12:30 | 6.3 | 819 |
 
 ### SENSEX - range 73005.11 - 73396.56 (finished)
