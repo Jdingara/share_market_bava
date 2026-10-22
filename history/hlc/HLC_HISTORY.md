@@ -2,10 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 56 trade(s), +3452.35 points, ₹+703,779**
+**All days: 60 trade(s), +3564.40 points, ₹+714,956**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
+| 2026-10-22 | SENSEX | 73500 | PROFIT BOOKING / PANIC | yes | 3 | +84.95 | ₹+5,893 | finished |
+| 2026-10-22 | NIFTY | 22750 | PROFIT BOOKING / PANIC | yes | 1 | +27.10 | ₹+5,284 | finished |
 | 2026-10-21 | SENSEX | 73800 | PROFIT BOOKING / PANIC | yes | 2 | +164.20 | ₹+17,136 | finished |
 | 2026-10-21 | NIFTY | 22900 | PROFIT BOOKING / PANIC | yes | 2 | +48.80 | ₹+6,266 | finished |
 | 2026-10-20 | SENSEX | 73800 | PROFIT BOOKING / PANIC | yes | 0 | +0.00 | ₹+0 | finished |
@@ -38,6 +40,28 @@
 | 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | -42.10 | ₹-13,682 | finished |
 | 2026-09-29 | SENSEX | 72900 | PROFIT BOOKING / PANIC | yes | 1 | -50.00 | ₹-15,000 | replayed |
 | 2026-09-29 | NIFTY | 22800 | PROFIT BOOKING / PANIC | yes | 1 | +45.60 | ₹+14,820 | replayed |
+
+## 2026-10-22 (Thu)
+
+### NIFTY — finished (last update 2026-10-22 15:00)
+
+- Close 22811.35, ATM 22750. R3 23239.3 · R2 23079.3 · R1 22910 · S1 22580.7 · S2 22420.7 · S3 22251.4.
+- CE PROFIT BOOKING, PE PANIC — buyer’s day.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| BREAKOUT RETEST | 195 × 22750 PE | index closed beyond the first 5-min candle at 09:20; retest of its 0.75 22573.5 in candle 09:25 | 09:25 | 247.25 | 0.0 (index above the breakout candle 22621.1) | 274.35 (09:30) | SL (index above the breakout candle 22621.1) - index reached the SL 22621.1 in candle 09:30 | +27.10 | ₹+5,284 |
+
+### SENSEX — finished (last update 2026-10-22 15:00)
+
+- Close 73709.69, ATM 73500. R3 74349.4 · R2 74070.45 · R1 73778.95 · S1 73208.5 · S2 72929.55 · S3 72638.05.
+- CE PROFIT BOOKING, PE PANIC — buyer’s day.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| PATTERN | 140 × 73500 CE | index Piercing Line (no level, 09:25) + ATM PE Dark Cloud Cover (09:25) | 09:25 | 137.05 | 0.0 (index below the pattern 73043.9) | 105.75 (09:30) | SL (index below the pattern 73043.9) - index reached the SL 73043.9 in candle 09:30 | -31.30 | ₹-4,382 |
+| PATTERN | 100 × 73500 CE | index Bullish Harami (no level, 10:05) + ATM PE Bearish Harami (10:05) | 10:05 | 119.35 | 0.0 (index below the pattern 73108.8) | 269.35 (10:40) | profit lock +150 - a later candle had closed above 269.35, so the SL was locked there; candle 10:40 came back to it | +150.00 | ₹+15,000 |
+| BREAKOUT RETEST | 140 × 73500 CE | index closed beyond the first 5-min candle at 10:20; retest of its 0.75 73505.6 in candle 10:40 | 10:40 | 241.05 | 0.0 (index below the breakout candle 73305.4) | 207.3 (11:30) | opposite confirmation (index Bearish Engulfing + CE Bearish Engulfing at 11:30) - exit, watch PE | -33.75 | ₹-4,725 |
 
 ## 2026-10-21 (Wed)
 
