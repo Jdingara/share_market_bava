@@ -700,3 +700,14 @@ def test_atm_confirm_at_0930_then_the_retest_of_the_square_below_the_otm_close()
     engine.on_candle(_at("09:30"), bars(sniper - 40, (close + 40, k * k - 5, close + 30, close)))  # retest of k^2
     t = engine.trades[0]
     assert t.entry_fill == k * k  # (the regular signal path may get there first - same square)
+
+
+@pytest.mark.ride
+@pytest.mark.locked_touch
+def test_sl_locked_at_the_target_exits_on_a_touch():
+    """Owner, 22-10 (SENSEX 400: entry candle closed above 484 -> SL 484; next candle 528 then closed 374.85) - exit
+    at 484 on the touch, not at the close."""
+    engine, _ = _run([("09:20", (78, 64, 72, 67)), ("09:25", (104, 71, 101.9, 72)), ("09:30", (125, 102, 124, 105)),
+                      ("09:35", (180, 150, 175, 160)), ("09:40", (190, 120, 125, 176))])
+    [t] = engine.trades
+    assert t.exit_premium == 169 and "touched the locked SL" in t.exit_detail

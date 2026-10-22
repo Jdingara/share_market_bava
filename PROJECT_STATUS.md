@@ -329,3 +329,4 @@ data/
 - **Vengat ORB (owner, 19-10)**: entries only after 09:30 - the first possible entry is the candle closing 09:35.
 - **Loss limits (owner, 21-10)**: Sniper NIFTY Rs 10,000 (was 7,500), SENSEX Rs 15,000 (was 10,000).
 - **Sniper ATM-confirm entry (owner, 22-10; replaces 19-10 - old version in tag sniper-rules-2026-10-21)**: the candle closing at 09:30 counts as confirmation; its OTM close must be above the Sniper, its own close and the same-side ATM close; entry = RETEST of the square below that close (22-10 SENSEX 73400 PE: 09:25 closed 415 -> 400 in the 09:30 candle).
+- **Sniper locked target on touch (owner, 22-10)**: after a strong break the ride continues, but once the SL sits at the target (or higher) a TOUCH exits there instead of waiting for the close (22-10 SENSEX: 400 -> 484 locked, next candle 528 then closed 374.85). `LOCKED_TARGET_ON_TOUCH`.

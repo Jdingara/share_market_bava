@@ -16,6 +16,8 @@ def sniper_target_mode(monkeypatch, request):
 
     if "ride" not in request.keywords:
         monkeypatch.setattr(sniper_engine, "RIDE_NORMAL_DAYS", False)
+    if "locked_touch" not in request.keywords:  # the 22-10 locked-target-on-touch exit has its own test
+        monkeypatch.setattr(sniper_engine, "LOCKED_TARGET_ON_TOUCH", False)
     if "atm_confirm" not in request.keywords:  # the 19-10 ATM-confirm square entry has its own tests
         monkeypatch.setattr(sniper_engine, "ATM_CONFIRM_SQUARE_ENTRY", False)
     if "legacy_trailing" in request.keywords:  # the 28-09 .. 07-10 trailing rules (replaced 12-10)
@@ -27,5 +29,6 @@ def sniper_target_mode(monkeypatch, request):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "ride: owner's 09-10 normal-day mode (no target exit, trailing only)")
+    config.addinivalue_line("markers", "locked_touch: owner's 22-10 locked target SL exits on a touch")
     config.addinivalue_line("markers", "atm_confirm: owner's 19-10 ATM-confirm square entry")
     config.addinivalue_line("markers", "legacy_trailing: the trailing rules before 12-10 (cost on touch, TSL by touch)")

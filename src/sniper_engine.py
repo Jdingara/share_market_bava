@@ -138,6 +138,7 @@ SNIPER_RANGE_BREAK_REENTRY = True
 # Owner, 2026-10-16: at 2 squares (the target) - a candle CLOSING above it is a strong break: SL to the target (2 squares
 # locked), then the square TSL; touched but no close above = no strong break -> exit at the target.
 STRONG_BREAK_OR_TARGET = True
+LOCKED_TARGET_ON_TOUCH = True  # owner 22-10: SL locked at/above the target exits on a touch
 # Owner, 2026-10-19 (SENSEX: 09:50 ATM CE closed 404.75 below the Sniper 428.08; at 09:55 the 74500 PE ran from 390 through
 # 441 to 529.95): the conditions are on the OTM only - the opposite ATM just has to CONFIRM (one close below the Sniper).
 # From the next candle, the first square above the Sniper and the OTM's yesterday close (441) is the entry when the OTM
@@ -334,6 +335,8 @@ class SniperDay:
             return f"candle {when:%H:%M} closed {premium:g}, below the SL {trade.stop_loss:g}"
         if reason == "TRAIL_STOP":
             why = f" ({trade.tsl_why})" if trade.tsl_why else ""
+            if LOCKED_TARGET_ON_TOUCH and trade.trail_stop >= trade.target and premium >= trade.trail_stop - 0.01:
+                return f"candle {when:%H:%M} touched the locked SL {trade.trail_stop:g} - exit there{why}"
             return f"candle {when:%H:%M} closed {premium:g}, below the trailing SL {trade.trail_stop:g}{why}"
         if reason == "TARGET":
             return (f"2 square numbers reached (target {trade.target:g}) in candle {when:%H:%M}, no strong break "
@@ -423,6 +426,7 @@ class SniperDay:
             trails = self.trailing and (id(trade) not in self.fixed_sl or ride)
             moved_now = False
             force_target = False
+            locked_before = trade.trail_stop  # owner 22-10: the touch exit uses the SL as it stood BEFORE this candle
             if (trails and self.first_tsl_on_touch and trade.trail_stop <= trade.stop_loss
                     and bar.high >= (math.isqrt(trade.entry_square) + 1) ** 2):
                 trade.trail_stop = float(trade.entry_square)  # owner, 07-10: first step on a touch -> cost
@@ -461,6 +465,11 @@ class SniperDay:
                                              else f"a later candle closed {bar.close:g} above the target {(k + 2) ** 2} - SL to the target")
             trailed = trade.trail_stop > trade.stop_loss
             stop_exit = self._stop_hit(bar, trade.trail_stop, trailed)
+            if LOCKED_TARGET_ON_TOUCH and locked_before >= trade.target and bar.low <= locked_before:
+                # owner 22-10 (SENSEX 400 -> 484 locked, next candle 528 -> close 374.85): once the SL sits at the target or
+                # higher, a TOUCH exits there - no waiting for the candle close
+                trade.trail_stop = locked_before
+                stop_exit = min(locked_before, bar.open) if bar.open is not None else locked_before
             target_hit = self.keep_target and not ride and bar.high >= trade.target
             if force_target:
                 # owner 16-10: 2 squares reached without a close above - no strong break -> book the target
