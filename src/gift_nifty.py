@@ -97,12 +97,10 @@ def report() -> str:
         verdict = "GAP UP" if diff > FLAT else "GAP DOWN" if diff < -FLAT else "FLAT"
         lines.append(f"  NIFTY close on {d}: {c:,.2f}  +  {diff:+,.2f}  =  expected NIFTY open about {expected:,.2f}")
         lines.append(f"  => {verdict} (about {diff:+,.0f} points; flat band +-{FLAT:g})")
-    text = "
-".join(lines)
+    text = "\n".join(lines)
     out = ROOT / "data" / "paper_trades" / f"gift_nifty_{date.today().isoformat()}.txt"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(text + "
-", encoding="utf-8")
+    out.write_text(text + "\n", encoding="utf-8")
     return text
 
 
