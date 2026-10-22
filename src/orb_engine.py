@@ -53,6 +53,9 @@ STEP_TSL = True
 # OPTION PREMIUM points from the entry fill; the SL stays on the index (first candle high + 1 / low - 1). Fills at the
 # moment of the touch (estimated inside the 5-min candle), not at the candle close. False = index-point target.
 PREMIUM_TARGET = True
+# owner 22-10 night: SENSEX - a wick to +80 is not enough; the target counts only when a 5-min option candle CLOSES at it
+# (until then the SL stays on the index, first candle high / low). NIFTY: the touch counts.
+TARGET_ON_CLOSE = {"NIFTY": False, "SENSEX": True}
 
 
 @dataclass(frozen=True)
@@ -301,7 +304,8 @@ class OrbDay:
                                f"TSL - premium came back to {t.trail_premium:g} in candle {when:%H:%M}")]
         events: list[str] = []
         step = TSL_POINTS[self.market.name]
-        if not t.riding and opt.high >= t.target_premium - TARGET_SLACK:
+        reached = opt.close if TARGET_ON_CLOSE.get(self.market.name) else opt.high
+        if not t.riding and reached >= t.target_premium - TARGET_SLACK:
             t.riding, t.best_premium = True, t.target_premium
             events.append(f"TARGET {t.side} {t.strike:g}: premium reached {t.target_premium:g} - no exit, "
                           f"SL locked at the target, then up in steps of {step}")

@@ -120,3 +120,18 @@ def test_premium_target_40_locks_then_steps_of_25():  # owner 22-10 night: targe
 def test_entry_in_the_old_lunch_gap():  # owner 22-10: no 12:00-12:30 break
     day = _day()
     assert day.on_candle(_at("12:05"), Candle(23045, 23060, 23040, 23050), _chain(strike=23050.0))
+
+
+@pytest.mark.orb_retest
+@pytest.mark.orb_tsl
+def test_sensex_target_needs_a_candle_close():  # owner 22-10 night
+    day = OrbDay(date(2026, 10, 19), ORB_MARKETS["SENSEX"])
+    day.on_candle(_at("09:15"), Candle(73050, 73100, 73000, 73020), _chain(strike=73000.0))
+    day.on_candle(_at("09:30"), Candle(73010, 73020, 72980, 72985), _chain(pe=150, strike=73000.0))
+    day.on_candle(_at("09:40"), Candle(73040, 73080, 73030, 73070), _chain(pe=130, strike=73100.0))  # PE at 73075
+    t = day.trades[0]
+    wick = {(73100.0, "PE"): Candle(130, 215, 120, 140), (73100.0, "CE"): Candle(100, 100, 100, 100)}
+    day.on_candle(_at("09:45"), Candle(73070, 73072, 73036, 73050), wick)  # +85 wick, close 140
+    assert not t.riding and t.trail_premium == 0
+    day.on_candle(_at("09:50"), Candle(73050, 73055, 73030, 73040), _chain(pe=215, strike=73100.0))  # closes at it
+    assert t.riding and t.trail_premium == 210
