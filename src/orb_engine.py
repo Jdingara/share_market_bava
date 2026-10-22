@@ -55,7 +55,7 @@ STEP_TSL = True
 PREMIUM_TARGET = True
 # owner 22-10 night: SENSEX - a wick to +80 is not enough; the target counts only when a 5-min option candle CLOSES at it
 # (until then the SL stays on the index, first candle high / low). NIFTY: the touch counts.
-TARGET_ON_CLOSE = {"NIFTY": False, "SENSEX": True}
+TARGET_ON_CLOSE = {"NIFTY": True, "SENSEX": True}  # NIFTY too (owner 22-10 night: "niftykkum same")
 
 
 @dataclass(frozen=True)
