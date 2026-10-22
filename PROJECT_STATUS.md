@@ -335,3 +335,10 @@ data/
 
 ## GIFT Nifty morning check (owner, 22-10)
 - src/gift_nifty.py: --snapshot (Task "GiftNifty 1530 Snapshot", weekdays 15:30) saves GIFT Nifty to data/gift_nifty.csv; --report (run by daily_start.ps1 at 08:40, written to data/paper_trades/gift_nifty_<date>.txt) shows GIFT now vs yesterday's 15:30 value and vs the NIFTY spot close. Source groww.in. Information only.
+
+## #5 Vengat BEP (branch `bep`, created 2026-10-22)
+- Owner's rule (22-10): break-even-point support / resistance, Sniper concept. ATM = yesterday's index close rounded;
+  resistance ladder = each OTM CE strike + (its yesterday close / 2); support ladder = each OTM PE strike - (its
+  yesterday close / 2); each next strike gives the next level. `src/bep_levels.py` prints them (information only).
+- Still to come from the owner: entry rule (reversal / break / confirmation), SL, target / TSL, strike, lots, time
+  window, markets. No trading code yet - paper only once built.
