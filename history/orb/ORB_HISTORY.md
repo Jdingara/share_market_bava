@@ -2,11 +2,11 @@
 
 **Paper trades - no real orders.** Opening range = the index's 09:15-09:20 candle; a close outside it buys the ATM CE / PE (NIFTY 2 lots, SENSEX 6 lots), since 22-10: entry on the retest of the first candle's 0.75, SL first candle +-1 (index), target = option premium +40 / +80 then SL steps of 25 / 50. Written by `src/orb_history.py`.
 
-**All days: 27 trade(s), ₹+64,628**
+**All days: 27 trade(s), ₹+99,400**
 
 | Date | Market | Range | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|
-| 2026-10-22 | SENSEX | 73005.11 - 73396.56 | 1 | +40.23 | ₹+4,828 | finished |
+| 2026-10-22 | SENSEX | 73005.11 - 73396.56 | 1 | +330.00 | ₹+39,600 | finished |
 | 2026-10-22 | NIFTY | 22564.9 - 22697.55 | 2 | +129.85 | ₹+16,880 | finished |
 | 2026-10-21 | SENSEX | 74149.89 - 74479.28 | 7 | -32.90 | ₹-3,948 | finished |
 | 2026-10-21 | NIFTY | 22976.15 - 23063.6 | 4 | +74.95 | ₹+9,744 | finished |
@@ -28,7 +28,7 @@
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
-| 120 x 73100 CE | 12:10 | 175.92 | 73004.11 / prem 255.92 | 216.15 (12:30) | TSL - premium came back to 255.92 in candle 12:30 | 40.23 | 4828 |
+| 120 x 73100 CE | 12:10 | 175.92 | 73004.11 / prem 255.92 | 505.92 (12:55) | TSL - premium came back to 505.92 in candle 12:55 | 330.0 | 39600 |
 
 ## 2026-10-21
 
