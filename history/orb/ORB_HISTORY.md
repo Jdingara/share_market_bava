@@ -2,12 +2,12 @@
 
 **Paper trades - no real orders.** Opening range = the index's 09:15-09:20 candle; a close outside it buys the ATM CE / PE (NIFTY 2 lots, SENSEX 6 lots), SL the other end of the range, target 1:2. Written by `src/orb_history.py`.
 
-**All days: 27 trade(s), ₹+92,238**
+**All days: 27 trade(s), ₹+52,363**
 
 | Date | Market | Range | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|
-| 2026-10-22 | SENSEX | 73005.11 - 73396.56 | 1 | +291.65 | ₹+34,998 | finished |
-| 2026-10-22 | NIFTY | 22564.9 - 22697.55 | 2 | +110.15 | ₹+14,320 | finished |
+| 2026-10-22 | SENSEX | 73005.11 - 73396.56 | 1 | +9.25 | ₹+1,110 | finished |
+| 2026-10-22 | NIFTY | 22564.9 - 22697.55 | 2 | +64.10 | ₹+8,333 | finished |
 | 2026-10-21 | SENSEX | 74149.89 - 74479.28 | 7 | -32.90 | ₹-3,948 | finished |
 | 2026-10-21 | NIFTY | 22976.15 - 23063.6 | 4 | +74.95 | ₹+9,744 | finished |
 | 2026-10-20 | SENSEX |  -  | 0 | +0.00 | ₹+0 | finished |
@@ -21,14 +21,14 @@
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
-| 130 x 22650 PE | 09:40 | 164.45 | 22698.55 / 22596.07 | 195.2 (10:00) | TARGET 1:2 - index reached 22596.1 in candle 10:00 | 30.75 | 3998 |
-| 130 x 22600 CE | 12:25 | 181.15 | 22563.9 / 22666.38 | 260.55 (12:50) | TARGET 1:2 - index reached 22666.4 in candle 12:50 | 79.4 | 10322 |
+| 130 x 22650 PE | 09:40 | 164.45 | 22607.85 / 22614.39 | 173.15 (10:05) | TSL - index reached 22607.8 in candle 10:05 | 8.7 | 1131 |
+| 130 x 22600 CE | 12:25 | 181.15 | 22723.25 / 22648.06 | 236.55 (12:55) | TSL - index reached 22723.2 in candle 12:55 | 55.4 | 7202 |
 
 ### SENSEX - range 73005.11 - 73396.56 (finished)
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
-| 120 x 73100 CE | 12:25 | 216.15 | 73004.11 / 73300.69 | 507.8 (12:50) | TARGET 1:2 - index reached 73300.7 in candle 12:50 | 291.65 | 34998 |
+| 120 x 73100 CE | 12:25 | 216.15 | 73185.14 / 73202.97 | 225.4 (12:35) | TSL - index reached 73185.1 in candle 12:35 | 9.25 | 1110 |
 
 ## 2026-10-21
 
