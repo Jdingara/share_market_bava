@@ -41,6 +41,18 @@ foreach ($s in $strategies.Keys) {
   Copy-Item (Join-Path $main ".env") (Join-Path $dir ".env") -Force
 }
 
+# owner 22-10: #5 Vengat BEP - "market edhu varai pogum" levels (information only, no trades), from its own folder
+$bep = Join-Path $bots_root "bep"
+if (Test-Path $bep) {
+  New-Item -ItemType Directory -Force (Join-Path $bep ".cache") | Out-Null
+  Copy-Item (Join-Path $main ".cache\kite_session.json") (Join-Path $bep ".cache\kite_session.json") -Force
+  Copy-Item (Join-Path $main ".env") (Join-Path $bep ".env") -Force
+  git -C $bep pull --ff-only 2>&1 | ForEach-Object { Note "git bep: $_" }
+  Push-Location $bep
+  py src\bep_levels.py 2>&1 | ForEach-Object { Note "bep: $_" }
+  Pop-Location
+}
+
 # already running (e.g. started by hand)? then leave them alone
 $running = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '_live\.py' -and $_.Name -eq 'python.exe' }
 if ($running) { Note "bots already running - not starting again"; exit 0 }
