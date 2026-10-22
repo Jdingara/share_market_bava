@@ -57,11 +57,14 @@ def last_trading_day(kite) -> date:
     return max(done)
 
 
-def sniper_levels(kite, market: str, day: date) -> str:
+def sniper_levels(kite, market: str, day: date, strike: float | None = None) -> str:
     m = MARKETS[market]
     c = _Closes(kite, market, day)
     spot = c.day_close(m["token"])
-    atm = round(spot / m["step"]) * m["step"]
+    if spot is None:
+        raise SystemExit(f"no {market} candle on {day} (holiday?) - pass a trading day")
+    # owner 22-10: like the video's setting - type any strike and its RES / SUP come out
+    atm = strike if strike else round(spot / m["step"]) * m["step"]
 
     def sni(k):
         ce, pe = c.option(k + m["step"], "CE"), c.option(k - m["step"], "PE")
@@ -81,8 +84,8 @@ def sniper_levels(kite, market: str, day: date) -> str:
     s, ce, pe = sni(atm)
     lines += list(reversed(ups))
     if s is not None:
-        lines.append(f"  RANGE  {atm:g} +- SNI {s:.2f}  =  {atm - s:,.2f}  ...  {atm + s:,.2f}   "
-                     f"({atm + m['step']:g} CE {ce:g}, {atm - m['step']:g} PE {pe:g})")
+        lines.append(f"  {atm:g} RES: {atm + s:,.2f}   |   {atm:g} SUP: {atm - s:,.2f}   (SNI {s:.2f} = "
+                     f"({atm + m['step']:g} CE {ce:g} + {atm - m['step']:g} PE {pe:g}) / 2)")
     lines += downs
     return "\n".join(lines)
 
@@ -113,14 +116,18 @@ if __name__ == "__main__":
     ap.add_argument("--day", help="YYYY-MM-DD: the day whose closes build the levels (default: last trading day)")
     ap.add_argument("--market", choices=sorted(MARKETS), help="default: NIFTY and SENSEX")
     ap.add_argument("--mode", default="sniper", choices=("sniper", "otm"))
+    ap.add_argument("--strike", type=float, help="sniper mode: build the levels around this strike (default: ATM)")
     a = ap.parse_args()
     from dotenv import load_dotenv
     from kite_auth import connected_client
     load_dotenv(ROOT / ".env")
     kite = connected_client()
     day = date.fromisoformat(a.day) if a.day else last_trading_day(kite)
-    fn = sniper_levels if a.mode == "sniper" else otm_levels
-    text = "\n\n".join(fn(kite, mk, day) for mk in ([a.market] if a.market else ["NIFTY", "SENSEX"]))
+    markets = [a.market] if a.market else (["NIFTY"] if a.strike else ["NIFTY", "SENSEX"])
+    if a.mode == "sniper":
+        text = "\n\n".join(sniper_levels(kite, mk, day, a.strike) for mk in markets)
+    else:
+        text = "\n\n".join(otm_levels(kite, mk, day) for mk in markets)
     print(text)
     out = ROOT / "data" / f"bep_levels_{date.today().isoformat()}.txt"
     out.parent.mkdir(parents=True, exist_ok=True)
