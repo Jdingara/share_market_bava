@@ -27,6 +27,9 @@ from hlc_signal import Candle
 
 CANDLE = timedelta(minutes=5)
 WINDOWS = ((time(9, 35), time(12, 0)), (time(12, 30), time(15, 10)))  # candle CLOSE times; owner 19-10: after 09:30 (09:35)
+NO_MIDDAY_GAP = True  # owner 22-10: no 12:00-12:30 break - entries 09:35-15:10 straight (False = the 19-10 two windows)
+if NO_MIDDAY_GAP:
+    WINDOWS = ((time(9, 35), time(15, 10)),)
 SQUARE_OFF = time(15, 15)  # the candle closing 15:15 closes everything (owner: "all close 3.16pm")
 MAX_TRADES = 5  # owner 22-10: 5 trades a day (was 10 - kept in tag orb-rules-2026-10-21)
 PROFIT_STOP = 10_000  # owner 22-10: once the day's booked profit reaches Rs 10,000 - no new entry

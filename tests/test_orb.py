@@ -51,7 +51,10 @@ def test_opposite_break_closes_the_old_and_opens_the_new_side():
     assert first.exit_reason.startswith("SL") and second.side == "PE" and second.sl_index == 23020  # 22970 + 50 cap
 
 
-def test_no_entry_in_the_lunch_gap_and_square_off_at_1516():
+def test_no_entry_in_the_lunch_gap_and_square_off_at_1516(monkeypatch):  # the 19-10 windows (NO_MIDDAY_GAP = False)
+    import orb_engine
+    from datetime import time
+    monkeypatch.setattr(orb_engine, "WINDOWS", ((time(9, 35), time(12, 0)), (time(12, 30), time(15, 10))))
     day = _day()
     assert day.on_candle(_at("12:05"), Candle(23045, 23060, 23040, 23050), _chain(strike=23050.0)) == []
     day.on_candle(_at("15:00"), Candle(23045, 23060, 23040, 23050), _chain(ce=120, strike=23050.0))
@@ -112,3 +115,8 @@ def test_target_50_points_then_tsl_20_rides():  # owner 22-10
     assert t.sl_index == 23010 and not t.exit_reason
     day.on_candle(_at("09:55"), Candle(23000, 23012, 22995, 23008), _chain(pe=180, strike=23100.0))
     assert t.exit_reason.startswith("TSL") and t.pnl_points == 50
+
+
+def test_entry_in_the_old_lunch_gap():  # owner 22-10: no 12:00-12:30 break
+    day = _day()
+    assert day.on_candle(_at("12:05"), Candle(23045, 23060, 23040, 23050), _chain(strike=23050.0))
