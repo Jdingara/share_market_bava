@@ -1,13 +1,13 @@
 # Vengat ORB - Trade History
 
-**Paper trades - no real orders.** Opening range = the index's 09:15-09:20 candle; a close outside it buys the ATM CE / PE (NIFTY 2 lots, SENSEX 6 lots), SL the other end of the range, target 1:2. Written by `src/orb_history.py`.
+**Paper trades - no real orders.** Opening range = the index's 09:15-09:20 candle; a close outside it buys the ATM CE / PE (NIFTY 2 lots, SENSEX 6 lots), since 22-10: entry on the retest of the first candle's 0.75, SL first candle +-1 (index), target = option premium +40 / +80 then SL steps of 25 / 50. Written by `src/orb_history.py`.
 
-**All days: 27 trade(s), ₹+54,130**
+**All days: 27 trade(s), ₹+64,628**
 
 | Date | Market | Range | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|
-| 2026-10-22 | SENSEX | 73005.11 - 73396.56 | 1 | +21.00 | ₹+2,520 | finished |
-| 2026-10-22 | NIFTY | 22564.9 - 22697.55 | 2 | +66.85 | ₹+8,690 | finished |
+| 2026-10-22 | SENSEX | 73005.11 - 73396.56 | 1 | +40.23 | ₹+4,828 | finished |
+| 2026-10-22 | NIFTY | 22564.9 - 22697.55 | 2 | +129.85 | ₹+16,880 | finished |
 | 2026-10-21 | SENSEX | 74149.89 - 74479.28 | 7 | -32.90 | ₹-3,948 | finished |
 | 2026-10-21 | NIFTY | 22976.15 - 23063.6 | 4 | +74.95 | ₹+9,744 | finished |
 | 2026-10-20 | SENSEX |  -  | 0 | +0.00 | ₹+0 | finished |
@@ -21,14 +21,14 @@
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
-| 130 x 22700 PE | 09:40 | 190.15 | 22624.39 / 22624.39 | 200.2 (10:05) | TSL - index reached 22624.4 in candle 10:05 | 10.05 | 1306 |
-| 130 x 22600 CE | 12:10 | 179.75 | 22713.06 / 22638.06 | 236.55 (12:55) | TSL - index reached 22713.1 in candle 12:55 | 56.8 | 7384 |
+| 130 x 22700 PE | 09:40 | 181.32 | 22698.55 / prem 221.32 | 221.32 (10:05) | TSL - premium came back to 221.32 in candle 10:05 | 40.0 | 5200 |
+| 130 x 22600 CE | 12:10 | 170.25 | 22563.9 / prem 210.25 | 260.1 (12:55) | TSL - premium came back to 260.25 in candle 12:55 | 89.85 | 11680 |
 
 ### SENSEX - range 73005.11 - 73396.56 (finished)
 
 | Buy | Entry | Fill | SL / target (index) | Exit | Reason | Points | ₹ |
 |---|---|---|---|---|---|---|---|
-| 120 x 73100 CE | 12:10 | 209.2 | 73182.97 / 73182.97 | 230.2 (12:30) | TSL - index reached 73183 in candle 12:30 | 21.0 | 2520 |
+| 120 x 73100 CE | 12:10 | 175.92 | 73004.11 / prem 255.92 | 216.15 (12:30) | TSL - premium came back to 255.92 in candle 12:30 | 40.23 | 4828 |
 
 ## 2026-10-21
 
