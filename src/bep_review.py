@@ -20,17 +20,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from bep_levels import MARKETS, _Closes  # noqa: E402
+from bep_levels import MARKETS, VARIANTS, _Closes  # noqa: E402
 
 HISTORY = ROOT / "history" / "bep"
 CSV = HISTORY / "days.csv"
-FIELDS = ["date", "market", "levels_from", "atm", "level_name", "level", "reached", "first_touch", "closes_beyond",
+FIELDS = ["date", "market", "step", "levels_from", "atm", "level_name", "level", "reached", "first_touch", "closes_beyond",
           "max_beyond", "max_back", "day_open", "day_high", "day_low", "day_close"]
 STEPS = 3  # levels each side beyond the ATM's RES / SUP
 
 
-def ladder(kite, market: str, prev: date) -> tuple[float, list[tuple[str, float, int]]]:
-    m = MARKETS[market]
+def ladder(kite, market: str, prev: date, step: int) -> tuple[float, list[tuple[str, float, int]]]:
+    m = dict(MARKETS[market], step=step)
     c = _Closes(kite, market, prev)
     spot = c.day_close(m["token"])
     if spot is None:
@@ -46,12 +46,12 @@ def ladder(kite, market: str, prev: date) -> tuple[float, list[tuple[str, float,
     return atm, sorted(out, key=lambda x: -x[1])
 
 
-def review(kite, market: str, day: date) -> list[dict]:
+def review(kite, market: str, day: date, step: int = 100) -> list[dict]:
     m = MARKETS[market]
     rows = kite.historical_data(m["token"], datetime.combine(day - timedelta(days=10), datetime.min.time()),
                                 datetime.combine(day - timedelta(days=1), datetime.max.time()), "day")
     prev = max(r["date"].date() for r in rows)
-    atm, levels = ladder(kite, market, prev)
+    atm, levels = ladder(kite, market, prev, step)
     c = kite.historical_data(m["token"], datetime.combine(day, datetime.min.time()),
                              datetime.combine(day, datetime.max.time()), "5minute")
     if not c:
@@ -61,7 +61,7 @@ def review(kite, market: str, day: date) -> list[dict]:
     for name, level, sign in levels:
         hits = [i for i, x in enumerate(c) if x["low"] <= level <= x["high"]
                 or (i == 0 and (x["open"] > level if sign > 0 else x["open"] < level))]
-        row = {"date": day.isoformat(), "market": market, "levels_from": prev.isoformat(), "atm": atm,
+        row = {"date": day.isoformat(), "market": market, "step": step, "levels_from": prev.isoformat(), "atm": atm,
                "level_name": name, "level": level, "day_open": c[0]["open"], "day_high": hi, "day_low": lo,
                "day_close": c[-1]["close"]}
         if not hits:
@@ -82,10 +82,12 @@ def review(kite, market: str, day: date) -> list[dict]:
 def save(rows: list[dict]) -> None:
     HISTORY.mkdir(parents=True, exist_ok=True)
     old = list(csv.DictReader(CSV.open(encoding="utf-8"))) if CSV.exists() else []
-    keys = {(r["date"], r["market"]) for r in rows}
-    keep = [r for r in old if (r["date"], r["market"]) not in keys]
+    for r in old:
+        r["step"] = r.get("step") or "100"  # rows written before the 22-10 SENSEX variants were all 100
+    keys = {(r["date"], r["market"], str(r["step"])) for r in rows}
+    keep = [r for r in old if (r["date"], r["market"], r["step"]) not in keys]
     allrows = sorted(keep + [{k: str(v) for k, v in r.items()} for r in rows],
-                     key=lambda r: (r["date"], r["market"], -float(r["level"])))
+                     key=lambda r: (r["date"], r["market"], int(r["step"]), -float(r["level"])))
     with CSV.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
@@ -100,11 +102,11 @@ def write_md(rows: list[dict]) -> None:
              "Written by `src/bep_review.py`.", "",
              "*beyond* = how far the index went past the level after touching it (negative = missed by); "
              "*back* = how far it came back the other way.", ""]
-    days = sorted({(r["date"], r["market"]) for r in rows}, reverse=True)
-    for d, mk in days:
-        rs = [r for r in rows if r["date"] == d and r["market"] == mk]
+    days = sorted({(r["date"], r["market"], r["step"]) for r in rows}, key=lambda x: (x[0], x[1], -int(x[2])), reverse=True)
+    for d, mk, st in days:
+        rs = [r for r in rows if r["date"] == d and r["market"] == mk and r["step"] == st]
         r0 = rs[0]
-        lines += [f"## {d} {mk} (levels from {r0['levels_from']}, ATM {r0['atm']})",
+        lines += [f"## {d} {mk} - strikes every {st} (levels from {r0['levels_from']}, ATM {r0['atm']})",
                   f"Open {r0['day_open']} · High {r0['day_high']} · Low {r0['day_low']} · Close {r0['day_close']}", "",
                   "| Level | Value | Reached | First touch | Closes beyond | Beyond | Back |", "|---|---|---|---|---|---|---|"]
         for r in rs:
@@ -125,14 +127,14 @@ if __name__ == "__main__":
     load_dotenv(ROOT / ".env")
     kite = connected_client()
     day = date.fromisoformat(a.day) if a.day else date.today()
-    for mk in ([a.market] if a.market else ["NIFTY", "SENSEX"]):
+    for mk, st in [(mk, st) for mk in ([a.market] if a.market else ["NIFTY", "SENSEX"]) for st in VARIANTS[mk]]:
         try:
-            rows = review(kite, mk, day)
+            rows = review(kite, mk, day, st)
         except SystemExit as error:
             print(f"{mk}: {error}")
             continue
         save(rows)
-        print(f"{day} {mk}: open {rows[0]['day_open']} high {rows[0]['day_high']} low {rows[0]['day_low']}")
+        print(f"{day} {mk} (every {st}): open {rows[0]['day_open']} high {rows[0]['day_high']} low {rows[0]['day_low']}")
         for r in rows:
             print(f"  {r['level_name']:10s} {r['level']:10,.2f}  reached {r['reached']:3s} {r['first_touch']:5s} "
                   f"beyond {r['max_beyond']}  back {r['max_back']}")

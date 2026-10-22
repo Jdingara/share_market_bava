@@ -28,6 +28,9 @@ sys.path.insert(0, str(ROOT / "src"))
 MARKETS = {"NIFTY": {"token": 256265, "exchange": "NFO", "step": 100, "otm_step": 50},
            "SENSEX": {"token": 265, "exchange": "BFO", "step": 100, "otm_step": 100}}
 LEVELS = 4  # levels each side
+# owner 22-10 night: SENSEX is ~3.2x NIFTY, the 100 ladder sits too tight there -> record 100 AND 300 side by side for a
+# few weeks, then keep the one that fits (one day, 22-10, is not enough to choose)
+VARIANTS = {"NIFTY": [100], "SENSEX": [100, 300]}
 
 
 class _Closes:
@@ -57,8 +60,10 @@ def last_trading_day(kite) -> date:
     return max(done)
 
 
-def sniper_levels(kite, market: str, day: date, strike: float | None = None) -> str:
-    m = MARKETS[market]
+def sniper_levels(kite, market: str, day: date, strike: float | None = None, step: int | None = None) -> str:
+    m = dict(MARKETS[market])
+    if step:
+        m["step"] = step
     c = _Closes(kite, market, day)
     spot = c.day_close(m["token"])
     if spot is None:
@@ -70,7 +75,7 @@ def sniper_levels(kite, market: str, day: date, strike: float | None = None) -> 
         ce, pe = c.option(k + m["step"], "CE"), c.option(k - m["step"], "PE")
         return None if ce is None or pe is None else (ce + pe) / 2, ce, pe
 
-    lines = [f"Vengat BEP {market} (sniper levels) - from {day} closes: index {spot:g}, ATM {atm:g}, expiry {c.expiry}"]
+    lines = [f"Vengat BEP {market} (sniper levels, strikes every {m['step']}) - from {day} closes: index {spot:g}, ATM {atm:g}, expiry {c.expiry}"]
     ups, downs = [], []
     for n in range(1, LEVELS):
         k = atm + n * m["step"]
@@ -125,7 +130,7 @@ if __name__ == "__main__":
     day = date.fromisoformat(a.day) if a.day else last_trading_day(kite)
     markets = [a.market] if a.market else (["NIFTY"] if a.strike else ["NIFTY", "SENSEX"])
     if a.mode == "sniper":
-        text = "\n\n".join(sniper_levels(kite, mk, day, a.strike) for mk in markets)
+        text = "\n\n".join(sniper_levels(kite, mk, day, a.strike, st) for mk in markets for st in VARIANTS[mk])
     else:
         text = "\n\n".join(otm_levels(kite, mk, day) for mk in markets)
     print(text)

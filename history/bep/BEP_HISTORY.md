@@ -4,7 +4,7 @@ Levels from the previous trading day's closes: SNI(K) = (K+100 CE close + K-100 
 
 *beyond* = how far the index went past the level after touching it (negative = missed by); *back* = how far it came back the other way.
 
-## 2026-10-22 SENSEX (levels from 2026-10-21, ATM 73700)
+## 2026-10-22 SENSEX - strikes every 100 (levels from 2026-10-21, ATM 73700)
 Open 73343.33 · High 73720.83 · Low 73005.11 · Close 73249.39
 
 | Level | Value | Reached | First touch | Closes beyond | Beyond | Back |
@@ -18,7 +18,21 @@ Open 73343.33 · High 73720.83 · Low 73005.11 · Close 73249.39
 | 73500 SUP | 73,260.55 | yes | 09:15 | 37 | 255.44 | 460.28 |
 | 73400 SUP | 73,158.55 | yes | 09:15 | 9 | 153.44 | 562.28 |
 
-## 2026-10-22 NIFTY (levels from 2026-10-21, ATM 22800)
+## 2026-10-22 SENSEX - strikes every 300 (levels from 2026-10-21, ATM 73800)
+Open 73343.33 · High 73720.83 · Low 73005.11 · Close 73249.39
+
+| Level | Value | Reached | First touch | Closes beyond | Beyond | Back |
+|---|---|---|---|---|---|---|
+| 74700 RES | 75,194.20 | no |  | 0 | -1473.37 |  |
+| 74400 RES | 74,768.40 | no |  | 0 | -1047.57 |  |
+| 74100 RES | 74,363.88 | no |  | 0 | -643.05 |  |
+| 73800 RES | 73,992.18 | no |  | 0 | -271.35 |  |
+| 73800 SUP | 73,607.82 | yes | 09:15 | 69 | 602.71 | 113.01 |
+| 73500 SUP | 73,335.55 | yes | 09:15 | 53 | 330.44 | 385.28 |
+| 73200 SUP | 73,016.60 | yes | 09:15 | 0 | 11.49 | 704.23 |
+| 72900 SUP | 72,652.27 | no |  | 0 | -352.84 |  |
+
+## 2026-10-22 NIFTY - strikes every 100 (levels from 2026-10-21, ATM 22800)
 Open 22687.75 · High 22785 · Low 22554.85 · Close 22687.65
 
 | Level | Value | Reached | First touch | Closes beyond | Beyond | Back |
@@ -32,7 +46,7 @@ Open 22687.75 · High 22785 · Low 22554.85 · Close 22687.65
 | 22600 SUP | 22,469.95 | no |  | 0 | -84.9 |  |
 | 22500 SUP | 22,351.85 | no |  | 0 | -203.0 |  |
 
-## 2026-10-21 NIFTY (levels from 2026-10-19, ATM 22900)
+## 2026-10-21 NIFTY - strikes every 100 (levels from 2026-10-19, ATM 22900)
 Open 23016 · High 23120.9 · Low 22649.9 · Close 22811.35
 
 | Level | Value | Reached | First touch | Closes beyond | Beyond | Back |
