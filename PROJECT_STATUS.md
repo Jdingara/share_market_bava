@@ -337,8 +337,10 @@ data/
 - src/gift_nifty.py: --snapshot (Task "GiftNifty 1530 Snapshot", weekdays 15:30) saves GIFT Nifty to data/gift_nifty.csv; --report (run by daily_start.ps1 at 08:40, written to data/paper_trades/gift_nifty_<date>.txt) shows GIFT now vs yesterday's 15:30 value and vs the NIFTY spot close. Source groww.in. Information only.
 
 ## #5 Vengat BEP (branch `bep`, created 2026-10-22)
-- Owner's rule (22-10): break-even-point support / resistance, Sniper concept. ATM = yesterday's index close rounded;
-  resistance ladder = each OTM CE strike + (its yesterday close / 2); support ladder = each OTM PE strike - (its
-  yesterday close / 2); each next strike gives the next level. `src/bep_levels.py` prints them (information only).
-- Still to come from the owner: entry rule (reversal / break / confirmation), SL, target / TSL, strike, lots, time
-  window, markets. No trading code yet - paper only once built.
+- Owner (22-10): "ithil SL kidayathu, market edhu varai pogum endru parpatharkku" - a LEVELS tool, no trades, no SL.
+- Default = the Sniper ladder from the owner's reference (Tamil Stock "Advanced Sniper" video, 22-10), strikes in
+  steps of 100: SNI(K) = (K+100 CE close + K-100 PE close) / 2 (yesterday); range = ATM +- SNI(ATM); a break up
+  travels to (ATM+100) + SNI(ATM+100), then (ATM+200) + SNI(ATM+200) ...; down mirrored.
+- `--mode otm` keeps the owner's first description: OTM CE strike + its close / 2, OTM PE strike - its close / 2.
+- `py srcep_levels.py` prints NIFTY + SENSEX and saves data/bep_levels_<date>.txt; run by daily_start.ps1 (main)
+  every morning after the login.

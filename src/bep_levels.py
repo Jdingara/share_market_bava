@@ -1,15 +1,18 @@
 """
-Vengat BEP (#5, owner 2026-10-22) - break-even-point support / resistance levels. PAPER / information only.
+Vengat BEP (#5, owner 2026-10-22) - "market edhu varai pogum": break-even-point levels that show how far the index
+can travel. NO trades, no SL - information only (owner, 22-10: "ithil SL kidayathu, market edhu varai pogum endru
+parpatharkku").
 
-Owner's rule (22-10, Sniper concept):
-  * ATM = yesterday's index close rounded to the strike step.
-  * Resistance ladder: each OTM CE strike K (ATM + 1 step, + 2 steps, ...) -> K + (yesterday's close of K CE) / 2
-  * Support ladder:    each OTM PE strike K (ATM - 1 step, - 2 steps, ...) -> K - (yesterday's close of K PE) / 2
-  * Each next strike's BEP gives the next support / resistance.
-Entry / SL / target rules: not given yet - this file only computes the levels.
+Default (owner's reference: Tamil Stock "Advanced Sniper" video, 22-10), strikes in steps of 100:
+  * SNI(K)  = (yesterday's close of K+100 CE + yesterday's close of K-100 PE) / 2   (the Sniper of strike K)
+  * Range   = ATM - SNI(ATM)  ...  ATM + SNI(ATM)          (ATM = yesterday's index close rounded to 100)
+  * Up      : a break above the range travels towards (ATM+100) + SNI(ATM+100), then (ATM+200) + SNI(ATM+200), ...
+  * Down    : a break below travels towards (ATM-100) - SNI(ATM-100), then (ATM-200) - SNI(ATM-200), ...
+--mode otm (the owner's first description, 22-10): OTM CE strike + its close / 2 (up), OTM PE strike - its close / 2
+(down), strikes in steps of 50 (NIFTY).
 
-    py src\\bep_levels.py                 levels for the next session (from the last trading day's closes)
-    py src\\bep_levels.py --day 2026-10-22 levels built from that day's closes
+    py src\\bep_levels.py                       NIFTY + SENSEX levels for the next session
+    py src\\bep_levels.py --day 2026-10-22      levels built from that day's closes
 """
 
 from __future__ import annotations
@@ -22,58 +25,103 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-MARKETS = {"NIFTY": {"token": 256265, "exchange": "NFO", "step": 50}}
-LEVELS = 5  # strikes each side
+MARKETS = {"NIFTY": {"token": 256265, "exchange": "NFO", "step": 100, "otm_step": 50},
+           "SENSEX": {"token": 265, "exchange": "BFO", "step": 100, "otm_step": 100}}
+LEVELS = 4  # levels each side
 
 
-def _day_close(kite, token: int, day: date) -> float | None:
-    rows = kite.historical_data(token, datetime.combine(day, datetime.min.time()),
-                                datetime.combine(day, datetime.max.time()), "day")
-    return rows[-1]["close"] if rows else None
+class _Closes:
+    def __init__(self, kite, market: str, day: date):
+        m = MARKETS[market]
+        self.kite, self.day = kite, day
+        chain = [i for i in kite.instruments(m["exchange"]) if i["name"] == market and i["expiry"] > day]
+        self.expiry = min(i["expiry"] for i in chain)
+        self.token = {(i["strike"], i["instrument_type"]): i["instrument_token"] for i in chain if i["expiry"] == self.expiry}
+        self.cache: dict = {}
+
+    def day_close(self, token: int) -> float | None:
+        rows = self.kite.historical_data(token, datetime.combine(self.day, datetime.min.time()),
+                                         datetime.combine(self.day, datetime.max.time()), "day")
+        return rows[-1]["close"] if rows else None
+
+    def option(self, strike: float, kind: str) -> float | None:
+        if (strike, kind) not in self.cache:
+            t = self.token.get((strike, kind))
+            self.cache[(strike, kind)] = self.day_close(t) if t else None
+        return self.cache[(strike, kind)]
 
 
-def levels(kite, market: str, day: date) -> dict:
+def last_trading_day(kite) -> date:
+    rows = kite.historical_data(256265, datetime.now() - timedelta(days=10), datetime.now(), "day")
+    done = [r["date"].date() for r in rows if r["date"].date() < date.today() or datetime.now().hour >= 16]
+    return max(done)
+
+
+def sniper_levels(kite, market: str, day: date) -> str:
     m = MARKETS[market]
-    spot = _day_close(kite, m["token"], day)
-    if spot is None:
-        raise RuntimeError(f"no {market} close on {day}")
+    c = _Closes(kite, market, day)
+    spot = c.day_close(m["token"])
     atm = round(spot / m["step"]) * m["step"]
-    chain = [i for i in kite.instruments(m["exchange"]) if i["name"] == market and i["expiry"] > day]
-    expiry = min(i["expiry"] for i in chain)
-    token = {(i["strike"], i["instrument_type"]): i["instrument_token"] for i in chain if i["expiry"] == expiry}
-    out = {"market": market, "day": day, "close": spot, "atm": atm, "expiry": expiry, "R": [], "S": []}
-    for n in range(1, LEVELS + 1):
-        for side, kind, sign in (("R", "CE", 1), ("S", "PE", -1)):
-            strike = atm + sign * n * m["step"]
-            c = _day_close(kite, token[(strike, kind)], day) if (strike, kind) in token else None
-            if c is not None:
-                out[side].append((n, strike, kind, c, round(strike + sign * c / 2, 2)))
-    return out
 
+    def sni(k):
+        ce, pe = c.option(k + m["step"], "CE"), c.option(k - m["step"], "PE")
+        return None if ce is None or pe is None else (ce + pe) / 2, ce, pe
 
-def report(lv: dict) -> str:
-    lines = [f"Vengat BEP {lv['market']} - from {lv['day']} closes: index {lv['close']:g}, ATM {lv['atm']:g}, "
-             f"expiry {lv['expiry']}"]
-    for n, strike, kind, c, level in reversed(lv["R"]):
-        lines.append(f"  R{n}  {strike:g} {kind} close {c:8.2f}  ->  {level:,.2f}")
-    lines.append(f"  --  ATM {lv['atm']:g}  (close {lv['close']:g})")
-    for n, strike, kind, c, level in lv["S"]:
-        lines.append(f"  S{n}  {strike:g} {kind} close {c:8.2f}  ->  {level:,.2f}")
+    lines = [f"Vengat BEP {market} (sniper levels) - from {day} closes: index {spot:g}, ATM {atm:g}, expiry {c.expiry}"]
+    ups, downs = [], []
+    for n in range(1, LEVELS):
+        k = atm + n * m["step"]
+        s, ce, pe = sni(k)
+        if s is not None:
+            ups.append(f"  UP {n}   {k:g} + SNI {s:7.2f}  =  {k + s:,.2f}   ({k + m['step']:g} CE {ce:g}, {k - m['step']:g} PE {pe:g})")
+        k = atm - n * m["step"]
+        s, ce, pe = sni(k)
+        if s is not None:
+            downs.append(f"  DOWN {n} {k:g} - SNI {s:7.2f}  =  {k - s:,.2f}   ({k + m['step']:g} CE {ce:g}, {k - m['step']:g} PE {pe:g})")
+    s, ce, pe = sni(atm)
+    lines += list(reversed(ups))
+    if s is not None:
+        lines.append(f"  RANGE  {atm:g} +- SNI {s:.2f}  =  {atm - s:,.2f}  ...  {atm + s:,.2f}   "
+                     f"({atm + m['step']:g} CE {ce:g}, {atm - m['step']:g} PE {pe:g})")
+    lines += downs
     return "\n".join(lines)
+
+
+def otm_levels(kite, market: str, day: date) -> str:
+    m = MARKETS[market]
+    c = _Closes(kite, market, day)
+    spot = c.day_close(m["token"])
+    step = m["otm_step"]
+    atm = round(spot / step) * step
+    lines = [f"Vengat BEP {market} (OTM strike +- close/2) - from {day} closes: index {spot:g}, ATM {atm:g}, expiry {c.expiry}"]
+    ups, downs = [], []
+    for n in range(1, LEVELS + 2):
+        k = atm + n * step
+        ce = c.option(k, "CE")
+        if ce is not None:
+            ups.append(f"  R{n}  {k:g} CE close {ce:8.2f}  ->  {k + ce / 2:,.2f}")
+        k = atm - n * step
+        pe = c.option(k, "PE")
+        if pe is not None:
+            downs.append(f"  S{n}  {k:g} PE close {pe:8.2f}  ->  {k - pe / 2:,.2f}")
+    return "\n".join(lines + list(reversed(ups)) + [f"  --  ATM {atm:g}"] + downs)
 
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     ap.add_argument("--day", help="YYYY-MM-DD: the day whose closes build the levels (default: last trading day)")
-    ap.add_argument("--market", default="NIFTY", choices=sorted(MARKETS))
+    ap.add_argument("--market", choices=sorted(MARKETS), help="default: NIFTY and SENSEX")
+    ap.add_argument("--mode", default="sniper", choices=("sniper", "otm"))
     a = ap.parse_args()
     from dotenv import load_dotenv
     from kite_auth import connected_client
     load_dotenv(ROOT / ".env")
     kite = connected_client()
-    day = date.fromisoformat(a.day) if a.day else None
-    if day is None:
-        rows = kite.historical_data(MARKETS[a.market]["token"], datetime.now() - timedelta(days=10), datetime.now(), "day")
-        day = max(r["date"].date() for r in rows if r["date"].date() < date.today() or datetime.now().hour >= 16)
-    print(report(levels(kite, a.market, day)))
+    day = date.fromisoformat(a.day) if a.day else last_trading_day(kite)
+    fn = sniper_levels if a.mode == "sniper" else otm_levels
+    text = "\n\n".join(fn(kite, mk, day) for mk in ([a.market] if a.market else ["NIFTY", "SENSEX"]))
+    print(text)
+    out = ROOT / "data" / f"bep_levels_{date.today().isoformat()}.txt"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text + "\n", encoding="utf-8")
