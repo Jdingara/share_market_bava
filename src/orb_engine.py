@@ -41,7 +41,7 @@ RETEST_075 = True
 # owner 22-10: target = NIFTY 50 / SENSEX 100 index points from the entry; reaching it does NOT close the trade -
 # a trailing SL follows the index's best price by NIFTY 20 / SENSEX 50 points. False = the old 1:2 target exit.
 TARGET_TSL = True
-TARGET_POINTS = {"NIFTY": 50, "SENSEX": 100}
+TARGET_POINTS = {"NIFTY": 40, "SENSEX": 100}  # owner 22-10 evening: NIFTY 40 (was 50)
 TSL_POINTS = {"NIFTY": 20, "SENSEX": 50}
 
 

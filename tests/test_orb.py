@@ -108,9 +108,9 @@ def test_target_50_points_then_tsl_20_rides():  # owner 22-10
     day.on_candle(_at("09:30"), Candle(23010, 23020, 22980, 22985), _chain(pe=150, strike=23000.0))
     day.on_candle(_at("09:40"), Candle(23040, 23080, 23030, 23070), _chain(pe=130, strike=23100.0))  # PE at 23075
     t = day.trades[0]
-    assert t.target_index == 23025
+    assert t.target_index == 23035
     day.on_candle(_at("09:45"), Candle(23070, 23072, 23010, 23015), _chain(pe=170, strike=23100.0))  # target reached
-    assert t.riding and not t.exit_reason and t.sl_index == 23030  # best 23010 + 20
+    assert t.riding and not t.exit_reason and t.sl_index == 23030  # best 23010 + 20 (target 23035)
     day.on_candle(_at("09:50"), Candle(23015, 23020, 22990, 23000), _chain(pe=190, strike=23100.0))
     assert t.sl_index == 23010 and not t.exit_reason
     day.on_candle(_at("09:55"), Candle(23000, 23012, 22995, 23008), _chain(pe=180, strike=23100.0))

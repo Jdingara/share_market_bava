@@ -332,3 +332,4 @@ data/
 - ORB RETEST_075 (owner, 22-10, new rule, old breakout-close entry kept behind the flag): a NEW close beyond the first 5-min candle arms that side; entry on the retest of that candle's 0.75 (PE: Fib low->high, low + 0.75 x range; CE: high - 0.75 x range); SL first candle high + 1 / low - 1; target 1:2. Each new break (below, later above) gets its own retest.
 - ORB TARGET_TSL (owner, 22-10, new rule; old 1:2 target behind the flag): target = NIFTY 50 / SENSEX 100 index points from the entry; reaching it does not exit - a trailing SL follows the index's best price by NIFTY 20 / SENSEX 50 points; exit when the index touches it (or 15:16).
 - ORB NO_MIDDAY_GAP (owner, 22-10): no 12:00-12:30 break - entries on candles closing 09:35-15:10 straight (the 19-10 two windows kept behind the flag).
+- ORB (owner, 22-10 evening): NIFTY target 40 index points (was 50); SENSEX 100 unchanged; TSL 20 / 50 after it.
