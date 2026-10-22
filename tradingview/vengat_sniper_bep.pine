@@ -1,19 +1,21 @@
 //@version=6
 // Vengat BEP (#5, owner 2026-10-22) - "market edhu varai pogum" levels on the NIFTY index chart.
-// Same maths as bots/bep/src/bep_levels.py (checked against the owner's 21-10 screenshot: 22900 RES 23026.45 / SUP 22773.55):
+// Same maths as bots/bep/src/bep_levels.py (checked against the owner's video: 21-10, 22900 RES 23026.45 / SUP 22773.55,
+// 22800 RES 22931.43 / SUP 22668.58):
 //   SNI(K) = (yesterday's close of K+100 CE + yesterday's close of K-100 PE) / 2
-//   RES    = Strike 1 + SNI(Strike 1)        SUP = Strike 2 - SNI(Strike 2)
-// Market breaks the RES -> set Strike 1 one step up (22900 -> 23000) for the next resistance; breaks the SUP -> Strike 2 one step down.
+//   K RES  = K + SNI(K)          K SUP = K - SNI(K)        - for BOTH strikes (2 strikes -> 4 levels)
+// Like the video's indicator: the lines are drawn for the current day only (from its first candle to the right).
 // Information only - no entry / SL. Needs NSE option data on TradingView (symbols like NSE:NIFTY261027C23000).
-indicator("Vengat Sniper BEP", overlay = true)
+indicator("Vengat Sniper BEP", overlay = true, max_lines_count = 50, max_labels_count = 50)
 
 yy = input.int(2026, "Year", group = "Expiry date", inline = "exp")
 mm = input.int(10, "Month", minval = 1, maxval = 12, group = "Expiry date", inline = "exp")
 dd = input.int(27, "Day", minval = 1, maxval = 31, group = "Expiry date", inline = "exp")
-strike1 = input.int(22900, "Strike 1 (RES)", step = 100, group = "Strikes", inline = "st")
-strike2 = input.int(22900, "Strike 2 (SUP)", step = 100, group = "Strikes", inline = "st")
+strike1 = input.int(22900, "Strike 1", step = 100, group = "Strikes", inline = "st")
+strike2 = input.int(22800, "Strike 2", step = 100, group = "Strikes", inline = "st")
 gap = input.int(100, "OTM distance", step = 50, group = "Strikes")
 showLabels = input.bool(true, "Show Price Labels")
+showHistory = input.bool(false, "Show earlier days too (step lines)")
 
 expiry = str.tostring(yy % 100, "00") + str.tostring(mm, "00") + str.tostring(dd, "00")
 
@@ -25,18 +27,41 @@ prevClose(string sym) =>
 
 sni1 = (prevClose(optionSymbol("C", strike1 + gap)) + prevClose(optionSymbol("P", strike1 - gap))) / 2
 sni2 = (prevClose(optionSymbol("C", strike2 + gap)) + prevClose(optionSymbol("P", strike2 - gap))) / 2
-res = strike1 + sni1
-sup = strike2 - sni2
+res1 = strike1 + sni1
+sup1 = strike1 - sni1
+res2 = strike2 + sni2
+sup2 = strike2 - sni2
 
-plot(res, "RES", color.red, 2, plot.style_linebr)
-plot(sup, "SUP", color.green, 2, plot.style_linebr)
+// optional: every day's levels as step lines (off by default, like the video)
+plot(showHistory ? res1 : na, "Strike 1 RES", color.red, 1, plot.style_linebr)
+plot(showHistory ? sup1 : na, "Strike 1 SUP", color.green, 1, plot.style_linebr)
+plot(showHistory and strike2 != strike1 ? res2 : na, "Strike 2 RES", color.red, 1, plot.style_linebr)
+plot(showHistory and strike2 != strike1 ? sup2 : na, "Strike 2 SUP", color.green, 1, plot.style_linebr)
 
-var label resLabel = na
-var label supLabel = na
-if barstate.islast and showLabels
-    label.delete(resLabel)
-    label.delete(supLabel)
-    resLabel := label.new(bar_index + 2, res, str.tostring(strike1) + " RES: " + str.tostring(res, "0.00"),
-                          style = label.style_label_left, color = color.red, textcolor = color.white)
-    supLabel := label.new(bar_index + 2, sup, str.tostring(strike2) + " SUP: " + str.tostring(sup, "0.00"),
-                          style = label.style_label_left, color = color.green, textcolor = color.white)
+// the current day starts here
+var int dayStart = na
+if na(dayStart) or timeframe.change("D")
+    dayStart := bar_index
+
+var line[] lines = array.new<line>()
+var label[] labels = array.new<label>()
+
+drawLevel(float level, string txt, color col) =>
+    if not na(level)
+        array.push(lines, line.new(dayStart, level, bar_index + 15, level, color = col, width = 2))
+        if showLabels
+            array.push(labels, label.new(bar_index + 15, level, txt + str.tostring(level, "0.00"),
+                                         style = label.style_label_left, color = col, textcolor = color.white))
+
+if barstate.islast
+    for l in lines
+        line.delete(l)
+    for b in labels
+        label.delete(b)
+    array.clear(lines)
+    array.clear(labels)
+    drawLevel(res1, str.tostring(strike1) + " RES: ", color.red)
+    drawLevel(sup1, str.tostring(strike1) + " SUP: ", color.green)
+    if strike2 != strike1
+        drawLevel(res2, str.tostring(strike2) + " RES: ", color.red)
+        drawLevel(sup2, str.tostring(strike2) + " SUP: ", color.green)
