@@ -17,6 +17,8 @@ def sniper_target_mode(monkeypatch, request):
     if "ride" not in request.keywords:
         monkeypatch.setattr(sniper_engine, "RIDE_NORMAL_DAYS", False)
     import hlc_engine
+    if "breakout_retest" not in request.keywords:  # the 22-10 HLC breakout retest has its own test
+        monkeypatch.setattr(hlc_engine, "BREAKOUT_RETEST", False)
     if "pattern_gate" not in request.keywords:  # the 21-10 HLC pattern gate has its own tests
         monkeypatch.setattr(hlc_engine, "PATTERN_GATE", False)
     if "atm_confirm" not in request.keywords:  # the 19-10 ATM-confirm square entry has its own tests
@@ -30,6 +32,7 @@ def sniper_target_mode(monkeypatch, request):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "ride: owner's 09-10 normal-day mode (no target exit, trailing only)")
+    config.addinivalue_line("markers", "breakout_retest: owner's 22-10 HLC breakout + 0.75 retest entry")
     config.addinivalue_line("markers", "pattern_gate: owner's 21-10 HLC pattern-at-a-level + confirmation gate")
     config.addinivalue_line("markers", "atm_confirm: owner's 19-10 ATM-confirm square entry")
     config.addinivalue_line("markers", "legacy_trailing: the trailing rules before 12-10 (cost on touch, TSL by touch)")

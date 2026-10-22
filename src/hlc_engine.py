@@ -102,6 +102,7 @@ REENTRY_POINTS_SL = True  # owner, 2026-10-13: re-entries use entry - 25 / 50 po
 SWING_LOW_SL = True  # owner, 2026-10-12: SL = the candle before the entry candle's low - 1 (was -25 / -50 points)
 PB_FIB = 0.786  # PROFIT BOOKING side exit: Fib 0.786 of yesterday's close -> high (owner, 2026-10-12)
 PANIC_BLOCK = False  # owner, 2026-10-12: both sides (PROFIT BOOKING and PANIC) can trade - the index decides (29-09 block off)
+PATTERN_REENTRY_AFTER_SL = True  # owner 22-10: first trade hit its SL -> the next two-confirmation pattern may enter before 12:30 (SL pattern low - 1)
 SECOND_ENTRY_PM_REVERSAL = True  # owner 13-10 (all bots): after the morning trade one more, from 12:30, reversal + confirmation, SL reversal low - 1
 R3_S3_FULL_PROFIT = True
 # Owner, 2026-10-15: momentum - after an R3/S3 touch, and on a day that opened above R1 (CE) / below S1 (PE), the move
@@ -131,6 +132,7 @@ FIRST_BREAK_CONFIRM = True
 # tolerance) and then a confirmation candle (CE: closes green above the pattern's high; PE: red below its low). The
 # entry is only allowed on that confirmation candle.
 PATTERN_GATE = True
+BREAKOUT_RETEST = True  # owner 22-10: index closes beyond its first 5-min candle -> retest of 0.75 of that breakout candle
 BOTH_PB_BUYERS_DAY = True  # owner 16-10: CE and PE both PROFIT BOOKING yesterday is a buyer's day too  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
@@ -213,12 +215,14 @@ class HlcDay:
         self.expiry_day = False  # set by the live bot (today is the contract's expiry)
         self.expiry_uv: Optional[dict] = None  # {"side", "at", "low", "high", "name", "confirm"}
         self.expiry_uv_done = False
+        self.exit_n = 0
         self.second_rev: Optional[dict] = None  # owner 13-10: the 12:30+ reversal entry - {"at", "low", "name", "confirm"}
         self.fib_reentry: Optional[dict] = None  # INDEX_FIB_TARGET: {"side", "ratio", "level", "at", "done"}
         self.fib_used: set[float] = set()  # ratios already re-entered on
         self.flip: Optional[dict] = None  # FLIP_ON_CONFIRMATION: {"side", "at", "why"} - the side to take next
         self.gate_setup: dict[str, dict] = {}  # PATTERN_GATE: side -> {"at", "low", "high", "name", "level"}
         self.gate_ready: dict[str, dict] = {}  # side -> {"at", "why"} - the confirmation candle that opens entries
+        self.breakout: Optional[dict] = None  # BREAKOUT_RETEST: {"side", "at", "low", "high", "level", "when", "done"}
         self.full_profit: Optional[str] = None  # owner 13-10: the index touched R3 / S3 -> full profit, no more trades
 
     # --- helpers ---
@@ -256,6 +260,7 @@ class HlcDay:
         trade.exit_premium = round(premium, 2)
         trade.exit_reason = reason
         trade.pnl_points = round(premium - trade.entry_fill, 2)
+        self.exit_n = len(self.index_history)  # the candle count when it closed (PATTERN_REENTRY_AFTER_SL)
         self.open_trade = None
         return (f"EXIT {trade.side} {trade.strike:g} at {premium:.2f} - {reason} "
                 f"(bought {trade.entry_fill:.2f}, {trade.pnl_points:+.2f} points)")
@@ -340,6 +345,7 @@ class HlcDay:
         self._track_expiry_uv()
         self._track_first_break(when)
         self._track_pattern_gate(when)
+        self._track_breakout(when)
         self._track_second_reversal()
 
         if len(self.index_history) >= 3 and self._zone_touch(index):
@@ -405,6 +411,9 @@ class HlcDay:
                 if event:
                     self.open_trade.fib_from = f["ratio"]
                     return events + [self._with_premium_targets(event)]
+        event = self._breakout_retest_entry(when, index, chain)
+        if event:
+            return events + [self._with_premium_targets(event)]
         if FLIP_ON_CONFIRMATION and self.flip is not None and not self.flip.get("done"):
             f = self.flip
             beyond = index.close > self.levels.close if f["side"] == "CE" else index.close < self.levels.close
@@ -416,6 +425,14 @@ class HlcDay:
                                     "R3" if f["side"] == "CE" else "S3")
                 if event:
                     return events + [self._with_premium_targets(event)]
+        last = self.trades[-1] if self.trades else None
+        if (PATTERN_REENTRY_AFTER_SL and PATTERN_GATE and last and last.exit_reason.startswith("SL") and last.pnl_points < 0
+                and len(self.trades) < 2 and (self.levels.atm, "CE") in chain and (self.levels.atm, "PE") in chain):
+            # owner 22-10 (SENSEX: 09:25 CE hit SL, 10:05 Bullish Harami + ATM PE Bearish Harami was not taken):
+            # the SAME side again, on a new two-confirmation pattern formed after the SL candle
+            event = self._pattern_entry(when, index, chain, self.levels.atm, sides=(last.side,), after=self.exit_n)
+            if event:
+                return events + [self._with_premium_targets(event)]
         if SECOND_ENTRY_PM_REVERSAL and self.trades:
             event = self._second_reversal_entry(when, index, chain) if len(self.trades) < 2 else None
             return events + ([event] if event else [])
@@ -1025,7 +1042,7 @@ class HlcDay:
                 low, high = min(x.low for x in span), max(x.high for x in span)
                 # owner 22-10: no level needed - the two confirmations (index + opposite option) are the reversal point
                 level = self._level_near(low if side == "CE" else high, names) or "no level"
-                self.gate_setup[side] = {"at": n, "low": low, "high": high, "name": found[0], "level": level, "when": when}
+                self.gate_setup[side] = {"at": n, "start": n - found[1] + 1, "low": low, "high": high, "name": found[0], "level": level, "when": when}
             other = "PE" if side == "CE" else "CE"
             prem = self.premium_history.get((self.levels.atm, other), [])
             down = bearish_pattern(prem[-3:]) if prem else None
@@ -1033,19 +1050,20 @@ class HlcDay:
                 self.gate_setup[f"opt_{side}"] = {"at": n, "name": down[0], "when": when}
             idx, opt = self.gate_setup.get(side), self.gate_setup.get(f"opt_{side}")
             if idx and opt and n - min(idx["at"], opt["at"]) <= 1 and n == max(idx["at"], opt["at"]):
-                self.gate_ready[side] = {"at": n, "low": idx["low"], "high": idx["high"],
+                self.gate_ready[side] = {"at": n, "start": idx["start"], "low": idx["low"], "high": idx["high"],
                                          "why": f"index {idx['name']} ({idx['level']}, {idx['when']:%H:%M}) + ATM {other} "
                                                 f"{opt['name']} ({opt['when']:%H:%M})"}
 
-    def _pattern_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], atm: float) -> Optional[str]:
+    def _pattern_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], atm: float,
+                       sides: tuple[str, ...] = ("CE", "PE"), after: int = 0) -> Optional[str]:
         """Owner, 2026-10-21: the two confirmations (index pattern at an HLC level + the opposite option turning down)
         ARE the entry - SL just past the index pattern (a small SL: "pattern-il eduthal than SL kammi")."""
         if not PATTERN_GATE:
             return None
         n = len(self.index_history)
-        for side in ("CE", "PE"):
+        for side in sides:
             ready = self.gate_ready.get(side)
-            if ready is None or ready["at"] != n or (atm, side) not in chain or side in self.blocked:
+            if ready is None or ready["at"] != n or ready["start"] <= after or (atm, side) not in chain or side in self.blocked:
                 continue
             sl = ready["low"] - 1 if side == "CE" else ready["high"] + 1
             targets = self._targets(side, index.close, "R3" if side == "CE" else "S3")
@@ -1066,8 +1084,57 @@ class HlcDay:
                     f"SL index {sl:g}, targets {names}")
         return None
 
+    def _track_breakout(self, when: datetime) -> None:
+        """Owner, 2026-10-22: the first index candle that CLOSES beyond the 09:15 candle (22-10 SENSEX: nothing until
+        10:20, which closed 73522.53 above 73396.56) is the breakout candle; its 0.75 (CE: low + 0.75 x range; PE:
+        high - 0.75 x range) is the retest level."""
+        if not BREAKOUT_RETEST or self.breakout is not None or len(self.index_history) < 2:
+            return
+        first, c = self.index_history[0], self.index_history[-1]
+        side = "CE" if c.close > first.high else "PE" if c.close < first.low else None
+        if side is None:
+            return
+        rng = c.high - c.low
+        level = c.low + 0.75 * rng if side == "CE" else c.high - 0.75 * rng
+        self.breakout = {"side": side, "at": len(self.index_history), "low": c.low, "high": c.high,
+                         "level": round(level, 2), "when": when, "done": False}
+
+    def _breakout_retest_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle]) -> Optional[str]:
+        b = self.breakout
+        if (not BREAKOUT_RETEST or b is None or b["done"] or len(self.index_history) <= b["at"]
+                or len(self.trades) >= MAX_TRADES):
+            return None
+        side, atm = b["side"], self.levels.atm
+        touched = index.low <= b["level"] if side == "CE" else index.high >= b["level"]
+        broken = index.close < b["low"] if side == "CE" else index.close > b["high"]
+        if broken:
+            b["done"] = True  # the breakout failed before any retest
+            return None
+        if not touched or (atm, side) not in chain or side in self.blocked:
+            return None
+        b["done"] = True
+        sl = b["low"] - 1 if side == "CE" else b["high"] + 1
+        targets = self._targets(side, index.close, "R3" if side == "CE" else "S3")
+        if not targets:
+            return None
+        prem = chain[(atm, side)]
+        trade = HlcTrade(date=self.day.isoformat(), kind="BREAKOUT RETEST", side=side, strike=atm,
+                         pattern=(f"index closed beyond the first 5-min candle at {b['when']:%H:%M}; retest of its 0.75 "
+                                  f"{b['level']:g} in candle {when:%H:%M}"),
+                         entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=index.close,
+                         sl_premium=0.0, sl_rule=f"index {'below' if side == 'CE' else 'above'} the breakout candle {sl:g}",
+                         index_sl=round(sl, 2), targets=targets, big_gap=self.big_gap)
+        trade.premium_targets = self.premium_ladder(trade.side, trade.strike, trade.entry_fill)
+        if not self._size(trade):
+            return None
+        self.trades.append(trade)
+        self.open_trade = trade
+        names = " -> ".join(f"{nm} {v:g}" for nm, v in targets)
+        return (f"BUY {side} {atm:g} at {prem.close:.2f} (BREAKOUT RETEST, {trade.pattern}; index {index.close:.2f}) - "
+                f"SL index {sl:g}, targets {names}")
+
     def _gate_open(self, trade: HlcTrade) -> bool:
-        if not PATTERN_GATE:
+        if not PATTERN_GATE or trade.kind == "BREAKOUT RETEST":  # owner 22-10: its own condition, no pattern needed
             return True
         ready = self.gate_ready.get(trade.side)
         if ready is None or ready["at"] != len(self.index_history):
@@ -1188,6 +1255,17 @@ class HlcDay:
                 if touch_lock > trade.lock_level:
                     trade.lock_level = touch_lock
                     trade.lock_why = f"+{reached:g} touched ({trade.entry_fill + reached:g}), so the SL moved to +{reached - add:g}"
+        if trade.kind == "BREAKOUT RETEST":
+            # owner 22-10: target = yesterday's close; once reached, no exit - SL to cost and the profit lock rides on
+            close = self.levels.close
+            ahead = trade.entry_index < close if not pe else trade.entry_index > close
+            reached = (index.high >= close) if not pe else (index.low <= close)
+            if (not ahead or reached) and trade.lock_level < trade.entry_fill:
+                trade.lock_level = trade.entry_fill
+                trade.lock_why = f"yesterday's close {close:g} reached (or already behind) - SL to cost, TSL rides"
+            if closes >= EXIT_CLOSE:
+                return [self._exit(trade, when, prem.close, "15:00 exit")]
+            return []
         if self._momentum_ride(trade):
             # owner 15-10: momentum - no level / Fib targets; the profit lock above (and the SL) take it out
             if closes >= EXIT_CLOSE:

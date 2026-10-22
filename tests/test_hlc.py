@@ -747,3 +747,20 @@ def test_pattern_gate_needs_the_index_pattern_at_a_level_and_the_opposite_option
     day2.premium_history[(22800.0, "PE")] = [Candle(80, 92, 79, 90), Candle(90, 95, 88, 94)]
     day2._track_pattern_gate(_at("09:35"))
     assert not day2._gate_open(t())
+
+
+@pytest.mark.breakout_retest
+@pytest.mark.pattern_gate
+def test_breakout_of_the_first_candle_then_the_075_retest_enters():
+    """Owner, 22-10 SENSEX: no close beyond the 09:15 candle until 10:20; then a retest of that candle's 0.75 -> CE."""
+    day = HlcDay(date(2026, 9, 29), LEVELS, HLC_MARKETS["NIFTY"])
+    c = LEVELS.close
+    ch = lambda ce: {(22800.0, "CE"): Candle(ce, ce, ce, ce), (22800.0, "PE"): Candle(60, 60, 60, 60)}
+    day.on_candle(_at("09:15"), Candle(c, c + 20, c - 20, c + 5), ch(50))           # range c-20 .. c+20
+    day.on_candle(_at("09:20"), Candle(c + 5, c + 18, c - 10, c + 10), ch(52))      # inside - nothing
+    day.on_candle(_at("09:30"), Candle(c + 10, c + 60, c + 8, c + 55), ch(70))      # closes above: breakout candle
+    lvl = (c + 8) + 0.75 * 52                                                         # c + 47
+    assert day.breakout and abs(day.breakout["level"] - lvl) < 0.01 and not day.trades
+    day.on_candle(_at("09:35"), Candle(c + 55, c + 58, lvl - 2, lvl + 3), ch(66))   # retest of the 0.75
+    t = day.trades[0]
+    assert t.kind == "BREAKOUT RETEST" and t.side == "CE" and t.index_sl == c + 7
