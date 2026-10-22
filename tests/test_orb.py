@@ -58,12 +58,21 @@ def test_no_entry_in_the_lunch_gap_and_square_off_at_1516():
     assert day.trades[0].exit_reason == "15:16 square-off" and day.done and events
 
 
-def test_at_most_ten_trades():
+def test_at_most_five_trades():  # owner 22-10 (was 10)
     day = _day()
     for i in range(12):
         hhmm = f"{10 + i // 6:02d}:{(i % 6) * 10:02d}"
         day.on_candle(_at(hhmm), Candle(23045, 23200, 23040, 23050), _chain(ce=100, strike=23050.0))
-    assert len(day.trades) == 10
+    assert len(day.trades) == 5
+
+
+def test_no_new_entry_after_rs_10000_profit():  # owner 22-10
+    day = _day()
+    for i in range(12):  # the premium climbs 100 a candle: the first trade books 100 x 130 = Rs 13,000
+        hhmm = f"{10 + i // 6:02d}:{(i % 6) * 10:02d}"
+        day.on_candle(_at(hhmm), Candle(23045, 23200, 23040, 23050), _chain(ce=100 + 100 * i, strike=23050.0))
+    assert day.trades[0].pnl_rupees >= 10_000
+    assert len(day.trades) == 1
 
 
 def test_sl_is_capped_at_50_nifty_points():

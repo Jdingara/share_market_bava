@@ -327,3 +327,5 @@ data/
 - **Vengat ORB (owner, 19-10)**: trades every day; an opening range wider than NIFTY 100 / SENSEX 300 points puts the SL at the range's middle (50%), the 1:2 target from that SL. No daily loss limit.
 - **19-10 later**: Sniper ATM-confirm entry needs the confirmation candle after 09:30 (a 09:20 confirmation doesn't count). Vengat ORB: SL at most NIFTY 50 / SENSEX 100 index points from the entry (replaces the 50% range rule), every day.
 - **Vengat ORB (owner, 19-10)**: entries only after 09:30 - the first possible entry is the candle closing 09:35.
+
+- ORB (owner, 22-10): max 5 trades a day (was 10); once the day's booked profit reaches Rs 10,000 no new entry (open trade runs to its own exit).

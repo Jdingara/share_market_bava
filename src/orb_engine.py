@@ -7,7 +7,7 @@ Vengat ORB - Opening Range Breakout (owner, 2026-10-19). PAPER MODE.
   * SL: the other end of the range on the index (CE: range low, PE: range high); but at most NIFTY 50 /
     SENSEX 100 index points from the entry (owner 19-10). Trades every day.
   * Target 1:2 on the index: CE target = entry index + 2 x (entry index - range low); PE mirrored.
-  * Entries only on candles closing after 09:30 (09:35)-12:00 and 12:30-15:15, at most 10 trades a day; NIFTY 2 lots, SENSEX 6 lots.
+  * Entries only on candles closing after 09:30 (09:35)-12:00 and 12:30-15:15, at most 5 trades a day (owner 22-10, was 10), no new entry once the day's profit is Rs 10,000; NIFTY 2 lots, SENSEX 6 lots.
   * Re-entry: any later candle closing outside the range. An opposite break closes the open trade and opens the new
     side. Everything is closed by 15:16 (at the close of the candle ending 15:15).
 
@@ -25,7 +25,8 @@ from hlc_signal import Candle
 CANDLE = timedelta(minutes=5)
 WINDOWS = ((time(9, 35), time(12, 0)), (time(12, 30), time(15, 10)))  # candle CLOSE times; owner 19-10: after 09:30 (09:35)
 SQUARE_OFF = time(15, 15)  # the candle closing 15:15 closes everything (owner: "all close 3.16pm")
-MAX_TRADES = 10
+MAX_TRADES = 5  # owner 22-10: 5 trades a day (was 10 - kept in tag orb-rules-2026-10-21)
+PROFIT_STOP = 10_000  # owner 22-10: once the day's booked profit reaches Rs 10,000 - no new entry
 REWARD = 2.0  # 1:2
 
 
@@ -125,6 +126,8 @@ class OrbDay:
             self.done = True
             return events
         if self.open_trade is not None or len(self.trades) >= MAX_TRADES:
+            return events
+        if PROFIT_STOP and sum(t.pnl_rupees for t in self.trades) >= PROFIT_STOP:
             return events
         if not any(a <= closes <= b for a, b in WINDOWS):
             return events
