@@ -42,8 +42,13 @@ RETEST_075 = True
 # a trailing SL follows the index's best price by NIFTY 20 / SENSEX 50 points. False = the old 1:2 target exit.
 TARGET_TSL = True
 ROUND_STRIKE = 100  # owner 22-10 evening: the retest buys the round-100 strike nearest the 0.75 (22664 -> 22700); 0 = strike step
-TARGET_POINTS = {"NIFTY": 40, "SENSEX": 100}  # owner 22-10 evening: NIFTY 40 (was 50)
-TSL_POINTS = {"NIFTY": 20, "SENSEX": 50}
+TARGET_POINTS = {"NIFTY": 40, "SENSEX": 80}  # owner 22-10 evening: NIFTY 40 (was 50), SENSEX 80 (was 100)
+TSL_POINTS = {"NIFTY": 25, "SENSEX": 50}  # owner 22-10 evening: 25 / 50 (was 20 / 50)
+TARGET_SLACK = 2  # owner 22-10: the target counts as reached within 2 points of it
+# owner 22-10 evening: after the target the SL moves in STEPS ("25, 50 enkira vikithathil"): each further full step
+# beyond the target lifts the SL by one step - +1 step -> SL at the target, +2 -> target + 1 step, ...
+# False = the earlier continuous trail (best price - TSL points).
+STEP_TSL = True
 
 
 @dataclass(frozen=True)
@@ -128,7 +133,8 @@ class OrbDay:
             if premium is not None:
                 ce = t.side == "CE"
                 sl_hit = index.low <= t.sl_index if ce else index.high >= t.sl_index
-                target_hit = index.high >= t.target_index if ce else index.low <= t.target_index
+                slack = TARGET_SLACK if TARGET_TSL else 0
+                target_hit = index.high >= t.target_index - slack if ce else index.low <= t.target_index + slack
                 if sl_hit:  # (both in one candle: the SL is assumed first)
                     events.append(self._exit(t, when, premium, index.close,
                                              f"{'TSL' if t.riding else 'SL'} - index reached {t.sl_index:g} "
@@ -139,10 +145,14 @@ class OrbDay:
                         t.riding, t.best_index = True, t.target_index
                     t.best_index = max(t.best_index, index.high) if ce else min(t.best_index, index.low)
                     trail = t.best_index - tsl if ce else t.best_index + tsl
+                    if STEP_TSL:
+                        steps = int(abs(t.best_index - t.target_index) // tsl) if (
+                            t.best_index > t.target_index if ce else t.best_index < t.target_index) else 0
+                        trail = (t.target_index + (steps - 1) * tsl * (1 if ce else -1)) if steps else t.sl_index
                     if (trail > t.sl_index) if ce else (trail < t.sl_index):
                         t.sl_index = round(trail, 2)
                         events.append(f"TSL {t.side} {t.strike:g}: index best {t.best_index:g} -> SL index {t.sl_index:g} "
-                                      f"({tsl} pts behind)")
+                                      f"({f'steps of {tsl} pts beyond the target' if STEP_TSL else f'{tsl} pts behind'})")
                     if closes >= SQUARE_OFF:
                         events.append(self._exit(t, when, premium, index.close, "15:16 square-off"))
                 elif target_hit:
@@ -250,8 +260,8 @@ class OrbDay:
 
     def _target_note(self) -> str:
         if TARGET_TSL:
-            return (f"{TARGET_POINTS[self.market.name]} pts, then TSL {TSL_POINTS[self.market.name]} pts - "
-                    f"no exit at the target")
+            return (f"{TARGET_POINTS[self.market.name]} pts (+-{TARGET_SLACK}), then TSL "
+                    f"{'in steps of ' if STEP_TSL else ''}{TSL_POINTS[self.market.name]} pts - no exit at the target")
         return "1:2"
 
     def total(self) -> tuple[float, float]:

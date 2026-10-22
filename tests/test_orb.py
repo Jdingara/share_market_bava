@@ -102,18 +102,20 @@ def test_pe_break_then_retest_of_the_first_candles_075():  # owner 22-10
 
 @pytest.mark.orb_retest
 @pytest.mark.orb_tsl
-def test_target_50_points_then_tsl_20_rides():  # owner 22-10
+def test_target_40_points_then_tsl_in_steps_of_25():  # owner 22-10 evening
     day = OrbDay(date(2026, 10, 19), ORB_MARKETS["NIFTY"])
     day.on_candle(_at("09:15"), Candle(23050, 23100, 23000, 23020), _chain())
     day.on_candle(_at("09:30"), Candle(23010, 23020, 22980, 22985), _chain(pe=150, strike=23000.0))
     day.on_candle(_at("09:40"), Candle(23040, 23080, 23030, 23070), _chain(pe=130, strike=23100.0))  # PE at 23075
     t = day.trades[0]
     assert t.target_index == 23035
-    day.on_candle(_at("09:45"), Candle(23070, 23072, 23010, 23015), _chain(pe=170, strike=23100.0))  # target reached
-    assert t.riding and not t.exit_reason and t.sl_index == 23030  # best 23010 + 20 (target 23035)
-    day.on_candle(_at("09:50"), Candle(23015, 23020, 22990, 23000), _chain(pe=190, strike=23100.0))
+    day.on_candle(_at("09:45"), Candle(23070, 23072, 23036, 23040), _chain(pe=150, strike=23100.0))  # within 2 points
+    assert t.riding and t.sl_index == 23101  # target reached, no step yet - the SL stays
+    day.on_candle(_at("09:50"), Candle(23040, 23045, 23010, 23015), _chain(pe=170, strike=23100.0))  # +25 beyond
+    assert t.sl_index == 23035 and not t.exit_reason
+    day.on_candle(_at("09:55"), Candle(23015, 23020, 22985, 23000), _chain(pe=190, strike=23100.0))  # +50 beyond
     assert t.sl_index == 23010 and not t.exit_reason
-    day.on_candle(_at("09:55"), Candle(23000, 23012, 22995, 23008), _chain(pe=180, strike=23100.0))
+    day.on_candle(_at("10:00"), Candle(23000, 23012, 22995, 23008), _chain(pe=180, strike=23100.0))
     assert t.exit_reason.startswith("TSL") and t.pnl_points == 50
 
 

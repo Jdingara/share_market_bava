@@ -334,3 +334,4 @@ data/
 - ORB NO_MIDDAY_GAP (owner, 22-10): no 12:00-12:30 break - entries on candles closing 09:35-15:10 straight (the 19-10 two windows kept behind the flag).
 - ORB (owner, 22-10 evening): NIFTY target 40 index points (was 50); SENSEX 100 unchanged; TSL 20 / 50 after it.
 - ORB ROUND_STRIKE (owner, 22-10 evening): the retest entry buys the round-100 strike nearest the 0.75 level (NIFTY 22664 -> 22700 PE; SENSEX already 100). SL stays the first 5-min candle high + 1 / low - 1 (index).
+- ORB (owner, 22-10 evening): target NIFTY 40 / SENSEX 80 index points, reached within +-2 points; then the SL moves in STEPS of NIFTY 25 / SENSEX 50 beyond the target (+1 step -> SL at the target, +2 -> target + 1 step, ...). The continuous trail is kept behind STEP_TSL = False.
