@@ -330,3 +330,4 @@ data/
 
 - ORB (owner, 22-10): max 5 trades a day (was 10); once the day's booked profit reaches Rs 10,000 no new entry (open trade runs to its own exit).
 - ORB RETEST_075 (owner, 22-10, new rule, old breakout-close entry kept behind the flag): a NEW close beyond the first 5-min candle arms that side; entry on the retest of that candle's 0.75 (PE: Fib low->high, low + 0.75 x range; CE: high - 0.75 x range); SL first candle high + 1 / low - 1; target 1:2. Each new break (below, later above) gets its own retest.
+- ORB TARGET_TSL (owner, 22-10, new rule; old 1:2 target behind the flag): target = NIFTY 50 / SENSEX 100 index points from the entry; reaching it does not exit - a trailing SL follows the index's best price by NIFTY 20 / SENSEX 50 points; exit when the index touches it (or 15:16).

@@ -35,6 +35,11 @@ REWARD = 2.0  # 1:2
 #   PE (break below): Fib from the low up -> 0.75 = low + 0.75 x range;  CE (break above): high - 0.75 x range.
 #   SL = that candle's high + 1 (PE) / low - 1 (CE) - a small SL. False = the old entry at the breakout close.
 RETEST_075 = True
+# owner 22-10: target = NIFTY 50 / SENSEX 100 index points from the entry; reaching it does NOT close the trade -
+# a trailing SL follows the index's best price by NIFTY 20 / SENSEX 50 points. False = the old 1:2 target exit.
+TARGET_TSL = True
+TARGET_POINTS = {"NIFTY": 50, "SENSEX": 100}
+TSL_POINTS = {"NIFTY": 20, "SENSEX": 50}
 
 
 @dataclass(frozen=True)
@@ -60,6 +65,8 @@ class OrbTrade:
     entry_index: float
     sl_index: float
     target_index: float
+    riding: bool = False  # TARGET_TSL: the target was reached, the trailing SL rides it
+    best_index: float = 0.0
     entry_reason: str = ""
     exit_time: str = ""
     exit_premium: float = 0.0
@@ -120,8 +127,20 @@ class OrbDay:
                 target_hit = index.high >= t.target_index if ce else index.low <= t.target_index
                 if sl_hit:  # (both in one candle: the SL is assumed first)
                     events.append(self._exit(t, when, premium, index.close,
-                                             f"SL - index reached {t.sl_index:g} "
+                                             f"{'TSL' if t.riding else 'SL'} - index reached {t.sl_index:g} "
                                              f"in candle {when:%H:%M}"))
+                elif TARGET_TSL and (target_hit or t.riding):
+                    tsl = TSL_POINTS[self.market.name]
+                    if not t.riding:
+                        t.riding, t.best_index = True, t.target_index
+                    t.best_index = max(t.best_index, index.high) if ce else min(t.best_index, index.low)
+                    trail = t.best_index - tsl if ce else t.best_index + tsl
+                    if (trail > t.sl_index) if ce else (trail < t.sl_index):
+                        t.sl_index = round(trail, 2)
+                        events.append(f"TSL {t.side} {t.strike:g}: index best {t.best_index:g} -> SL index {t.sl_index:g} "
+                                      f"({tsl} pts behind)")
+                    if closes >= SQUARE_OFF:
+                        events.append(self._exit(t, when, premium, index.close, "15:16 square-off"))
                 elif target_hit:
                     events.append(self._exit(t, when, premium, index.close,
                                              f"TARGET 1:2 - index reached {t.target_index:g} in candle {when:%H:%M}"))
@@ -156,6 +175,8 @@ class OrbDay:
             sl = index.close - self.market.max_sl if side == "CE" else index.close + self.market.max_sl
         risk = abs(index.close - sl)
         target = index.close + REWARD * risk if side == "CE" else index.close - REWARD * risk
+        if TARGET_TSL:
+            target = index.close + TARGET_POINTS[self.market.name] * (1 if side == "CE" else -1)
         trade = OrbTrade(date=self.day.isoformat(), side=side, strike=strike, qty=self.market.lot,
                          entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=round(index.close, 2),
                          sl_index=round(sl, 2), target_index=round(target, 2),
@@ -166,7 +187,7 @@ class OrbDay:
         self.open_trade = trade
         events.append(f"BUY {trade.qty} x {side} {strike:g} at {trade.entry_fill:.2f} ({trade.entry_reason}) - "
                       f"SL index {trade.sl_index:g} ({risk:.2f} pts{', capped' if wide else ''}), "
-                      f"target index {trade.target_index:g} (1:2)")
+                      f"target index {trade.target_index:g} ({self._target_note()})")
         return events
 
     def _retest_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], closes: time) -> list[str]:
@@ -210,6 +231,8 @@ class OrbDay:
             sl = level - self.market.max_sl if side == "CE" else level + self.market.max_sl
         risk = abs(level - sl)
         target = level + REWARD * risk if side == "CE" else level - REWARD * risk
+        if TARGET_TSL:
+            target = level + TARGET_POINTS[self.market.name] * (1 if side == "CE" else -1)
         trade = OrbTrade(date=self.day.isoformat(), side=side, strike=strike, qty=self.market.lot,
                          entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=round(level, 2),
                          sl_index=round(sl, 2), target_index=round(target, 2),
@@ -218,7 +241,14 @@ class OrbDay:
         self.trades.append(trade)
         self.open_trade = trade
         return (f"BUY {trade.qty} x {side} {strike:g} at {trade.entry_fill:.2f} ({trade.entry_reason}) - "
-                f"SL index {trade.sl_index:g} ({risk:.2f} pts{', capped' if wide else ''}), target index {trade.target_index:g} (1:2)")
+                f"SL index {trade.sl_index:g} ({risk:.2f} pts{', capped' if wide else ''}), target index {trade.target_index:g} "
+                f"({self._target_note()})")
+
+    def _target_note(self) -> str:
+        if TARGET_TSL:
+            return (f"{TARGET_POINTS[self.market.name]} pts, then TSL {TSL_POINTS[self.market.name]} pts - "
+                    f"no exit at the target")
+        return "1:2"
 
     def total(self) -> tuple[float, float]:
         closed = [t for t in self.trades if t.exit_reason]

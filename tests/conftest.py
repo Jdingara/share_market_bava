@@ -26,10 +26,13 @@ def sniper_target_mode(monkeypatch, request):
     import orb_engine
     if "orb_retest" not in request.keywords:  # the 22-10 ORB 0.75 retest entry has its own test
         monkeypatch.setattr(orb_engine, "RETEST_075", False)
+    if "orb_tsl" not in request.keywords:  # the 22-10 ORB 50/100-point target + TSL has its own test
+        monkeypatch.setattr(orb_engine, "TARGET_TSL", False)
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "ride: owner's 09-10 normal-day mode (no target exit, trailing only)")
+    config.addinivalue_line("markers", "orb_tsl: owner's 22-10 ORB target 50/100 points then TSL 20/50")
     config.addinivalue_line("markers", "orb_retest: owner's 22-10 ORB retest of the first candle's 0.75")
     config.addinivalue_line("markers", "atm_confirm: owner's 19-10 ATM-confirm square entry")
     config.addinivalue_line("markers", "legacy_trailing: the trailing rules before 12-10 (cost on touch, TSL by touch)")
