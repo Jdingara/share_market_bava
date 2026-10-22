@@ -23,9 +23,13 @@ def sniper_target_mode(monkeypatch, request):
         monkeypatch.setattr(sniper_engine, "ALL_STOPS_ON_CLOSE", False)
         monkeypatch.setattr(sniper_engine, "TRAIL_BEFORE_TARGET", True)
         monkeypatch.setattr(sniper_engine, "SQUARE_LADDER_TSL", False)
+    import orb_engine
+    if "orb_retest" not in request.keywords:  # the 22-10 ORB 0.75 retest entry has its own test
+        monkeypatch.setattr(orb_engine, "RETEST_075", False)
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "ride: owner's 09-10 normal-day mode (no target exit, trailing only)")
+    config.addinivalue_line("markers", "orb_retest: owner's 22-10 ORB retest of the first candle's 0.75")
     config.addinivalue_line("markers", "atm_confirm: owner's 19-10 ATM-confirm square entry")
     config.addinivalue_line("markers", "legacy_trailing: the trailing rules before 12-10 (cost on touch, TSL by touch)")

@@ -4,6 +4,9 @@ Vengat ORB - Opening Range Breakout (owner, 2026-10-19). PAPER MODE.
   * Range: the index's first 5-minute candle (09:15-09:20) - its high and low.
   * Entry: a 5-minute candle CLOSING above the range high -> buy the ATM CE at that candle's close; closing below the
     range low -> the ATM PE. No other confirmation.
+  * Owner 22-10 (RETEST_075, the new rule): a NEW close beyond the range only ARMS the side; the entry is the retest
+    of the first candle's 0.75 (PE: low + 0.75 x range, CE: high - 0.75 x range), SL = that candle's high + 1 / low - 1,
+    target 1:2 from the 0.75. Each new break (below, then later above) arms its own retest.
   * SL: the other end of the range on the index (CE: range low, PE: range high); but at most NIFTY 50 /
     SENSEX 100 index points from the entry (owner 19-10). Trades every day.
   * Target 1:2 on the index: CE target = entry index + 2 x (entry index - range low); PE mirrored.
@@ -28,6 +31,10 @@ SQUARE_OFF = time(15, 15)  # the candle closing 15:15 closes everything (owner: 
 MAX_TRADES = 5  # owner 22-10: 5 trades a day (was 10 - kept in tag orb-rules-2026-10-21)
 PROFIT_STOP = 10_000  # owner 22-10: once the day's booked profit reaches Rs 10,000 - no new entry
 REWARD = 2.0  # 1:2
+# owner 22-10: after the break, enter on the RETEST of the first 5-min candle's 0.75 (Fib on that candle):
+#   PE (break below): Fib from the low up -> 0.75 = low + 0.75 x range;  CE (break above): high - 0.75 x range.
+#   SL = that candle's high + 1 (PE) / low - 1 (CE) - a small SL. False = the old entry at the breakout close.
+RETEST_075 = True
 
 
 @dataclass(frozen=True)
@@ -77,6 +84,8 @@ class OrbDay:
         self.trades: list[OrbTrade] = []
         self.open_trade: Optional[OrbTrade] = None
         self.done = False
+        self.armed: Optional[dict] = None  # RETEST_075: {"side", "level", "when"} after a NEW close beyond the range
+        self.last_pos: Optional[str] = None  # where the previous candle closed: "CE" above, "PE" below, None inside
 
     def _exit(self, trade: OrbTrade, when: datetime, premium: float, index: float, reason: str) -> str:
         trade.exit_time, trade.exit_premium, trade.exit_index = when.isoformat(), round(premium, 2), round(index, 2)
@@ -125,6 +134,8 @@ class OrbDay:
         if closes >= SQUARE_OFF:
             self.done = True
             return events
+        if RETEST_075:
+            return events + self._retest_entry(when, index, chain, closes)
         if self.open_trade is not None or len(self.trades) >= MAX_TRADES:
             return events
         if PROFIT_STOP and sum(t.pnl_rupees for t in self.trades) >= PROFIT_STOP:
@@ -157,6 +168,57 @@ class OrbDay:
                       f"SL index {trade.sl_index:g} ({risk:.2f} pts{', capped' if wide else ''}), "
                       f"target index {trade.target_index:g} (1:2)")
         return events
+
+    def _retest_entry(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], closes: time) -> list[str]:
+        # owner 22-10: once a break below, another time a break above - each NEW break (a close beyond the range after
+        # a close inside it or beyond the other side) arms its own retest; only that retest is an entry
+        side = "CE" if index.close > self.high else "PE" if index.close < self.low else None
+        fresh = side is not None and side != self.last_pos
+        self.last_pos = side
+        if self.open_trade is not None:
+            self.armed = None
+            return []
+        events: list[str] = []
+        rng = self.high - self.low
+        a = self.armed
+        if a is not None and (len(self.trades) < MAX_TRADES
+                              and not (PROFIT_STOP and sum(t.pnl_rupees for t in self.trades) >= PROFIT_STOP)
+                              and any(x <= closes <= y for x, y in WINDOWS)):
+            touched = index.low <= a["level"] if a["side"] == "CE" else index.high >= a["level"]
+            if touched:
+                event = self._open_retest(when, index, chain, a)
+                if event:
+                    self.armed = None
+                    return [event]
+        if fresh:
+            level = self.high - 0.75 * rng if side == "CE" else self.low + 0.75 * rng
+            self.armed = {"side": side, "level": round(level, 2), "when": when}
+            events.append(f"Break {'above' if side == 'CE' else 'below'} the range at {when:%H:%M} (close {index.close:g}) "
+                          f"- waiting for the retest of 0.75 {level:.2f} for a {side}")
+        return events
+
+    def _open_retest(self, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle], a: dict) -> Optional[str]:
+        side, level = a["side"], a["level"]
+        step = self.market.strike_step
+        strike = float(round(level / step) * step)
+        prem = chain.get((strike, side))
+        if prem is None:
+            return None
+        sl = self.low - 1 if side == "CE" else self.high + 1
+        wide = abs(level - sl) > self.market.max_sl
+        if wide:
+            sl = level - self.market.max_sl if side == "CE" else level + self.market.max_sl
+        risk = abs(level - sl)
+        target = level + REWARD * risk if side == "CE" else level - REWARD * risk
+        trade = OrbTrade(date=self.day.isoformat(), side=side, strike=strike, qty=self.market.lot,
+                         entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=round(level, 2),
+                         sl_index=round(sl, 2), target_index=round(target, 2),
+                         entry_reason=(f"break {'above' if side == 'CE' else 'below'} the range at {a['when']:%H:%M}, "
+                                       f"retest of the first candle's 0.75 {level:g} in candle {when:%H:%M} -> ATM {strike:g} {side}"))
+        self.trades.append(trade)
+        self.open_trade = trade
+        return (f"BUY {trade.qty} x {side} {strike:g} at {trade.entry_fill:.2f} ({trade.entry_reason}) - "
+                f"SL index {trade.sl_index:g} ({risk:.2f} pts{', capped' if wide else ''}), target index {trade.target_index:g} (1:2)")
 
     def total(self) -> tuple[float, float]:
         closed = [t for t in self.trades if t.exit_reason]

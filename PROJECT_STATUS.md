@@ -329,3 +329,4 @@ data/
 - **Vengat ORB (owner, 19-10)**: entries only after 09:30 - the first possible entry is the candle closing 09:35.
 
 - ORB (owner, 22-10): max 5 trades a day (was 10); once the day's booked profit reaches Rs 10,000 no new entry (open trade runs to its own exit).
+- ORB RETEST_075 (owner, 22-10, new rule, old breakout-close entry kept behind the flag): a NEW close beyond the first 5-min candle arms that side; entry on the retest of that candle's 0.75 (PE: Fib low->high, low + 0.75 x range; CE: high - 0.75 x range); SL first candle high + 1 / low - 1; target 1:2. Each new break (below, later above) gets its own retest.

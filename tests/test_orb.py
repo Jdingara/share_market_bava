@@ -1,4 +1,5 @@
 import sys
+import pytest
 from datetime import date, datetime
 from pathlib import Path
 
@@ -81,3 +82,16 @@ def test_sl_is_capped_at_50_nifty_points():
     day.on_candle(_at("09:30"), Candle(23090, 23110, 23085, 23105), _chain(ce=150, strike=23100.0))
     t = day.trades[0]
     assert t.sl_index == 23055 and t.target_index == 23205
+
+
+@pytest.mark.orb_retest
+def test_pe_break_then_retest_of_the_first_candles_075():  # owner 22-10
+    day = OrbDay(date(2026, 10, 19), ORB_MARKETS["NIFTY"])
+    day.on_candle(_at("09:15"), Candle(23050, 23100, 23000, 23020), _chain())  # range 23000-23100, 0.75 up = 23075
+    day.on_candle(_at("09:30"), Candle(23010, 23020, 22980, 22985), _chain(pe=150, strike=23000.0))  # close below
+    assert not day.trades and day.armed["level"] == 23075
+    day.on_candle(_at("09:35"), Candle(22985, 23060, 22980, 23040), _chain(pe=140, strike=23050.0))  # not yet
+    assert not day.trades
+    day.on_candle(_at("09:40"), Candle(23040, 23080, 23030, 23070), _chain(pe=130, strike=23100.0))  # touched 23075
+    t = day.trades[0]
+    assert t.side == "PE" and t.entry_index == 23075 and t.sl_index == 23101 and t.target_index == 23023
