@@ -332,3 +332,6 @@ data/
 - Branches: `sniper` (#1), `hlc` (#2), `orb` (#3), `lalitha` (#4); `main` = shared code + the daily scripts. Each strategy runs from its own git worktree: E:\BOT\Share_BOTots\<strategy>. Sniper and HLC share one data/paper_trades folder (junction to bots\shared_paper_trades) so the Rs 5 lakh capital pool still works.
 - daily_start.ps1 (08:40): pulls main + every worktree, logs in once, copies the session and .env into each worktree, starts each strategy's bots from its own folder. daily_push.ps1 (15:10): commits each worktree's history/ and pushes it to that strategy's branch.
 - A rule change goes ONLY to that strategy's branch (ask the owner which strategy first).
+
+## GIFT Nifty morning check (owner, 22-10)
+- src/gift_nifty.py: --snapshot (Task "GiftNifty 1530 Snapshot", weekdays 15:30) saves GIFT Nifty to data/gift_nifty.csv; --report (run by daily_start.ps1 at 08:40, written to data/paper_trades/gift_nifty_<date>.txt) shows GIFT now vs yesterday's 15:30 value and vs the NIFTY spot close. Source groww.in. Information only.

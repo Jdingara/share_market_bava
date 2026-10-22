@@ -29,6 +29,7 @@ foreach ($s in $strategies.Keys) {
   git -C (Join-Path $bots_root $s) pull --ff-only 2>&1 | ForEach-Object { Note "git ${s}: $_" }
 }
 
+py src\gift_nifty.py --report 2>&1 | ForEach-Object { Note "gift: $_" }  # owner 22-10: GIFT Nifty vs yesterday 15:30
 py src\auto_login.py 2>&1 | ForEach-Object { Note "login: $_" }
 if ($LASTEXITCODE -ne 0) { Note "login failed - bots not started"; exit 1 }
 
