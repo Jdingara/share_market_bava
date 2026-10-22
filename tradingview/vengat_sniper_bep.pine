@@ -1,0 +1,42 @@
+//@version=6
+// Vengat BEP (#5, owner 2026-10-22) - "market edhu varai pogum" levels on the NIFTY index chart.
+// Same maths as bots/bep/src/bep_levels.py (checked against the owner's 21-10 screenshot: 22900 RES 23026.45 / SUP 22773.55):
+//   SNI(K) = (yesterday's close of K+100 CE + yesterday's close of K-100 PE) / 2
+//   RES    = Strike 1 + SNI(Strike 1)        SUP = Strike 2 - SNI(Strike 2)
+// Market breaks the RES -> set Strike 1 one step up (22900 -> 23000) for the next resistance; breaks the SUP -> Strike 2 one step down.
+// Information only - no entry / SL. Needs NSE option data on TradingView (symbols like NSE:NIFTY261027C23000).
+indicator("Vengat Sniper BEP", overlay = true)
+
+yy = input.int(2026, "Year", group = "Expiry date", inline = "exp")
+mm = input.int(10, "Month", minval = 1, maxval = 12, group = "Expiry date", inline = "exp")
+dd = input.int(27, "Day", minval = 1, maxval = 31, group = "Expiry date", inline = "exp")
+strike1 = input.int(22900, "Strike 1 (RES)", step = 100, group = "Strikes", inline = "st")
+strike2 = input.int(22900, "Strike 2 (SUP)", step = 100, group = "Strikes", inline = "st")
+gap = input.int(100, "OTM distance", step = 50, group = "Strikes")
+showLabels = input.bool(true, "Show Price Labels")
+
+expiry = str.tostring(yy % 100, "00") + str.tostring(mm, "00") + str.tostring(dd, "00")
+
+optionSymbol(string kind, int strike) =>
+    "NSE:NIFTY" + expiry + kind + str.tostring(strike)
+
+prevClose(string sym) =>
+    request.security(sym, "D", close[1], lookahead = barmerge.lookahead_on, ignore_invalid_symbol = true)
+
+sni1 = (prevClose(optionSymbol("C", strike1 + gap)) + prevClose(optionSymbol("P", strike1 - gap))) / 2
+sni2 = (prevClose(optionSymbol("C", strike2 + gap)) + prevClose(optionSymbol("P", strike2 - gap))) / 2
+res = strike1 + sni1
+sup = strike2 - sni2
+
+plot(res, "RES", color.red, 2, plot.style_linebr)
+plot(sup, "SUP", color.green, 2, plot.style_linebr)
+
+var label resLabel = na
+var label supLabel = na
+if barstate.islast and showLabels
+    label.delete(resLabel)
+    label.delete(supLabel)
+    resLabel := label.new(bar_index + 2, res, str.tostring(strike1) + " RES: " + str.tostring(res, "0.00"),
+                          style = label.style_label_left, color = color.red, textcolor = color.white)
+    supLabel := label.new(bar_index + 2, sup, str.tostring(strike2) + " SUP: " + str.tostring(sup, "0.00"),
+                          style = label.style_label_left, color = color.green, textcolor = color.white)

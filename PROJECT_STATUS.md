@@ -345,3 +345,4 @@ data/
 - `py srcep_levels.py` prints NIFTY + SENSEX and saves data/bep_levels_<date>.txt; run by daily_start.ps1 (main)
   every morning after the login.
 - Verified 22-10 against the owner's video screenshot (21-10 session, from 19-10 closes, 20-10 holiday): 22900 RES 23,026.45 / SUP 22,773.55 and the next level 23,129.60 match exactly. `--strike K` builds the levels around any strike (like the video's setting).
+- tradingview/vengat_sniper_bep.pine (22-10): our own TradingView indicator with the video's inputs (expiry date, Strike 1 -> RES, Strike 2 -> SUP, price labels); same maths as bep_levels.py. Not yet run on TradingView - the owner pastes it into the Pine editor.
