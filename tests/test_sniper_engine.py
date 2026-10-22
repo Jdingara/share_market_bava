@@ -683,17 +683,20 @@ def test_no_momentum_while_the_otm_is_below_the_same_side_atm_close():
 
 
 @pytest.mark.atm_confirm
-def test_atm_confirms_below_the_sniper_then_the_first_square_above_is_the_entry():
-    """Owner, 19-10 SENSEX: 09:50 ATM CE closed below the Sniper; 09:55 the 74500 PE ran 390 -> 441 -> 529.95 and
-    closed 513.50 -> entry 441 (first square above the Sniper 428.08 and its close 430.85), target 529 in that candle."""
+def test_atm_confirm_at_0930_then_the_retest_of_the_square_below_the_otm_close():
+    """Owner, 22-10 (SENSEX 73400 PE: the 09:25-09:30 candle closed 415 with the ATM CE below the Sniper -> entry on
+    the retest of 400 in the 09:30 candle)."""
+    from sniper_engine import highest_square_below
     engine = SniperDay(date(2026, 10, 6), SENSEX_ROW, index_close=72382.47, near_points=30)
     sniper = SENSEX_ROW.sniper
-    floor = max(sniper, SENSEX_ROW.otm_pe_close)
-    k = math.isqrt(int(floor)) + 1
+    top = max(sniper, SENSEX_ROW.otm_pe_close, SENSEX_ROW.atm_pe_close)
+    close = top + 30
+    k = highest_square_below(close)
+    assert k * k > max(sniper, SENSEX_ROW.otm_pe_close)
     bars = lambda ce_close, pe: {"atm_ce": Bar(ce_close, ce_close, ce_close, ce_close), "atm_pe": Bar(500, 500, 500, 500),
                                  "otm_ce": Bar(300, 300, 300, 300), "otm_pe": Bar(*pe)}
-    engine.on_candle(_at("09:45"), bars(sniper + 30, (floor - 20, floor - 40, floor - 30, floor - 35)))
-    engine.on_candle(_at("09:50"), bars(sniper - 20, (floor - 20, floor - 45, floor - 38, floor - 30)))  # ATM CE confirms
-    events = engine.on_candle(_at("09:55"), bars(sniper - 60, ((k + 2) ** 2 + 1, floor - 40, (k + 2) ** 2 - 15, floor - 38)))
+    engine.on_candle(_at("09:20"), bars(sniper + 30, (top, top - 30, top - 10, top - 20)))
+    engine.on_candle(_at("09:25"), bars(sniper - 20, (close + 5, top - 10, close, top - 5)))   # closes 09:30 - confirms
+    engine.on_candle(_at("09:30"), bars(sniper - 40, (close + 40, k * k - 5, close + 30, close)))  # retest of k^2
     t = engine.trades[0]
-    assert t.entry_fill == k * k and t.exit_reason == "TARGET" and t.exit_premium == (k + 2) ** 2
+    assert t.entry_fill == k * k  # (the regular signal path may get there first - same square)

@@ -883,26 +883,30 @@ class SniperDay:
                 or self.pending or half in self.halves_used or not self._next_trade_allowed()):
             return None
         prev = self._prev_bars
-        if (when - timedelta(minutes=5)).time() < time(9, 30):
-            return None  # owner 19-10: the confirmation candle must be after 09:30 (a 09:20 confirmation doesn't count)
+        if (when - timedelta(minutes=5)).time() < time(9, 25):
+            # owner 19-10: no confirmation before 09:30; owner 22-10: the candle CLOSING at 09:30 (09:25-09:30) counts
+            return None
         for setup in (s for s in self.setups if s.half == half):
             falling = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
             otm = _key(setup)
             if setup.contract or prev[falling].close >= self.row.sniper:
                 continue  # the opposite ATM hasn't confirmed (closed below the Sniper) yet
-            floor = max(self.row.sniper, self.prev[otm], prev[otm].close)
-            k = math.isqrt(int(floor)) + 1
-            bar = bars[otm]
+            # owner 22-10 (replaces 19-10's "first square above, on a touch"): the confirmation candle's OTM CLOSE must
+            # be above the Sniper, its own yesterday close and the same side's ATM yesterday close; then the entry is the
+            # RETEST of the square below that close (22-10 SENSEX 73400 PE: 09:25 closed 415 -> 400 at 09:30)
             same_atm = "atm_ce" if setup.buy_type == "CE" else "atm_pe"
-            if bar.high < k * k or bar.high <= self.prev[same_atm]:
-                # owner 19-10: the OTM must also go above the same side's ATM yesterday close (09:40 ATM PE below the
-                # Sniper but the 74700 CE never above the ATM CE close 476.15 -> no OTM entry)
+            otm_close = prev[otm].close
+            if not (otm_close > self.row.sniper and otm_close > self.prev[otm] and otm_close > self.prev[same_atm]):
                 continue
-            fill = max(float(k * k), bar.open) if bar.open is not None else float(k * k)
+            k = highest_square_below(otm_close)
+            bar = bars[otm]
+            if k * k <= max(self.row.sniper, self.prev[otm]) or bar.low > k * k:
+                continue
+            fill = min(float(k * k), bar.open) if bar.open is not None else float(k * k)
             self.halves_used.add(half)
             why = (f"ATM {setup.falling_type} confirmed: closed {prev[falling].close:g} below the Sniper {self.row.sniper:g}; "
-                   f"OTM {setup.buy_type} went above the Sniper and its close {self.prev[otm]:g} -> the first square above, "
-                   f"{k * k}, traded in candle {when:%H:%M}")
+                   f"OTM {setup.buy_type} closed {otm_close:g} above the Sniper, its close {self.prev[otm]:g} and the ATM "
+                   f"{setup.buy_type} close {self.prev[same_atm]:g} -> retest of the square {k * k} in candle {when:%H:%M}")
             events = self._open(setup, k, when, round(fill, 2), bar, True, prev[falling].close < self.row.sniper, reason=why)
             trade = events[0].trade if events else None
             if trade is not None and not trade.exit_reason and bar.high >= trade.target and bar.close <= trade.target:
