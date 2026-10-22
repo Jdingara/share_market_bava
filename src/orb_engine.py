@@ -49,6 +49,10 @@ TARGET_SLACK = 2  # owner 22-10: the target counts as reached within 2 points of
 # beyond the target lifts the SL by one step - +1 step -> SL at the target, +2 -> target + 1 step, ...
 # False = the earlier continuous trail (best price - TSL points).
 STEP_TSL = True
+# owner 22-10 night: "target eppavume option premium" - the target (40 / 80 +-2) and the TSL steps (25 / 50) are
+# OPTION PREMIUM points from the entry fill; the SL stays on the index (first candle high + 1 / low - 1). Fills at the
+# moment of the touch (estimated inside the 5-min candle), not at the candle close. False = index-point target.
+PREMIUM_TARGET = True
 
 
 @dataclass(frozen=True)
@@ -76,6 +80,9 @@ class OrbTrade:
     target_index: float
     riding: bool = False  # TARGET_TSL: the target was reached, the trailing SL rides it
     best_index: float = 0.0
+    target_premium: float = 0.0  # PREMIUM_TARGET: entry fill + 40 / 80
+    trail_premium: float = 0.0  # PREMIUM_TARGET: the premium SL once the steps start (0 = none yet)
+    best_premium: float = 0.0
     entry_reason: str = ""
     exit_time: str = ""
     exit_premium: float = 0.0
@@ -128,7 +135,9 @@ class OrbDay:
         events: list[str] = []
         closes = _closes_at(when)
         t = self.open_trade
-        if t is not None:
+        if t is not None and PREMIUM_TARGET and TARGET_TSL:
+            events += self._premium_exits(t, when, index, chain, closes)
+        elif t is not None:
             premium = self._premium(chain, t)
             if premium is not None:
                 ce = t.side == "CE"
@@ -247,16 +256,72 @@ class OrbDay:
         target = level + REWARD * risk if side == "CE" else level - REWARD * risk
         if TARGET_TSL:
             target = level + TARGET_POINTS[self.market.name] * (1 if side == "CE" else -1)
+        fill = self._premium_at(level, index, prem, side) if PREMIUM_TARGET else round(prem.close, 2)
         trade = OrbTrade(date=self.day.isoformat(), side=side, strike=strike, qty=self.market.lot,
-                         entry_time=when.isoformat(), entry_fill=round(prem.close, 2), entry_index=round(level, 2),
+                         entry_time=when.isoformat(), entry_fill=fill, entry_index=round(level, 2),
                          sl_index=round(sl, 2), target_index=round(target, 2),
                          entry_reason=(f"break {'above' if side == 'CE' else 'below'} the range at {a['when']:%H:%M}, "
                                        f"retest of the first candle's 0.75 {level:g} in candle {when:%H:%M} -> ATM {strike:g} {side}"))
+        if PREMIUM_TARGET and TARGET_TSL:
+            trade.target_premium = round(fill + TARGET_POINTS[self.market.name], 2)
+            trade.target_index = 0.0
         self.trades.append(trade)
         self.open_trade = trade
+        if PREMIUM_TARGET and TARGET_TSL:
+            return (f"BUY {trade.qty} x {side} {strike:g} at {trade.entry_fill:.2f} ({trade.entry_reason}) - "
+                    f"SL index {trade.sl_index:g} ({risk:.2f} pts{', capped' if wide else ''}), target premium "
+                    f"{trade.target_premium:g} (+{TARGET_POINTS[self.market.name]} +-{TARGET_SLACK}), then the SL in "
+                    f"premium steps of {TSL_POINTS[self.market.name]} - no exit at the target")
         return (f"BUY {trade.qty} x {side} {strike:g} at {trade.entry_fill:.2f} ({trade.entry_reason}) - "
                 f"SL index {trade.sl_index:g} ({risk:.2f} pts{', capped' if wide else ''}), target index {trade.target_index:g} "
                 f"({self._target_note()})")
+
+    @staticmethod
+    def _premium_at(level: float, index: Candle, opt: Candle, side: str) -> float:
+        """The option price when the index stood at `level` inside this 5-min candle - placed between the option's
+        low and high in proportion (CE rises with the index, PE falls)."""
+        span = index.high - index.low
+        f = min(1.0, max(0.0, (level - index.low) / span)) if span > 0 else 0.5
+        if side == "PE":
+            f = 1 - f
+        return round(opt.low + f * (opt.high - opt.low), 2)
+
+    def _premium_exits(self, t: OrbTrade, when: datetime, index: Candle, chain: dict[tuple[float, str], Candle],
+                       closes: time) -> list[str]:
+        opt = chain.get((t.strike, t.side))
+        if opt is None:
+            return []
+        ce = t.side == "CE"
+        if index.low <= t.sl_index if ce else index.high >= t.sl_index:  # the index SL (first candle +-1)
+            fill = self._premium_at(t.sl_index, index, opt, t.side)
+            return [self._exit(t, when, fill, t.sl_index, f"SL - index reached {t.sl_index:g} in candle {when:%H:%M}")]
+        if t.trail_premium and opt.low <= t.trail_premium:
+            fill = min(t.trail_premium, opt.open)
+            return [self._exit(t, when, fill, index.close,
+                               f"TSL - premium came back to {t.trail_premium:g} in candle {when:%H:%M}")]
+        events: list[str] = []
+        step = TSL_POINTS[self.market.name]
+        if not t.riding and opt.high >= t.target_premium - TARGET_SLACK:
+            t.riding, t.best_premium = True, t.target_premium
+            events.append(f"TARGET {t.side} {t.strike:g}: premium reached {t.target_premium:g} - no exit, "
+                          f"SL locked at the target, then up in steps of {step}")
+        if t.riding:
+            t.best_premium = max(t.best_premium, opt.high)
+            # owner 22-10 night ("muthal entry 40 kidaikkum, 2vathu 100"): the target touch locks the SL AT the
+            # target (+40 kept), each further full step lifts it by one step
+            steps = max(0, int((t.best_premium - t.target_premium) // step))
+            trail = round(t.target_premium + steps * step, 2)
+            if True:
+                if trail > t.trail_premium:
+                    t.trail_premium = trail
+                    events.append(f"TSL {t.side} {t.strike:g}: premium best {t.best_premium:g} -> SL premium {trail:g}")
+        if closes >= SQUARE_OFF:
+            events.append(self._exit(t, when, opt.close, index.close, "15:16 square-off"))
+        elif not t.riding and ((index.close < self.low) if ce else (index.close > self.high)):
+            events.append(self._exit(t, when, opt.close, index.close,
+                                     f"opposite break - index closed {index.close:g} "
+                                     f"{'below the range low' if ce else 'above the range high'}"))
+        return events
 
     def _target_note(self) -> str:
         if TARGET_TSL:

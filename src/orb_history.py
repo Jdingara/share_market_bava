@@ -47,7 +47,7 @@ def record_orb_day(day: date, market: str, engine: OrbDay, status: str, note: st
         _write(folder / "days.csv", DAY_FIELDS, days)
         rows = [{"date": t.date, "market": market, "side": t.side, "strike": f"{t.strike:g}", "qty": t.qty,
                  "entry_time": t.entry_time[11:16], "entry_fill": t.entry_fill, "entry_index": t.entry_index,
-                 "sl_index": t.sl_index, "target_index": t.target_index, "exit_time": t.exit_time[11:16],
+                 "sl_index": t.sl_index, "target_index": (f"prem {t.target_premium:g}" if getattr(t, "target_premium", 0) else t.target_index), "exit_time": t.exit_time[11:16],
                  "exit_premium": t.exit_premium if t.exit_reason else "", "exit_index": t.exit_index if t.exit_reason else "",
                  "exit_reason": t.exit_reason or "OPEN", "pnl_points": t.pnl_points if t.exit_reason else "",
                  "pnl_rupees": round(t.pnl_rupees) if t.exit_reason else "", "entry_reason": t.entry_reason}
@@ -62,7 +62,7 @@ def _write_markdown(folder: Path, days: list[dict], trades: list[dict]) -> None:
     total = sum(_num(d["pnl_rupees"]) for d in days)
     lines = ["# Vengat ORB - Trade History", "",
              "**Paper trades - no real orders.** Opening range = the index's 09:15-09:20 candle; a close outside it buys "
-             "the ATM CE / PE (NIFTY 2 lots, SENSEX 6 lots), SL the other end of the range, target 1:2. Written by `src/orb_history.py`.", "",
+             "the ATM CE / PE (NIFTY 2 lots, SENSEX 6 lots), since 22-10: entry on the retest of the first candle's 0.75, SL first candle +-1 (index), target = option premium +40 / +80 then SL steps of 25 / 50. Written by `src/orb_history.py`.", "",
              f"**All days: {sum(int(_num(d['trades'])) for d in days)} trade(s), ₹{total:+,.0f}**", "",
              "| Date | Market | Range | Trades | P&L points | P&L ₹ | Status |", "|---|---|---|---|---|---|---|"]
     for d in sorted(days, key=lambda d: (d["date"], d["market"]), reverse=True):

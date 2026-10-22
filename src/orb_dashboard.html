@@ -24,7 +24,7 @@
 </head>
 <body>
 <h1>Vengat ORB <span id="market"></span> <span class="muted" id="mode"></span></h1>
-<div class="muted">PAPER MODE · no real orders · range = index 09:15-09:20 candle · close outside → ATM CE / PE · SL other end · target 1:2</div>
+<div class="muted">PAPER MODE · no real orders · range = index 09:15-09:20 candle · new close outside → retest of the first candle's 0.75 → round-100 strike · SL first candle ±1 (index) · target premium +40 / +80, then SL in steps of 25 / 50</div>
 <div class="card row">
   <div><div class="muted">Range high</div><div class="big" id="hi">–</div></div>
   <div><div class="muted">Range low</div><div class="big" id="lo">–</div></div>
@@ -46,7 +46,7 @@ async function tick() {
     const total = s.trades.filter(t => t.exit_reason).reduce((a, t) => a + t.pnl_rupees, 0);
     $("pnl").textContent = fmt(total); $("pnl").className = "big " + (total >= 0 ? "up" : "down");
     $("trades").innerHTML = s.trades.map(t => `<tr><td>${t.qty} x ${t.strike} ${t.side}</td><td>${t.entry_time.slice(11,16)}</td>
-      <td>${t.entry_fill}</td><td>${t.entry_index}</td><td>${t.sl_index} / ${t.target_index}</td>
+      <td>${t.entry_fill}</td><td>${t.entry_index}</td><td>${t.sl_index} / ${t.target_premium ? 'prem ' + t.target_premium + (t.trail_premium ? ' (SL prem ' + t.trail_premium + ')' : '') : t.target_index}</td>
       <td>${t.exit_reason ? t.exit_premium + " (" + t.exit_time.slice(11,16) + ")" : "open"}</td><td>${t.exit_reason || ""}</td>
       <td class="${t.pnl_points >= 0 ? "up" : "down"}">${t.exit_reason ? t.pnl_points.toFixed(2) : ""}</td>
       <td class="${t.pnl_points >= 0 ? "up" : "down"}">${t.exit_reason ? fmt(t.pnl_rupees) : ""}</td></tr>`).join("");

@@ -22,7 +22,7 @@ from dashboard import start_dashboard
 from hlc_signal import Candle
 from keep_awake import keep_awake
 from kite_auth import PROJECT_ROOT, connected_client
-from orb_engine import ORB_MARKETS, OrbDay
+from orb_engine import MAX_TRADES, ORB_MARKETS, OrbDay
 from orb_history import ORB_HISTORY_DIR, record_orb_day
 from sniper_live import (CANDLE_MINUTES, MARKET_OPEN, Notifier, OptionChain, _historical, _keep_dashboard_open, _naive,
                          _next_poll, _sleep_until)
@@ -123,7 +123,7 @@ def live(market_name: str, open_browser: bool) -> None:
     if open_browser:
         webbrowser.open(url)
     notify = Notifier(day, state, prefix=f"ORB_{market_name}_log")
-    notify.send(f"Vengat ORB started ({market_name}, qty {market.lot} per trade, max 10 trades) - PAPER MODE, "
+    notify.send(f"Vengat ORB started ({market_name}, qty {market.lot} per trade, max {MAX_TRADES} trades) - PAPER MODE, "
                 f"no real orders.", phone=False)
     chain = OptionChain(kite, day, MARKETS[market_name])
     state._set(expiry=chain.expiry.isoformat())
