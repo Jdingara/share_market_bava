@@ -22,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 FILE = ROOT / "data" / "gift_nifty.csv"
 URL = "https://groww.in/indices/global-indices/sgx-nifty"
+FLAT = 30  # NIFTY points: a smaller gap counts as a flat open
 
 
 def fetch() -> dict:
@@ -83,7 +84,11 @@ def report() -> str:
     nc = nifty_close()
     if nc:
         d, c = nc
-        lines.append(f"  vs NIFTY close on {d}: {c:,.2f}  ->  {g['value'] - c:+,.2f} points (expected gap)")
+        gap = g["value"] - c
+        lines.append(f"  vs NIFTY close on {d}: {c:,.2f}  ->  {gap:+,.2f} points (expected gap)")
+        # owner 22-10: the point of this check - will the market open GAP UP or GAP DOWN?
+        verdict = ("GAP UP" if gap > FLAT else "GAP DOWN" if gap < -FLAT else "FLAT")
+        lines.append(f"  => expected open: {verdict} (about {gap:+,.0f} points; flat band +-{FLAT:g})")
     text = "\n".join(lines)
     out = ROOT / "data" / "paper_trades" / f"gift_nifty_{date.today().isoformat()}.txt"
     out.parent.mkdir(parents=True, exist_ok=True)
