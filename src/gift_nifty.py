@@ -75,24 +75,34 @@ def nifty_close() -> tuple[str, float] | None:
 
 
 def report() -> str:
+    """Owner, 22-10: take the GIFT Nifty move since yesterday 15:30 (GIFT now - GIFT at 15:30) and add those points to
+    OUR NIFTY close -> the expected NIFTY open; that says GAP UP / GAP DOWN / FLAT. (Comparing GIFT with the NIFTY
+    spot directly would mix in the futures premium.)"""
     g = fetch()
     lines = [f"GIFT Nifty now {g['value']:,.2f} (quote {g['time']})"]
     snap = last_snapshot()
     if snap:
         d, v = snap
-        lines.append(f"  vs GIFT Nifty at 15:30 on {d}: {v:,.2f}  ->  {g['value'] - v:+,.2f} points")
+        diff = g["value"] - v
+        lines.append(f"  GIFT at 15:30 on {d}: {v:,.2f}  ->  GIFT difference {diff:+,.2f} points")
+    elif "dayChange" in g:
+        diff = g["dayChange"]  # no 15:30 snapshot yet - GIFT's own change since its previous close (approximate)
+        lines.append(f"  (no 15:30 snapshot yet) GIFT change since its previous close {g.get('close', 0):,.2f}: {diff:+,.2f} points")
+    else:
+        diff = None
     nc = nifty_close()
-    if nc:
+    if nc and diff is not None:
         d, c = nc
-        gap = g["value"] - c
-        lines.append(f"  vs NIFTY close on {d}: {c:,.2f}  ->  {gap:+,.2f} points (expected gap)")
-        # owner 22-10: the point of this check - will the market open GAP UP or GAP DOWN?
-        verdict = ("GAP UP" if gap > FLAT else "GAP DOWN" if gap < -FLAT else "FLAT")
-        lines.append(f"  => expected open: {verdict} (about {gap:+,.0f} points; flat band +-{FLAT:g})")
-    text = "\n".join(lines)
+        expected = c + diff
+        verdict = "GAP UP" if diff > FLAT else "GAP DOWN" if diff < -FLAT else "FLAT"
+        lines.append(f"  NIFTY close on {d}: {c:,.2f}  +  {diff:+,.2f}  =  expected NIFTY open about {expected:,.2f}")
+        lines.append(f"  => {verdict} (about {diff:+,.0f} points; flat band +-{FLAT:g})")
+    text = "
+".join(lines)
     out = ROOT / "data" / "paper_trades" / f"gift_nifty_{date.today().isoformat()}.txt"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(text + "\n", encoding="utf-8")
+    out.write_text(text + "
+", encoding="utf-8")
     return text
 
 
