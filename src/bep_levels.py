@@ -18,6 +18,7 @@ Default (owner's reference: Tamil Stock "Advanced Sniper" video, 22-10), strikes
 from __future__ import annotations
 
 import argparse
+import time
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -43,8 +44,16 @@ class _Closes:
         self.cache: dict = {}
 
     def day_close(self, token: int) -> float | None:
-        rows = self.kite.historical_data(token, datetime.combine(self.day, datetime.min.time()),
-                                         datetime.combine(self.day, datetime.max.time()), "day")
+        for attempt in range(5):  # Zerodha allows ~3 historical calls a second (23-10: "Too many requests" at 08:40)
+            try:
+                time.sleep(0.35)
+                rows = self.kite.historical_data(token, datetime.combine(self.day, datetime.min.time()),
+                                                 datetime.combine(self.day, datetime.max.time()), "day")
+                break
+            except Exception as error:
+                if "Too many requests" not in str(error) or attempt == 4:
+                    raise
+                time.sleep(2)
         return rows[-1]["close"] if rows else None
 
     def option(self, strike: float, kind: str) -> float | None:
