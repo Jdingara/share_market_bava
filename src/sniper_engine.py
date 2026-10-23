@@ -84,7 +84,7 @@ PROJECT_STATUS.md's Open Decisions until the owner confirms them):
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from typing import Literal, Optional
 
@@ -896,9 +896,17 @@ class SniperDay:
             # owner 19-10: no confirmation before 09:30; owner 22-10: the candle CLOSING at 09:30 (09:25-09:30) counts
             return None
         for setup in (s for s in self.setups if s.half == half):
+            if setup.contract:
+                # owner 23-10 (SENSEX: 10:15 confirmation, 73100 PE retest of 676, 784 hit): on a "trade the ATM" day the
+                # confirmation entry still buys the OTM (was: skipped - the setup bought the ATM)
+                setup = replace(setup, contract="",
+                                buy_strike=self.row.otm_pe_strike if setup.buy_type == "PE" else self.row.otm_ce_strike)
             falling = "atm_ce" if setup.falling_type == "CE" else "atm_pe"
             otm = _key(setup)
-            if setup.contract or prev[falling].close >= self.row.sniper:
+            if self.prev[falling] <= self.row.sniper:
+                continue  # owner 23-10: this ATM leg closed below the Sniper already yesterday (23-10 SENSEX ATM PE 515.7
+                # < 590.6) - no travel to the Sniper, so its close below it is no confirmation
+            if prev[falling].close >= self.row.sniper:
                 continue  # the opposite ATM hasn't confirmed (closed below the Sniper) yet
             # owner 22-10 (replaces 19-10's "first square above, on a touch"): the confirmation candle's OTM CLOSE must
             # be above the Sniper, its own yesterday close and the same side's ATM yesterday close; then the entry is the
