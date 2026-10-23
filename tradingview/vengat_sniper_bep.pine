@@ -17,6 +17,8 @@ gap = input.int(100, "OTM distance", step = 50, group = "Strikes")
 showLabels = input.bool(true, "Show Price Labels")
 showHistory = input.bool(false, "Show earlier days too (step lines)")
 
+// only on the index chart: on an option chart the index levels would squash the premium scale - stay hidden there
+onIndex = syminfo.type == "index"
 expiry = str.tostring(yy % 100, "00") + str.tostring(mm, "00") + str.tostring(dd, "00")
 
 optionSymbol(string kind, int strike) =>
@@ -33,10 +35,10 @@ res2 = strike2 + sni2
 sup2 = strike2 - sni2
 
 // optional: every day's levels as step lines (off by default, like the video)
-plot(showHistory ? res1 : na, "Strike 1 RES", color.red, 1, plot.style_linebr)
-plot(showHistory ? sup1 : na, "Strike 1 SUP", color.green, 1, plot.style_linebr)
-plot(showHistory and strike2 != strike1 ? res2 : na, "Strike 2 RES", color.red, 1, plot.style_linebr)
-plot(showHistory and strike2 != strike1 ? sup2 : na, "Strike 2 SUP", color.green, 1, plot.style_linebr)
+plot(showHistory and onIndex ? res1 : na, "Strike 1 RES", color.red, 1, plot.style_linebr)
+plot(showHistory and onIndex ? sup1 : na, "Strike 1 SUP", color.green, 1, plot.style_linebr)
+plot(showHistory and onIndex and strike2 != strike1 ? res2 : na, "Strike 2 RES", color.red, 1, plot.style_linebr)
+plot(showHistory and onIndex and strike2 != strike1 ? sup2 : na, "Strike 2 SUP", color.green, 1, plot.style_linebr)
 
 // the current day starts here
 var int dayStart = na
@@ -53,7 +55,7 @@ drawLevel(float level, string txt, color col) =>
             array.push(labels, label.new(bar_index + 15, level, txt + str.tostring(level, "0.00"),
                                          style = label.style_label_left, color = col, textcolor = color.white))
 
-if barstate.islast
+if barstate.islast and onIndex
     for l in lines
         line.delete(l)
     for b in labels
