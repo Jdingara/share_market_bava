@@ -70,6 +70,11 @@ if barstate.islast
         label.delete(b)
     array.clear(lines)
     array.clear(labels)
+    if onIndex and na(sni1)
+        // no option data for the symbol tried - show it, so the right symbol format / data feed can be found
+        array.push(labels, label.new(bar_index, close, "No option data for " + idxSym("C", strike1 + gap) + " / " +
+                                     idxSym("P", strike1 - gap) + " - check the expiry date and that this exchange's options load on TradingView",
+                                     style = label.style_label_down, color = color.orange, textcolor = color.black))
     if onIndex
         drawLevel(strike1 + sni1, str.tostring(strike1) + " RES: ", color.red)
         drawLevel(strike1 - sni1, str.tostring(strike1) + " SUP: ", color.green)
