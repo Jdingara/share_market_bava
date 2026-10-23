@@ -133,6 +133,10 @@ FIRST_BREAK_CONFIRM = True
 # entry is only allowed on that confirmation candle.
 PATTERN_GATE = True
 BREAKOUT_RETEST = True  # owner 22-10: index closes beyond its first 5-min candle -> retest of 0.75 of that breakout candle
+# owner 23-10: the BREAKOUT RETEST targets are the index S1 / S2 / S3 (CE: R1 / R2 / R3), the premium Fib 0.786 of
+# yesterday's close -> high and the premium's yesterday high - whichever comes first locks the SL there (no exit),
+# every further one lifts it, the profit lock (TSL) rides on. False = the 22-10 rule (index yesterday close -> SL to cost).
+BREAKOUT_FIRST_TARGET_LOCK = True
 BOTH_PB_BUYERS_DAY = True  # owner 16-10: CE and PE both PROFIT BOOKING yesterday is a buyer's day too  # owner, 2026-10-13: the index touching R3 / S3 = full profit - close and no more trades today
 NORMAL_DAY_MAX_TRADES = 2  # owner, 2026-10-09: non-buyer's days - 2 trades, no target exits (trailing only)
 MAX_TRADES = 4  # owner 08-10: pattern + 15-min retest TREND entries both on -> 4 a day (was 2)
@@ -1133,6 +1137,28 @@ class HlcDay:
         return (f"BUY {side} {atm:g} at {prem.close:.2f} (BREAKOUT RETEST, {trade.pattern}; index {index.close:.2f}) - "
                 f"SL index {sl:g}, targets {names}")
 
+    def _breakout_target_lock(self, trade: HlcTrade, index: Candle, prem: Candle) -> tuple[float, str]:
+        """Owner, 23-10: the targets reached in this candle - index S1/S2/S3 (R1/R2/R3), premium Fib 0.786 of
+        yesterday's close -> high, premium yesterday's high - and the premium SL they lock (the highest one)."""
+        pe = trade.side == "PE"
+        best, why = 0.0, ""
+        for name, value in trade.targets:
+            if name == "Close" or not ((index.low <= value) if pe else (index.high >= value)):
+                continue
+            span = index.high - index.low  # the option price when the index stood at the level, inside this candle
+            f = ((index.high - value) if pe else (value - index.low)) / span if span > 0 else 1.0
+            at = round(prem.low + max(0.0, min(1.0, f)) * (prem.high - prem.low), 2)
+            if at > best:
+                best, why = at, f"index target {name} {value:g} reached (premium about {at:g} then) - SL locked there"
+        hlc = self.yesterday.get(trade.side)
+        if hlc and trade.strike == self.levels.atm:
+            high, _, close = hlc
+            for name, value in ((f"premium Fib {PB_FIB:g} of yesterday's close-high", round(close + PB_FIB * (high - close), 2)),
+                                ("premium yesterday's high", high)):
+                if high > close and value > trade.entry_fill and prem.high >= value and value > best:
+                    best, why = value, f"{name} {value:g} reached - SL locked there"
+        return best, why
+
     def _gate_open(self, trade: HlcTrade) -> bool:
         if not PATTERN_GATE or trade.kind == "BREAKOUT RETEST":  # owner 22-10: its own condition, no pattern needed
             return True
@@ -1255,6 +1281,13 @@ class HlcDay:
                 if touch_lock > trade.lock_level:
                     trade.lock_level = touch_lock
                     trade.lock_why = f"+{reached:g} touched ({trade.entry_fill + reached:g}), so the SL moved to +{reached - add:g}"
+        if trade.kind == "BREAKOUT RETEST" and BREAKOUT_FIRST_TARGET_LOCK:
+            lock, why = self._breakout_target_lock(trade, index, prem)
+            if lock > trade.lock_level:
+                trade.lock_level, trade.lock_why = lock, why
+            if closes >= EXIT_CLOSE:
+                return [self._exit(trade, when, prem.close, "15:00 exit")]
+            return []
         if trade.kind == "BREAKOUT RETEST":
             # owner 22-10: target = yesterday's close; once reached, no exit - SL to cost and the profit lock rides on
             close = self.levels.close
