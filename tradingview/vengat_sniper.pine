@@ -11,14 +11,18 @@ showPDC = input.bool(true, "Previous day close (PDC)")
 showHL = input.bool(false, "Previous day high / low (PDH / PDL)")
 
 // NIFTY261027C22900 -> underlying NIFTY, expiry 261027, C, strike 22900
+// on an index / stock chart (no option symbol) the script stays quiet - no error - so it can stay on the chart
 t = syminfo.ticker
 expiry = str.match(t, "[0-9]{6}")
-p = str.pos(t, expiry)
-underlying = str.substring(t, 0, p)
-strike = int(str.tonumber(str.substring(t, p + 7)))
+isOption = expiry != ""
+p = isOption ? str.pos(t, expiry) : 0
+strikeNum = isOption ? str.tonumber(str.substring(t, p + 7)) : na
+isOption := isOption and not na(strikeNum)
+strike = isOption ? int(strikeNum) : 0
 prefix = syminfo.prefix + ":"
-ceSym = prefix + underlying + expiry + "C" + str.tostring(strike + gap)
-peSym = prefix + underlying + expiry + "P" + str.tostring(strike - gap)
+underlying = isOption ? str.substring(t, 0, p) : ""
+ceSym = isOption ? prefix + underlying + expiry + "C" + str.tostring(strike + gap) : syminfo.tickerid
+peSym = isOption ? prefix + underlying + expiry + "P" + str.tostring(strike - gap) : syminfo.tickerid
 
 prevClose(string sym) =>
     request.security(sym, "D", close[1], lookahead = barmerge.lookahead_on, ignore_invalid_symbol = true)
@@ -39,7 +43,7 @@ drawLevel(float level, string txt, color col) =>
         array.push(labels, label.new(dayClose, level, txt + str.tostring(level, "0.00"), xloc.bar_time,
                                      style = label.style_label_left, color = col, textcolor = color.white))
 
-if barstate.islast
+if barstate.islast and isOption
     for l in lines
         line.delete(l)
     for b in labels
