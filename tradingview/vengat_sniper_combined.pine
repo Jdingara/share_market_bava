@@ -1,0 +1,85 @@
+//@version=6
+// Vengat Sniper + BEP (owner 2026-10-23) - ONE indicator for both chart types:
+//   * on the INDEX chart (NSE:NIFTY / BSE:SENSEX): the BEP levels of Strike 1 and Strike 2 -
+//       SNI(K) = (yesterday's close of K+gap CE + yesterday's close of K-gap PE) / 2,  K RES = K + SNI(K),  K SUP = K - SNI(K)
+//   * on an OPTION chart (e.g. NSE:NIFTY261027C22600): that option's Sniper - SNI = (strike+gap CE + strike-gap PE
+//       yesterday's closes) / 2 - plus its previous day close (PDC) and, optionally, previous day high / low.
+// Same maths as bots/bep/src/bep_levels.py and bots/sniper/src/sniper_signal.py. Lines for the current day only.
+// Information only - no orders. Needs option data on TradingView.
+indicator("Vengat Sniper + BEP", overlay = true, max_lines_count = 50, max_labels_count = 50)
+
+yy = input.int(2026, "Year", group = "Expiry date (index chart)", inline = "exp")
+mm = input.int(10, "Month", minval = 1, maxval = 12, group = "Expiry date (index chart)", inline = "exp")
+dd = input.int(27, "Day", minval = 1, maxval = 31, group = "Expiry date (index chart)", inline = "exp")
+strike1 = input.int(22700, "Strike 1", step = 100, group = "Strikes (index chart)", inline = "st")
+strike2 = input.int(22600, "Strike 2", step = 100, group = "Strikes (index chart)", inline = "st")
+gap = input.int(100, "OTM distance", step = 50)
+showLabels = input.bool(true, "Show Price Labels")
+showPDC = input.bool(true, "Option chart: previous day close (PDC)")
+showHL = input.bool(false, "Option chart: previous day high / low")
+
+t = syminfo.ticker
+prefix = syminfo.prefix + ":"
+onIndex = syminfo.type == "index"
+
+// ---- option chart: NIFTY261027C22600 -> underlying NIFTY, expiry 261027, strike 22600
+optExpiry = str.match(t, "[0-9]{6}")
+isOption = not onIndex and optExpiry != ""
+p = isOption ? str.pos(t, optExpiry) : 0
+strikeNum = isOption ? str.tonumber(str.substring(t, p + 7)) : na
+isOption := isOption and not na(strikeNum)
+optStrike = isOption ? int(strikeNum) : 0
+optUnderlying = isOption ? str.substring(t, 0, p) : ""
+
+// ---- index chart: symbols from the inputs
+idxExpiry = str.tostring(yy % 100, "00") + str.tostring(mm, "00") + str.tostring(dd, "00")
+
+prevClose(string sym) =>
+    request.security(sym, "D", close[1], lookahead = barmerge.lookahead_on, ignore_invalid_symbol = true)
+
+idxSym(string kind, int k) =>
+    onIndex ? prefix + t + idxExpiry + kind + str.tostring(k) : syminfo.tickerid
+optSym(string kind, int k) =>
+    isOption ? prefix + optUnderlying + optExpiry + kind + str.tostring(k) : syminfo.tickerid
+
+sni1 = (prevClose(idxSym("C", strike1 + gap)) + prevClose(idxSym("P", strike1 - gap))) / 2
+sni2 = (prevClose(idxSym("C", strike2 + gap)) + prevClose(idxSym("P", strike2 - gap))) / 2
+sniOpt = (prevClose(optSym("C", optStrike + gap)) + prevClose(optSym("P", optStrike - gap))) / 2
+pdc = request.security(syminfo.tickerid, "D", close[1], lookahead = barmerge.lookahead_on)
+pdh = request.security(syminfo.tickerid, "D", high[1], lookahead = barmerge.lookahead_on)
+pdl = request.security(syminfo.tickerid, "D", low[1], lookahead = barmerge.lookahead_on)
+
+var int dayStart = na
+if na(dayStart) or timeframe.change("D")
+    dayStart := bar_index
+
+var line[] lines = array.new<line>()
+var label[] labels = array.new<label>()
+
+drawLevel(float level, string txt, color col) =>
+    if not na(level)
+        array.push(lines, line.new(dayStart, level, bar_index + 15, level, color = col, width = 2))
+        if showLabels
+            array.push(labels, label.new(bar_index + 15, level, txt + str.tostring(level, "0.00"),
+                                         style = label.style_label_left, color = col, textcolor = color.white))
+
+if barstate.islast
+    for l in lines
+        line.delete(l)
+    for b in labels
+        label.delete(b)
+    array.clear(lines)
+    array.clear(labels)
+    if onIndex
+        drawLevel(strike1 + sni1, str.tostring(strike1) + " RES: ", color.red)
+        drawLevel(strike1 - sni1, str.tostring(strike1) + " SUP: ", color.green)
+        if strike2 != strike1
+            drawLevel(strike2 + sni2, str.tostring(strike2) + " RES: ", color.red)
+            drawLevel(strike2 - sni2, str.tostring(strike2) + " SUP: ", color.green)
+    if isOption
+        drawLevel(sniOpt, "SNI : ", color.black)
+        if showPDC
+            drawLevel(pdc, "PDC : ", color.blue)
+        if showHL
+            drawLevel(pdh, "PDH : ", color.red)
+            drawLevel(pdl, "PDL : ", color.green)
