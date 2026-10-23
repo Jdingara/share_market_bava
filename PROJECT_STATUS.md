@@ -350,3 +350,4 @@ data/
 - SENSEX (owner 22-10 night: 'thodarnthu check pannuvom'): levels and the daily record run with strikes every 100 AND every 300 side by side; after a few weeks keep the one that fits. NIFTY stays 100 (the video).
 - Pine v2 (66b48e4, 22-10 night): both strikes give RES + SUP, lines for the current day only - owner confirmed it works on TradingView.
 - tradingview/vengat_sniper_combined.pine 'Vengat Sniper + BEP' (23-10): one indicator - BEP levels on the index chart, SNI/PDC on an option chart. Owner confirmed it works ('super arumaya work aguthu'). This is the one he uses now.
+- 23-10 15:45: combined indicator with the SENSEX -> BSX option root - owner confirmed it works on the SENSEX index chart too (manual SNI inputs stay as a fallback).
