@@ -157,3 +157,16 @@ def test_pe_zone_then_a_red_confirmation_candle():  # owner 23-10
     day.on_candle(_at("09:40"), Candle(23052, 23058, 23020, 23025), _chain(pe=150, strike=23000.0))  # red -> entry
     t = day.trades[0]
     assert t.side == "PE" and t.entry_index == 23025 and t.entry_fill == 150 and t.sl_index == 23075  # SL capped at 50 (19-10)
+
+
+@pytest.mark.orb_retest
+@pytest.mark.orb_zone_touch
+def test_pe_entry_on_the_touch_of_the_zones_05():  # owner 23-10
+    day = OrbDay(date(2026, 10, 19), ORB_MARKETS["NIFTY"])
+    day.on_candle(_at("09:15"), Candle(23050, 23100, 23000, 23020), _chain())  # 0.5 = 23050
+    day.on_candle(_at("09:30"), Candle(23010, 23020, 22980, 22985), _chain(pe=150, strike=23000.0))
+    day.on_candle(_at("09:35"), Candle(22985, 23049, 22980, 23040), _chain(pe=140, strike=23000.0))  # not yet
+    assert not day.trades
+    day.on_candle(_at("09:40"), Candle(23040, 23055, 23030, 23045), _chain(pe=130, strike=23000.0))  # touched
+    t = day.trades[0]
+    assert t.side == "PE" and t.entry_index == 23050 and t.sl_index == 23100 and t.strike == 23000  # SL capped at 50

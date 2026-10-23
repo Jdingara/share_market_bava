@@ -26,8 +26,10 @@ def sniper_target_mode(monkeypatch, request):
     import orb_engine
     if "orb_retest" not in request.keywords:  # the 22-10 ORB 0.75 retest entry has its own test
         monkeypatch.setattr(orb_engine, "RETEST_075", False)
-    if "orb_zone" not in request.keywords:  # the 23-10 ORB 0.5-0.618 zone + confirmation has its own test
-        monkeypatch.setattr(orb_engine, "ZONE_CONFIRM", False)
+    # the 23-10 ORB 0.5-0.618 zone + confirmation (switched off later that day) has its own test
+    monkeypatch.setattr(orb_engine, "ZONE_CONFIRM", "orb_zone" in request.keywords)
+    if "orb_zone_touch" not in request.keywords:
+        monkeypatch.setattr(orb_engine, "ZONE_TOUCH", False)
     if "orb_tsl" not in request.keywords:  # the 22-10 ORB 50/100-point target + TSL has its own test
         monkeypatch.setattr(orb_engine, "TARGET_TSL", False)
 
@@ -35,6 +37,7 @@ def sniper_target_mode(monkeypatch, request):
 def pytest_configure(config):
     config.addinivalue_line("markers", "ride: owner's 09-10 normal-day mode (no target exit, trailing only)")
     config.addinivalue_line("markers", "orb_tsl: owner's 22-10 ORB target 50/100 points then TSL 20/50")
+    config.addinivalue_line("markers", "orb_zone_touch: owner's 23-10 ORB entry on the touch of the zone's 0.5")
     config.addinivalue_line("markers", "orb_zone: owner's 23-10 ORB 0.5-0.618 zone + confirmation candle")
     config.addinivalue_line("markers", "orb_retest: owner's 22-10 ORB retest of the first candle's 0.75")
     config.addinivalue_line("markers", "atm_confirm: owner's 19-10 ATM-confirm square entry")

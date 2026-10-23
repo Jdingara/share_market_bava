@@ -43,7 +43,8 @@ RETEST_075 = True
 # entry needs a CONFIRMATION: after the index reaches the zone, a candle closing in the break's direction (PE: red,
 # CE: green) -> buy at that close. SL unchanged (first candle high + 1 / low - 1). False = the 22-10 0.75 touch entry.
 RETEST_ZONE = (0.5, 0.618)
-ZONE_CONFIRM = True
+ZONE_CONFIRM = False  # owner 23-10 later: no confirmation candle - see ZONE_TOUCH
+ZONE_TOUCH = True  # owner 23-10 ("entry tottal entry"): the index touching the zone's 0.5 = entry at that price
 # owner 22-10: target = NIFTY 50 / SENSEX 100 index points from the entry; reaching it does NOT close the trade -
 # a trailing SL follows the index's best price by NIFTY 20 / SENSEX 50 points. False = the old 1:2 target exit.
 TARGET_TSL = True
@@ -253,6 +254,9 @@ class OrbDay:
                     self.armed = None
                     return [event]
                 touched = False
+            elif ZONE_TOUCH:
+                a["level"] = a["zone"][0]  # the zone's first edge (0.5) - reached first on the way back
+                touched = index.low <= a["level"] if a["side"] == "CE" else index.high >= a["level"]
             else:
                 touched = index.low <= a["level"] if a["side"] == "CE" else index.high >= a["level"]
             if touched:
@@ -265,7 +269,8 @@ class OrbDay:
             z = [round(self.high - r * rng if side == "CE" else self.low + r * rng, 2) for r in RETEST_ZONE]
             self.armed = {"side": side, "level": round(level, 2), "when": when, "zone": z}
             wait = (f"the {RETEST_ZONE[0]:g}-{RETEST_ZONE[1]:g} zone {z[0]:.2f}-{z[1]:.2f} + a confirmation candle"
-                    if ZONE_CONFIRM else f"the retest of 0.75 {level:.2f}")
+                    if ZONE_CONFIRM else f"a touch of the {RETEST_ZONE[0]:g} {z[0]:.2f}" if ZONE_TOUCH
+                    else f"the retest of 0.75 {level:.2f}")
             events.append(f"Break {'above' if side == 'CE' else 'below'} the range at {when:%H:%M} (close {index.close:g}) "
                           f"- waiting for {wait} for a {side}")
         return events
@@ -293,7 +298,8 @@ class OrbDay:
                          entry_reason=(f"break {'above' if side == 'CE' else 'below'} the range at {a['when']:%H:%M}, "
                                        + (f"retest of the {RETEST_ZONE[0]:g}-{RETEST_ZONE[1]:g} zone {a['zone'][0]:g}-{a['zone'][1]:g}, "
                                           f"confirmation candle {when:%H:%M} closed {index.close:g}" if confirm else
-                                          f"retest of the first candle's 0.75 {level:g} in candle {when:%H:%M}")
+                                          f"retest of the first candle's {RETEST_ZONE[0]:g} {level:g} (zone touch) in candle {when:%H:%M}"
+                                          if ZONE_TOUCH else f"retest of the first candle's 0.75 {level:g} in candle {when:%H:%M}")
                                        + f" -> ATM {strike:g} {side}"))
         if PREMIUM_TARGET and TARGET_TSL:
             trade.target_premium = round(fill + TARGET_POINTS[self.market.name], 2)
