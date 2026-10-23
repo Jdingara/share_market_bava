@@ -13,6 +13,8 @@ mm = input.int(10, "Month", minval = 1, maxval = 12, group = "Expiry date (index
 dd = input.int(27, "Day", minval = 1, maxval = 31, group = "Expiry date (index chart)", inline = "exp")
 strike1 = input.int(22700, "Strike 1", step = 100, group = "Strikes (index chart)", inline = "st")
 strike2 = input.int(22600, "Strike 2", step = 100, group = "Strikes (index chart)", inline = "st")
+manual1 = input.float(0, "Strike 1 SNI (type it when no option data, e.g. SENSEX)", group = "Strikes (index chart)")
+manual2 = input.float(0, "Strike 2 SNI (type it when no option data, e.g. SENSEX)", group = "Strikes (index chart)")
 gap = input.int(100, "OTM distance", step = 50)
 showLabels = input.bool(true, "Show Price Labels")
 showPDC = input.bool(true, "Option chart: previous day close (PDC)")
@@ -44,6 +46,9 @@ optSym(string kind, int k) =>
 
 sni1 = (prevClose(idxSym("C", strike1 + gap)) + prevClose(idxSym("P", strike1 - gap))) / 2
 sni2 = (prevClose(idxSym("C", strike2 + gap)) + prevClose(idxSym("P", strike2 - gap))) / 2
+// owner 23-10: SENSEX options don't load on his TradingView - the SNI typed from the bot's morning report is used then
+sni1 := manual1 > 0 ? manual1 : sni1
+sni2 := manual2 > 0 ? manual2 : sni2
 sniOpt = (prevClose(optSym("C", optStrike + gap)) + prevClose(optSym("P", optStrike - gap))) / 2
 pdc = request.security(syminfo.tickerid, "D", close[1], lookahead = barmerge.lookahead_on)
 pdh = request.security(syminfo.tickerid, "D", high[1], lookahead = barmerge.lookahead_on)
