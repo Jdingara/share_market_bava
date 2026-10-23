@@ -9,3 +9,10 @@ replayed over the past days at the weekend, shown to the owner, and only then ad
 | 21-10 | #2 HLC (`hlc`) | The 12:30 2nd entry must follow the CURRENT trend (CE or PE by the market's direction then), not the morning trade's side (21-10: 12:30 PM reversal took CE while the market was falling). | to replay + add at the weekend |
 | 23-10 | #4 Lalitha (`lalitha`) | No entry on the 09:15 first 3-min candle (gap days blow every indicator up: 23-10 SENSEX RSI 75.6 only on 09:15, entry -Rs 14,950). Owner said ok to replay at the weekend first. | to replay + add at the weekend |
 | 23-10 | #4 Lalitha (`lalitha`) | Bug (not a rule): before 09:15 the bot asks Zerodha with from > to ('from date cannot be after to date') every 3 min - fix after market hours. | fix after 15:30 |
+
+## 23-10 changes already put in (owner said "now") - to re-check at the weekend against all earlier rules
+| Date | Strategy (branch) | Owner's remark (market that day) | What went in | Check against |
+|---|---|---|---|---|
+| 23-10 | #2 HLC (`hlc`) | NIFTY/SENSEX PE charts: target = option yesterday high / S1-S2, first one -> SL there, then TSL | BREAKOUT_FIRST_TARGET_LOCK (index S1/S2/S3, premium Fib 0.786, premium yesterday high) | 12-10 PB Fib 0.786 exit, 13-10 profit lock steps, 22-10 breakout target |
+| 23-10 | #3 ORB (`orb`) | retest 0.5-0.618 -> then "entry tottal entry" | ZONE_TOUCH (0.5 touch), ZONE_CONFIRM off, 0.75 off | 22-10 0.75 retest (+16,880 / +39,600 on 22-10) - replay all three over the week |
+| 23-10 | #1 Sniper (`sniper`) | SENSEX 10:15 ATM CE confirmation -> OTM 73100 PE square 676 -> 784 | confirm entry always OTM; confirming ATM leg must have closed above the Sniper yesterday | 19-10 / 22-10 ATM-confirm rules, 21-10 pending "2nd entry opposite side" |
