@@ -39,8 +39,10 @@ idxExpiry = str.tostring(yy % 100, "00") + str.tostring(mm, "00") + str.tostring
 prevClose(string sym) =>
     request.security(sym, "D", close[1], lookahead = barmerge.lookahead_on, ignore_invalid_symbol = true)
 
+// TradingView names the SENSEX options BSX... (owner's chart 23-10: BSX261029C73000), NIFTY's are NIFTY...
+optRoot = t == "SENSEX" ? "BSX" : t
 idxSym(string kind, int k) =>
-    onIndex ? prefix + t + idxExpiry + kind + str.tostring(k) : syminfo.tickerid
+    onIndex ? prefix + optRoot + idxExpiry + kind + str.tostring(k) : syminfo.tickerid
 optSym(string kind, int k) =>
     isOption ? prefix + optUnderlying + optExpiry + kind + str.tostring(k) : syminfo.tickerid
 
