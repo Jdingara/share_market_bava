@@ -1,0 +1,54 @@
+//@version=6
+// Vengat Sniper (#1 Sniper, owner 2026-10-23) - put it on an OPTION chart (e.g. NSE:NIFTY261027C22900 or
+// BSE:SENSEX261029P73200). Same maths as bots/sniper/src/sniper_signal.py:
+//   SNI = (yesterday's close of strike+100 CE + yesterday's close of strike-100 PE) / 2
+// plus the option's own previous day close (PDC) and, optionally, its previous day high / low.
+// Lines for the current day only. Information only - no orders.
+indicator("Vengat Sniper", overlay = true, max_lines_count = 20, max_labels_count = 20)
+
+gap = input.int(100, "OTM distance", step = 50)
+showPDC = input.bool(true, "Previous day close (PDC)")
+showHL = input.bool(false, "Previous day high / low (PDH / PDL)")
+
+// NIFTY261027C22900 -> underlying NIFTY, expiry 261027, C, strike 22900
+t = syminfo.ticker
+expiry = str.match(t, "[0-9]{6}")
+p = str.pos(t, expiry)
+underlying = str.substring(t, 0, p)
+strike = int(str.tonumber(str.substring(t, p + 7)))
+prefix = syminfo.prefix + ":"
+ceSym = prefix + underlying + expiry + "C" + str.tostring(strike + gap)
+peSym = prefix + underlying + expiry + "P" + str.tostring(strike - gap)
+
+prevClose(string sym) =>
+    request.security(sym, "D", close[1], lookahead = barmerge.lookahead_on, ignore_invalid_symbol = true)
+
+sni = (prevClose(ceSym) + prevClose(peSym)) / 2
+pdc = request.security(syminfo.tickerid, "D", close[1], lookahead = barmerge.lookahead_on)
+pdh = request.security(syminfo.tickerid, "D", high[1], lookahead = barmerge.lookahead_on)
+pdl = request.security(syminfo.tickerid, "D", low[1], lookahead = barmerge.lookahead_on)
+dayOpen = request.security(syminfo.tickerid, "D", time, lookahead = barmerge.lookahead_on)
+dayClose = request.security(syminfo.tickerid, "D", time_close, lookahead = barmerge.lookahead_on)
+
+var line[] lines = array.new<line>()
+var label[] labels = array.new<label>()
+
+drawLevel(float level, string txt, color col) =>
+    if not na(level)
+        array.push(lines, line.new(dayOpen, level, dayClose, level, xloc.bar_time, color = col, width = 2))
+        array.push(labels, label.new(dayClose, level, txt + str.tostring(level, "0.00"), xloc.bar_time,
+                                     style = label.style_label_left, color = col, textcolor = color.white))
+
+if barstate.islast
+    for l in lines
+        line.delete(l)
+    for b in labels
+        label.delete(b)
+    array.clear(lines)
+    array.clear(labels)
+    drawLevel(sni, "SNI : ", color.black)
+    if showPDC
+        drawLevel(pdc, "PDC : ", color.blue)
+    if showHL
+        drawLevel(pdh, "PDH : ", color.red)
+        drawLevel(pdl, "PDL : ", color.green)
