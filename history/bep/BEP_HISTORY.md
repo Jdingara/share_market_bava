@@ -4,6 +4,48 @@ Levels from the previous trading day's closes: SNI(K) = (K+100 CE close + K-100 
 
 *beyond* = how far the index went past the level after touching it (negative = missed by); *back* = how far it came back the other way.
 
+## 2026-10-23 SENSEX - strikes every 100 (levels from 2026-10-22, ATM 73200)
+Open 73665.64 · High 73766.51 · Low 72452.37 · Close 73123.83
+
+| Level | Value | Reached | First touch | Closes beyond | Beyond | Back |
+|---|---|---|---|---|---|---|
+| 73500 RES | 74,076.98 | no |  | 0 | -310.47 |  |
+| 73400 RES | 73,976.68 | no |  | 0 | -210.17 |  |
+| 73300 RES | 73,886.57 | no |  | 0 | -120.06 |  |
+| 73200 RES | 73,790.60 | no |  | 0 | -24.09 |  |
+| 73200 SUP | 72,609.40 | yes | 10:35 | 13 | 157.03 | 530.94 |
+| 73100 SUP | 72,502.50 | yes | 10:35 | 0 | 50.13 | 637.84 |
+| 73000 SUP | 72,393.70 | no |  | 0 | -58.67 |  |
+| 72900 SUP | 72,277.70 | no |  | 0 | -174.67 |  |
+
+## 2026-10-23 SENSEX - strikes every 300 (levels from 2026-10-22, ATM 73200)
+Open 73665.64 · High 73766.51 · Low 72452.37 · Close 73123.83
+
+| Level | Value | Reached | First touch | Closes beyond | Beyond | Back |
+|---|---|---|---|---|---|---|
+| 74100 RES | 74,629.43 | no |  | 0 | -862.92 |  |
+| 73800 RES | 74,299.00 | no |  | 0 | -532.49 |  |
+| 73500 RES | 73,991.95 | no |  | 0 | -225.44 |  |
+| 73200 RES | 73,698.68 | yes | 09:15 | 0 | 67.83 | 1246.31 |
+| 73200 SUP | 72,701.32 | yes | 10:35 | 23 | 248.95 | 439.02 |
+| 72900 SUP | 72,365.57 | no |  | 0 | -86.8 |  |
+| 72600 SUP | 72,010.45 | no |  | 0 | -441.92 |  |
+| 72300 SUP | 71,634.45 | no |  | 0 | -817.92 |  |
+
+## 2026-10-23 NIFTY - strikes every 100 (levels from 2026-10-22, ATM 22700)
+Open 22742.2 · High 22787.25 · Low 22372 · Close 22600
+
+| Level | Value | Reached | First touch | Closes beyond | Beyond | Back |
+|---|---|---|---|---|---|---|
+| 23000 RES | 23,145.80 | no |  | 0 | -358.55 |  |
+| 22900 RES | 23,022.22 | no |  | 0 | -234.97 |  |
+| 22800 RES | 22,908.75 | no |  | 0 | -121.5 |  |
+| 22700 RES | 22,805.20 | no |  | 0 | -17.95 |  |
+| 22700 SUP | 22,594.80 | yes | 10:00 | 65 | 222.8 | 16.1 |
+| 22600 SUP | 22,486.38 | yes | 10:15 | 38 | 114.38 | 113.62 |
+| 22500 SUP | 22,369.12 | no |  | 0 | -2.88 |  |
+| 22400 SUP | 22,243.05 | no |  | 0 | -128.95 |  |
+
 ## 2026-10-22 SENSEX - strikes every 100 (levels from 2026-10-21, ATM 73700)
 Open 73343.33 · High 73720.83 · Low 73005.11 · Close 73249.39
 
