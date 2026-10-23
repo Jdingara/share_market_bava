@@ -2,10 +2,12 @@
 
 **Paper trades — no real orders.** Written by the bot (`src/hlc_history.py`). ₹ = points × qty, before charges.
 
-**All days: 60 trade(s), +3564.40 points, ₹+714,956**
+**All days: 64 trade(s), +3983.50 points, ₹+778,045**
 
 | Date | Market | ATM | CE / PE yesterday | Buyer's day | Trades | P&L points | P&L ₹ | Status |
 |---|---|---|---|---|---|---|---|---|
+| 2026-10-23 | SENSEX | 73500 | PROFIT BOOKING / PROFIT BOOKING | no | 2 | +350.58 | ₹+48,759 | finished |
+| 2026-10-23 | NIFTY | 22700 | PROFIT BOOKING / PROFIT BOOKING | no | 2 | +68.52 | ₹+14,330 | finished |
 | 2026-10-22 | SENSEX | 73500 | PROFIT BOOKING / PANIC | yes | 3 | +84.95 | ₹+5,893 | finished |
 | 2026-10-22 | NIFTY | 22750 | PROFIT BOOKING / PANIC | yes | 1 | +27.10 | ₹+5,284 | finished |
 | 2026-10-21 | SENSEX | 73800 | PROFIT BOOKING / PANIC | yes | 2 | +164.20 | ₹+17,136 | finished |
@@ -40,6 +42,28 @@
 | 2026-09-30 | NIFTY | 22800 | PANIC / PROFIT BOOKING | yes | 1 | -42.10 | ₹-13,682 | finished |
 | 2026-09-29 | SENSEX | 72900 | PROFIT BOOKING / PANIC | yes | 1 | -50.00 | ₹-15,000 | replayed |
 | 2026-09-29 | NIFTY | 22800 | PROFIT BOOKING / PANIC | yes | 1 | +45.60 | ₹+14,820 | replayed |
+
+## 2026-10-23 (Fri)
+
+### NIFTY — finished (last update 2026-10-23 15:00)
+
+- Close 22687.65, ATM 22700. R3 23155.35 · R2 23000.15 · R1 22855.2 · S1 22555.05 · S2 22399.85 · S3 22254.9.
+- CE PROFIT BOOKING, PE PROFIT BOOKING.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| BREAKOUT RETEST | 195 × 22700 PE | index closed beyond the first 5-min candle at 09:20; retest of its 0.75 22711.7 in candle 09:25 | 09:25 | 121.3 | 0.0 (index above the breakout candle 22748.7) | 204.72 (10:05) | profit lock +83.42 - index target S1 22555 reached (premium about 204.72 then) - SL locked there; candle 10:05 came back to it | +83.42 | ₹+16,267 |
+| PM REVERSAL | 130 × 22700 PE | 12:30+ entry: Bullish Engulfing reversal, green confirmation closed 244.8 | index Hanging Man (no level, 14:40) + ATM CE Hanging Man (14:40) | 14:40 | 244.8 | 173.2 (reversal low 174.2 - 1) | 229.9 (14:55) | 15:00 exit | -14.90 | ₹-1,937 |
+
+### SENSEX — finished (last update 2026-10-23 15:00)
+
+- Close 73249.39, ATM 73500. R3 75349.6 · R2 74746.7 · R1 74102.9 · S1 72856.2 · S2 72253.3 · S3 71609.5.
+- CE PROFIT BOOKING, PE PROFIT BOOKING.
+
+| Kind | Buy | Pattern | Entry | Fill | SL | Exit | Reason | Points | ₹ |
+|---|---|---|---|---|---|---|---|---|---|
+| BREAKOUT RETEST | 140 × 73500 PE | index closed beyond the first 5-min candle at 09:20; retest of its 0.75 73535.1 in candle 09:25 | 09:25 | 545.2 | 0.0 (index above the breakout candle 73647.1) | 911.88 (10:15) | profit lock +366.68 - index target S1 72856.2 reached (premium about 911.88 then) - SL locked there; candle 10:15 came back to it | +366.68 | ₹+51,335 |
+| PM REVERSAL | 160 × 73500 PE | 12:30+ entry: Morning Star reversal, green confirmation closed 1060 | index Evening Star (no level, 13:05) + ATM CE Shooting Star (13:10) | 13:10 | 1060 | 975.3 (reversal low 976.3 - 1) | 1043.9 (13:20) | TARGET booked at the Fib 0.75 72502.3 (close -> S2): S2 not reached, index Bullish Harami in candle 13:20 | -16.10 | ₹-2,576 |
 
 ## 2026-10-22 (Thu)
 
