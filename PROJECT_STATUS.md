@@ -349,3 +349,4 @@ data/
 - Daily record (22-10): src/bep_review.py writes history/bep/days.csv + BEP_HISTORY.md (each level: reached, first touch, closes beyond, how far beyond / back); run 15:40 Mon-Fri by the 'Vengat BEP Daily Record' task (main: bep_daily.ps1), which pushes history to this branch. Morning: daily_start prints the day's levels; Claude tells them to the owner, who checks them live.
 - SENSEX (owner 22-10 night: 'thodarnthu check pannuvom'): levels and the daily record run with strikes every 100 AND every 300 side by side; after a few weeks keep the one that fits. NIFTY stays 100 (the video).
 - Pine v2 (66b48e4, 22-10 night): both strikes give RES + SUP, lines for the current day only - owner confirmed it works on TradingView.
+- tradingview/vengat_sniper_combined.pine 'Vengat Sniper + BEP' (23-10): one indicator - BEP levels on the index chart, SNI/PDC on an option chart. Owner confirmed it works ('super arumaya work aguthu'). This is the one he uses now.
