@@ -143,3 +143,17 @@ def test_sensex_target_needs_a_candle_close():  # owner 22-10 night
     assert not t.riding and t.trail_premium == 0
     day.on_candle(_at("09:50"), Candle(73050, 73055, 73030, 73040), _chain(pe=215, strike=73100.0))  # closes at it
     assert t.riding and t.trail_premium == 210
+
+
+@pytest.mark.orb_retest
+@pytest.mark.orb_zone
+def test_pe_zone_then_a_red_confirmation_candle():  # owner 23-10
+    day = OrbDay(date(2026, 10, 19), ORB_MARKETS["NIFTY"])
+    day.on_candle(_at("09:15"), Candle(23050, 23100, 23000, 23020), _chain())  # zone 23050-23061.8
+    day.on_candle(_at("09:30"), Candle(23010, 23020, 22980, 22985), _chain(pe=150, strike=23000.0))  # break below
+    assert day.armed["zone"] == [23050, 23061.8]
+    day.on_candle(_at("09:35"), Candle(22985, 23055, 22980, 23052), _chain(pe=140, strike=23100.0))  # zone, green
+    assert not day.trades
+    day.on_candle(_at("09:40"), Candle(23052, 23058, 23020, 23025), _chain(pe=150, strike=23000.0))  # red -> entry
+    t = day.trades[0]
+    assert t.side == "PE" and t.entry_index == 23025 and t.entry_fill == 150 and t.sl_index == 23075  # SL capped at 50 (19-10)
