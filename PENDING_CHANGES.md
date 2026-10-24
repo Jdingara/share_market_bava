@@ -22,4 +22,4 @@ replayed over the past days at the weekend, shown to the owner, and only then ad
 | Case | Entry | Targets |
 |---|---|---|
 | R2 / S2 BROKEN, then retested | same direction as the move (continuation) | (to ask) |
-| R2 / S2 touched exactly, trend turns (candle confirmation) | the other side, current strike | 1st S1 (R1), 2nd yesterday's close; if it stalls in between, Fib S2 (0) -> close (1): 0.75 is the target (23-10 NIFTY: S1 22555, 0.75 22615, close 22687.7) - interpretation to confirm |
+| R2 / S2 touched exactly, trend turns (candle confirmation) | the other side, current strike | 1st S1 (R1), 2nd yesterday's close; if it stalls in between, Fib S2 (0) -> close (1): 0.75 is the target (23-10 NIFTY: S1 22555, 0.75 22615, close 22687.7) - CONFIRMED 24-10: market going up -> Fib drawn from the top down (close = 1, S2 = 0); going down -> from the bottom up (close = 1, R2 = 0, 0.75 = R2 - 0.75 x (R2 - close)) |
