@@ -17,3 +17,9 @@ replayed over the past days at the weekend, shown to the owner, and only then ad
 | 23-10 | #2 HLC (`hlc`) | NIFTY/SENSEX PE charts: target = option yesterday high / S1-S2, first one -> SL there, then TSL | BREAKOUT_FIRST_TARGET_LOCK (index S1/S2/S3, premium Fib 0.786, premium yesterday high) | 12-10 PB Fib 0.786 exit, 13-10 profit lock steps, 22-10 breakout target |
 | 23-10 | #3 ORB (`orb`) | retest 0.5-0.618 -> then "entry tottal entry" | ZONE_TOUCH (0.5 touch), ZONE_CONFIRM off, 0.75 off | 22-10 0.75 retest (+16,880 / +39,600 on 22-10) - replay all three over the week |
 | 23-10 | #1 Sniper (`sniper`) | SENSEX 10:15 ATM CE confirmation -> OTM 73100 PE square 676 -> 784 | confirm entry always OTM; confirming ATM leg must have closed above the Sniper yesterday | 19-10 / 22-10 ATM-confirm rules, 21-10 pending "2nd entry opposite side" |
+
+## 24-10 owner's HLC 2nd-entry rule (after the weekly report) - to code as a side variant this week (HLC frozen for real)
+| Case | Entry | Targets |
+|---|---|---|
+| R2 / S2 BROKEN, then retested | same direction as the move (continuation) | (to ask) |
+| R2 / S2 touched exactly, trend turns (candle confirmation) | the other side, current strike | 1st S1 (R1), 2nd yesterday's close; if it stalls in between, Fib S2 (0) -> close (1): 0.75 is the target (23-10 NIFTY: S1 22555, 0.75 22615, close 22687.7) - interpretation to confirm |
