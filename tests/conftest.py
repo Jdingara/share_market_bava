@@ -28,8 +28,7 @@ def sniper_target_mode(monkeypatch, request):
         monkeypatch.setattr(orb_engine, "RETEST_075", False)
     # the 23-10 ORB 0.5-0.618 zone + confirmation (switched off later that day) has its own test
     monkeypatch.setattr(orb_engine, "ZONE_CONFIRM", "orb_zone" in request.keywords)
-    if "orb_zone_touch" not in request.keywords:
-        monkeypatch.setattr(orb_engine, "ZONE_TOUCH", False)
+    monkeypatch.setattr(orb_engine, "ZONE_TOUCH", "orb_zone_touch" in request.keywords)  # 23-10 rule, off since 24-10
     if "orb_tsl" not in request.keywords:  # the 22-10 ORB 50/100-point target + TSL has its own test
         monkeypatch.setattr(orb_engine, "TARGET_TSL", False)
 

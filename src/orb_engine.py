@@ -44,7 +44,7 @@ RETEST_075 = True
 # CE: green) -> buy at that close. SL unchanged (first candle high + 1 / low - 1). False = the 22-10 0.75 touch entry.
 RETEST_ZONE = (0.5, 0.618)
 ZONE_CONFIRM = False  # owner 23-10 later: no confirmation candle - see ZONE_TOUCH
-ZONE_TOUCH = True  # owner 23-10 ("entry tottal entry"): the index touching the zone's 0.5 = entry at that price
+ZONE_TOUCH = False  # owner 24-10: B (0.75 touch) chosen after the weekly replay; was True 23-10 ("entry tottal entry"): the index touching the zone's 0.5 = entry at that price
 # owner 22-10: target = NIFTY 50 / SENSEX 100 index points from the entry; reaching it does NOT close the trade -
 # a trailing SL follows the index's best price by NIFTY 20 / SENSEX 50 points. False = the old 1:2 target exit.
 TARGET_TSL = True
